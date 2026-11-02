@@ -946,6 +946,9 @@ CH.ending_foundme = async () => {
   await P('I whistled PERFECTLY.', K());
   addScrap('foundme', 'Ordinary morning. Squeezed. (Lovingly.)');
   await stand(); free();
+  // She goes and puts the kettle on, so the whistle really does come from somewhere else in the house.
+  G.bark('Kettle. Stay there and be warm.', 2.6);
+  PARTNER.task = { o: { id: 'kettle', spot: { x: 12.6, z: -1.15 }, yaw: Math.PI, dur: [60, 60], stay: true, noReach: true }, phase: 'go', t: 0 };
   G.hint('(Take your time.)', 4);
   await wait(14);
   STATE.busy = true;
@@ -953,6 +956,7 @@ CH.ending_foundme = async () => {
   const w = await choose(['Whistle back', 'Go and find her']);
   if (w === 0) { await wait(Math.min(1.8, G.Audio.whistle(1.0, 0.8) + 0.3)); await N('(Badly. She laughs, from the kitchen.)'); }
   else await N('(She’s in the kitchen, in your jumper, with two mugs. Two.)');
+  if (PARTNER.task && PARTNER.task.o.id === 'kettle') G.endPartnerTask();
   showEnd('foundme', 'You Found Me');
 };
 
