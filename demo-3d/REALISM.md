@@ -192,6 +192,14 @@ blinks, dozing, hugs. Hats and the snow on them are handed to the model's own he
 - **Gentle nights:** `SETTINGS.nights` (`G.gentle()`). It skips `hunt()`, the night heartbeat, `slip()`, the obsessive walk-ups and the Act IV glimpses.
 - **Endings dialog:** `#endings` on the title screen. It reads `snowed.endings`, and `showEnd` refreshes the count through `G.syncEndings`.
 
+## Conversation from the neck up (build 87)
+
+- `talkHead` in people.js, layered on the head after the look-at and the recorded motion (which is kept small while looking at someone, so heads used to be nearly still in conversation).
+  - **Speaker:** while the line is being spoken (its length ÷ 15 characters a second, 0.8–6 s, without stage directions or parentheses), the head drifts gently (two sines, about 1.3°), with a small nod at each comma or full stop as the speech reaches it (up to 0.05 rad). At the end of a question the head tilts slightly and holds it.
+  - **Listener:** within 4 m, a small nod when the line ends (sometimes two), and a tilt the other way after a question.
+  - Lying down, it's all at 55%. Narration moves no one. This works with the bodies swapped too.
+- The recorded hand gestures while speaking (already there) still come in on top.
+
 ## Eyes and eyelids (build 86)
 
 - Subtitles have a soft, feathered dark backdrop (`#subs::before`, a radial gradient). It's barely visible indoors and at night, but keeps white words readable over bright snow, which the scene sheet showed they weren't.

@@ -587,6 +587,44 @@ function aimEyes(c, u, tgt, dt) {
     e.piv.quaternion.copy(e.q0).multiply(_eq.setFromEuler(new THREE.Euler(e.pitch, e.yaw, 0, 'YXZ')));
   }
 }
+/* Conversation, from the neck up. While a line is being spoken (about as long as it would take to say it), the
+ * speaker's head moves with the words: a gentle drift, a small nod on each comma or full stop as the speech reaches
+ * it, and a slight tilt held at the end of a question. The other one listens: a small nod when the line ends
+ * (sometimes two), a tilt when they've been asked something. Lying down it's all smaller. Narration moves no one. */
+function talkHead(c, u, dt, t) {
+  const D = G.DLG && G.DLG.cur, sw = !!(G.NIGHT && G.NIGHT.swapped);
+  const him = sw ? G.PARTNER : G.PLAYER, her = sw ? G.PLAYER : G.PARTNER;
+  const speaker = D && D.who === 'partner' ? her : D && D.who === 'player' ? him : null;
+  const T = c._th || (c._th = { line: null, nods: [], tilt: 0, env: 0, done: false, mark: 0 });
+  if (D !== T.line) {
+    T.line = D; T.done = false; T.mark = 0;
+    T.speak = D ? Math.max(0.8, Math.min(6, D.text.replace(/\*[^*]*\*|\([^)]*\)/g, '').length / 15)) : 0;
+    T.q = !!D && /\?\s*[”"]?\s*$/.test(D.text);
+  }
+  const me = speaker === c, listening = !!speaker && !me && Math.hypot(speaker.x - c.x, speaker.z - c.z) < 4 && !c.hidden && !speaker.hidden;
+  const el = D ? G.DLG.t : 0, speaking = me && el < T.speak;
+  T.env = G.damp(T.env, speaking ? 1 : 0, speaking ? 6 : 3, dt);
+  if (me && D) {
+    // emphasis: a little nod as the speech passes each comma / full stop
+    const reach = Math.floor(Math.min(1, el / T.speak) * D.text.length);
+    for (let i = T.mark; i < reach; i++) if (/[,.;!?…—]/.test(D.text[i]) && i < D.text.length - 1) { T.nods.push({ at: t, a: /[.!?]/.test(D.text[i]) ? 0.05 : 0.03 }); break; }
+    T.mark = Math.max(T.mark, reach);
+  }
+  if (D && !T.done && el >= T.speak) {
+    T.done = true;
+    if (me && T.q) T.tilt = 1;
+    if (listening) { T.nods.push({ at: t + 0.22, a: 0.055 }); if (Math.random() < 0.4) T.nods.push({ at: t + 0.62, a: 0.04 }); if (T.q) T.tilt = -1; }
+  }
+  if (!D) T.tilt = 0;
+  c._tiltK = G.damp(c._tiltK || 0, T.tilt, 4, dt);
+  let nod = 0;
+  T.nods = T.nods.filter((n) => { const k = (t - n.at) / 0.38; if (k < 0) return true; if (k > 1) return false; nod += n.a * Math.sin(Math.PI * k); return true; });
+  const amp = c.lie ? 0.55 : 1, sd = c === G.PLAYER ? 0 : 1.7;
+  const drift = T.env * (0.022 * Math.sin(t * 2.3 + sd) + 0.014 * Math.sin(t * 3.7 + sd * 2)), yaw = T.env * 0.02 * Math.sin(t * 1.1 + sd);
+  u.head.rotation.x += (drift + nod) * amp;
+  u.head.rotation.y += yaw * amp;
+  u.head.rotation.z += (c._tiltK || 0) * 0.075 * amp * (c === G.PLAYER ? 1 : -1);
+}
 /* Eyelids for a model whose head has no blink shapes: a cap over each eyeball (the eyes mesh split left and right),
  * attached to the head bone, in the face's average skin colour; shown while the eyes are shut. */
 function makeRealLids(model) {
@@ -1229,6 +1267,7 @@ G.animate = (c, dt, t) => {
   if (mb) { u.neck.rotation.x += mb.neck[0] * hk; u.neck.rotation.y += mb.neck[1] * hk; u.neck.rotation.z += mb.neck[2] * hk; }
   u.head.rotation.set(c.lookUp * 0.6 + Math.sin(t * 0.7 + c.z) * 0.02 * (mb ? 0 : 1) + (c.headDown || 0), c.look * 0.55, (c.tilt || 0) * 0.6 + c.headSway);
   if (mb) { u.head.rotation.x += mb.head[0] * hk; u.head.rotation.y += mb.head[1] * hk; u.head.rotation.z += mb.head[2] * hk; }
+  talkHead(c, u, dt, t);
   plantFeet(c, u, sit, w, dt);
   springHead(c, u, dt);
   G.retarget(c.m);
