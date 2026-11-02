@@ -153,6 +153,51 @@ G.Audio = (() => {
   }
   const tone = (f, d, v = 0.06, when = 0, dest) => { if (!ctx) return; const t = ctx.currentTime + when; const o = ctx.createOscillator(); o.frequency.value = f; const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.2); o.connect(g); g.connect(dest || master); o.start(t); o.stop(t + d + 0.3); };
   const burst = (dur, freq, vol, type = 'bandpass', q = 1, when = 0, dest) => { if (!ctx) return; const t = ctx.currentTime + when; const s = noise(); const bf = ctx.createBiquadFilter(); bf.type = type; bf.frequency.value = freq; bf.Q.value = q; const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(bf); bf.connect(g); g.connect(dest || master); s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.05); };
+  /* ---------- the score: a quiet piano over the pad ----------
+   * Short phrases built from the pad's current chord and a pentatonic scale, with long rests between them, so it
+   * comes and goes like someone playing in another room. Warm and fuller indoors in the day and evening, sparse
+   * and high outside, almost nothing at night (one note now and then, sometimes not quite the right one).
+   * It dips under dialogue and goes quiet for the radio. Made of oscillators: no recordings. */
+  let scoreIn = null, scoreG = null, scoreNext = 0, phrase = [], melIdx = 4;
+  const SCALE = [196.0, 220.0, 261.6, 293.7, 329.6, 392.0, 440.0, 523.3, 587.3, 659.3, 784.0, 880.0];
+  function scoreBus() {
+    scoreIn = ctx.createGain(); scoreG = ctx.createGain(); scoreG.gain.value = 0;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; scoreIn.connect(lp); lp.connect(scoreG); scoreG.connect(master);
+    // a soft room: one echo, darker each time round
+    const d = ctx.createDelay(1); d.delayTime.value = 0.41; const fb = ctx.createGain(); fb.gain.value = 0.32; const dl = ctx.createBiquadFilter(); dl.type = 'lowpass'; dl.frequency.value = 1500; const wet = ctx.createGain(); wet.gain.value = 0.3;
+    lp.connect(d); d.connect(dl); dl.connect(fb); fb.connect(d); dl.connect(wet); wet.connect(scoreG);
+  }
+  function key(f, t, v) {
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.01); g.gain.exponentialRampToValueAtTime(v * 0.3, t + 0.35); g.gain.exponentialRampToValueAtTime(0.0001, t + 3.4); g.connect(scoreIn);
+    for (const [m, a, ty] of [[1, 1, 'triangle'], [2.003, 0.3, 'sine'], [3.007, 0.08, 'sine']]) { const o = ctx.createOscillator(); o.type = ty; o.frequency.value = f * m; const og = ctx.createGain(); og.gain.value = a; o.connect(og); og.connect(g); o.start(t); o.stop(t + 3.5); }
+  }
+  function compose(mood) {
+    const chord = CHORDS[chordI].map((f) => { let x = f; while (x < 250) x *= 2; return x; });
+    const n = mood === 'night' ? 1 : mood === 'sparse' ? 3 + Math.floor(Math.random() * 3) : 4 + Math.floor(Math.random() * 5);
+    const step = mood === 'warm' ? 0.55 : 0.8, out = [];
+    let at = 0;
+    for (let i = 0; i < n; i++) {
+      melIdx = Math.max(mood === 'sparse' ? 5 : 2, Math.min(SCALE.length - 1, melIdx + [-2, -1, -1, 1, 1, 2][Math.floor(Math.random() * 6)]));
+      let f = SCALE[melIdx];
+      if (i % 2 === 0) { const c = chord.reduce((a, b) => (Math.abs(b - f) < Math.abs(a - f) ? b : a)); if (Math.abs(c - f) / f < 0.2) f = c; }   // chord tones on the strong beats
+      if (mood === 'night' && Math.random() < 0.3) f *= 1.0595;   // not quite the right note
+      out.push({ f, at, v: (i === 0 ? 1 : 0.8) * (0.7 + Math.random() * 0.3) });
+      if (mood === 'warm' && i === n - 1 && Math.random() < 0.5) out.push({ f: chord[0] / 2, at, v: 0.55 });   // a low note under the last one
+      at += step * (Math.random() < 0.25 ? 2 : 1);
+    }
+    return { notes: out, len: at };
+  }
+  function scoreTick(o) {
+    if (!ctx) return;
+    if (!scoreIn) scoreBus();
+    const now = ctx.currentTime, want = o.on ? (o.mood === 'night' ? 0.5 : o.mood === 'sparse' ? 0.75 : 1) * (o.duck ? 0.55 : 1) : 0;
+    scoreG.gain.setTargetAtTime(want * 0.05, now, o.on ? 2.5 : 0.8);
+    if (!o.on || now < scoreNext) return;
+    const p = compose(o.mood);
+    p.notes.forEach((nt) => key(nt.f, now + 0.05 + nt.at, 0.5 * nt.v));
+    const rest = o.mood === 'night' ? 14 + Math.random() * 16 : o.mood === 'sparse' ? 7 + Math.random() * 8 : 4 + Math.random() * 6;
+    scoreNext = now + p.len + rest;
+  }
   // Music-box note: a bright fundamental with a quickly decaying metallic partial.
   const bell = (f, when, v = 0.05) => { tone(f, 1.1, v, when); tone(f * 4.2, 0.12, v * 0.25, when); tone(f * 2, 0.5, v * 0.3, when); };
   return {
@@ -176,6 +221,7 @@ G.Audio = (() => {
       if (t > nextChord) { chordI = (chordI + 1) % CHORDS.length; CHORDS[chordI].forEach((fr, i) => pad[i].frequency.setTargetAtTime(fr, t, 1.8)); nextChord = t + 9 + Math.random() * 3; }
     },
     click() { tone(1800, 0.01, 0.03); },
+    score(o) { scoreTick(o); return ctx ? scoreNext - ctx.currentTime : 0; },   // (seconds until the next phrase)
     // A heartbeat, felt more than heard: two low thumps (lub-dub).
     heart(v = 1) { burst(0.11, 65, 0.2 * v, 'lowpass', 1.2); burst(0.09, 55, 0.14 * v, 'lowpass', 1.2, 0.26); },
     crackle(dt, level) {
@@ -396,6 +442,10 @@ function Audio_ambience(focus, dt, fp) {
   // The night and Act IV (until you're together again): the warm chords thin out and a low drone sits under everything.
   // When it goes quiet all at once (STATE.hush), something is coming.
   const eerie = !!G.S && (G.S.chapter === 'night' || (G.S.chapter === 'lastbirthday' && !G.S.flags.reunited));
+  // The quiet piano: warm indoors, sparse outside, almost nothing at night; off for the radio, the title screen,
+  // the power cut and the Music setting; a little quieter while someone's talking.
+  G.Audio.score({ on: SETTINGS.music !== 'off' && STATE.started && !G.Audio.radioOn() && !(G._PC && G._PC.out) && !document.body.classList.contains('ending'),
+    mood: eerie ? 'night' : inside ? 'warm' : 'sparse', duck: !!DLG.cur });
   G.Audio.set({ doorOpen: !!STATE.doorOpen, fire: fp, wind: (inside ? 0.35 : 0.45 + STATE.tod * 0.15) + gust * 0.55, pad: (STATE.started ? 1 : 0.6) * (eerie ? 0.3 : 1), drone: eerie && !STATE.hush ? 1 : 0, droneFast: !!STATE.hush, inside });
   G.Audio.crackle(dt, fp * (dFire < 12 ? 1 : 0));
   const cp = G.camera.position, fw = tmpV.set(0, 0, -1).applyQuaternion(G.camera.quaternion);
@@ -1964,6 +2014,10 @@ function boot() {
   const syncFlow = () => document.querySelectorAll('[data-flow]').forEach((b) => b.setAttribute('aria-pressed', String((SETTINGS.flow || 'auto') === b.dataset.flow)));
   document.querySelectorAll('[data-flow]').forEach((b) => b.addEventListener('click', () => { SETTINGS.flow = b.dataset.flow; saveSettings(); syncFlow(); }));
   syncFlow();
+  // Music: the quiet piano on or off (the ambience stays).
+  const syncMusic = () => document.querySelectorAll('[data-music]').forEach((b) => b.setAttribute('aria-pressed', String((SETTINGS.music || 'on') === b.dataset.music)));
+  document.querySelectorAll('[data-music]').forEach((b) => b.addEventListener('click', () => { SETTINGS.music = b.dataset.music; saveSettings(); syncMusic(); }));
+  syncMusic();
   // The endings you've reached (kept in this browser), with a nudge towards the ones you haven't.
   const ENDINGS = [
     ['foundme', 'You Found Me', 'Follow the trail. Go home together.'],

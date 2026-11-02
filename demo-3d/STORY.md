@@ -109,6 +109,7 @@ Free time used to have nothing to aim for: you wandered until you happened on wh
 - **You can keep walking while people talk** (you always could in free time; now nothing is waiting on you). If the camera cut in to frame a conversation, it hands itself back the moment you move.
 - **The subtitles stay out of the way:** no dark box behind them and no "E to continue" prompt; a little smaller and lower, sitting in the black film bars during scenes, with a tight shadow on the letters so they read on snow. Clicks go through them to the game.
 - Choices and the little games still wait for you.
+- **Music (build 93):** a quiet piano over the ambient pad, made of oscillators (no recordings). Short phrases from the pad's chord and a pentatonic scale, then long rests, like someone playing in another room: warm and fuller indoors, sparse and high outside, almost nothing at night (a single note now and then, sometimes not quite the right one). It dips under dialogue and goes quiet for the radio and the power cut. "Music: On / Off" in the pause menu.
 
 ## No two days the same (build 90)
 - **The weather** runs in a different order each playthrough (light snow, clear spells, proper snow, the odd short blizzard).
