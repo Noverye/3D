@@ -192,6 +192,15 @@ blinks, dozing, hugs. Hats and the snow on them are handed to the model's own he
 - **Gentle nights:** `SETTINGS.nights` (`G.gentle()`). It skips `hunt()`, the night heartbeat, `slip()`, the obsessive walk-ups and the Act IV glimpses.
 - **Endings dialog:** `#endings` on the title screen. It reads `snowed.endings`, and `showEnd` refreshes the count through `G.syncEndings`.
 
+## Eyes and eyelids (build 86)
+
+- Open eyes were always fine: brown irises, pupils and whites from the model's own eye texture. My earlier close-ups had caught her with her lids still shut.
+- Closed eyes (every blink, every bed scene) used a cap whose colour was the whole skin texture's average, darkened, which came out grey-brown. It was also bigger than the eye, so it stood out past the lashes.
+  - The cap's colour is now sampled from the face skin round each eye (cheek, temple, brow bone), keeping the brighter half of the texels so the lashes, brows and the socket's painted shadow don't darken it, then a touch darker and warmer for a lid in shade.
+  - It now hugs the eyeball (1.035 × its radius, set 2% back), so the face round the opening hides its edge the way real lids sit.
+  - The finish is 0.62 roughness instead of a flat 0.95.
+- The eye material also cuts away fully transparent texels (`alphaTest` 0.5). This is harmless with the current eye mesh, which has no separate cornea, and correct if a future export includes one.
+
 ## His trousers (build 85)
 
 - He no longer wears the same skin-tight leggings as her: `leggings_player` is now straight-leg trousers (`tools/trousers.py`, run in Blender). The result is saved as a new file, `cozy_characters_trousers.blend`, in the CozyCharacters folder; the other .blend files are untouched, and the file keeps a hidden `backup_leggings_player`.

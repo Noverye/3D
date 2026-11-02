@@ -536,6 +536,9 @@ function makeRealEyes(model) {
   let eyes = null, head = null;
   model.traverse((o) => { if (o.isMesh && /high-?poly/i.test(o.name)) eyes = o; if (o.isBone && /Head$/.test(o.name)) head = o; });
   if (!eyes || !head || !eyes.geometry.index) return null;
+  // The eye texture's cornea is clear (alpha 0) but the exported material is opaque, so the cornea shell was drawn
+  // as a pale grey disc over the iris. Cut the clear part away so the iris and pupil show through.
+  if (eyes.material && eyes.material.map) { eyes.material.alphaTest = 0.5; eyes.material.transparent = false; eyes.material.needsUpdate = true; }
   eyes.updateMatrixWorld(true);
   const g = eyes.geometry, P = g.attributes.position, Nn = g.attributes.normal, UV = g.attributes.uv, ix = g.index.array, M = eyes.matrixWorld;
   const nm = new THREE.Matrix3().getNormalMatrix(M), v = new THREE.Vector3(), out = [];
@@ -590,24 +593,48 @@ function makeRealLids(model) {
   let eyes = null, skin = null, head = null;
   model.traverse((o) => { if (o.isMesh && /high-?poly/i.test(o.name)) eyes = o; if (o.isMesh && /body/.test(o.material.name || '')) skin = o; if (o.isBone && /Head$/.test(o.name)) head = o; });
   if (!eyes || !head) return null;
-  const col = new THREE.Color(0xdcae98).convertSRGBToLinear();
-  try {   // average the skin texture (mostly skin), slightly darkened like a lid in the eye's shadow
-    const img = skin && skin.material.map && skin.material.map.image;
-    if (img) { const cv = document.createElement('canvas'); cv.width = cv.height = 16; const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0, 16, 16); const d = cx.getImageData(0, 0, 16, 16).data; let r = 0, g = 0, b = 0, n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 40) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; } if (n) col.setRGB(r / n / 255, g / n / 255, b / n / 255).convertSRGBToLinear().multiplyScalar(0.62); }
-  } catch (e) { /* keep the default */ }
-  const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.95, envMapIntensity: 0.12 });
-  G.MATS && G.MATS.push(mat);
+  eyes.updateMatrixWorld(true); if (skin) skin.updateMatrixWorld(true);
   const pos = eyes.geometry.attributes.position, v = new THREE.Vector3(), out = [];
-  eyes.updateMatrixWorld(true);
+  // The skin texture, small enough to read quickly.
+  let pix = null, PW = 0, PH = 0;
+  try {
+    const img = skin && skin.material.map && skin.material.map.image;
+    if (img) { PW = PH = 256; const cv = document.createElement('canvas'); cv.width = PW; cv.height = PH; const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0, PW, PH); pix = cx.getImageData(0, 0, PW, PH).data; }
+  } catch (e) { pix = null; }
   for (const side of [1, -1]) {
     const pts = [];
     for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(eyes.matrixWorld); if (Math.sign(v.x) === side) pts.push(v.clone()); }
     if (pts.length < 8) continue;
     const box = new THREE.Box3().setFromPoints(pts), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
     const r = Math.max(sz.x, sz.y) * 0.5;
-    // the cap: top 100° of a sphere just over the cornea, turned forward so it closes over the front of the eye
-    const lid = new THREE.Mesh(new THREE.SphereBufferGeometry(r * 1.13, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.56), mat);
-    lid.position.copy(c); lid.position.z -= r * 0.08; lid.rotation.x = Math.PI / 2 + 0.12;
+    // Colour: the skin of the lid itself, sampled from the face texture just above and around this eye (the old
+    // whole-texture average came out grey-brown); a touch warmer and darker, as a closed lid in the eye's shade.
+    let col = new THREE.Color(0xd9a98f).convertSRGBToLinear();
+    if (pix && skin.geometry.attributes.uv) {
+      // the face skin round the eye (cheek, temple, brow bone), leaving out the darker texels (lashes, brows, the
+      // socket's painted shadow): the brighter half's average is the lid's own colour
+      const SP = skin.geometry.attributes.position, UV = skin.geometry.attributes.uv, samp = [];
+      for (let i = 0; i < SP.count; i++) {
+        v.fromBufferAttribute(SP, i).applyMatrix4(skin.matrixWorld);
+        const dx = v.x - c.x, dy = v.y - c.y, dz = v.z - c.z;
+        if (dz < -r || dx * dx + dy * dy > (r * 5) * (r * 5) || dz > r * 4) continue;
+        const u = UV.getX(i), w = UV.getY(i);
+        const px = Math.max(0, Math.min(PW - 1, Math.round(u * (PW - 1)))), py = Math.max(0, Math.min(PH - 1, Math.round(w * (PH - 1))));
+        const k = (py * PW + px) * 4; if (pix[k + 3] < 128) continue;
+        samp.push([pix[k], pix[k + 1], pix[k + 2], pix[k] * 0.3 + pix[k + 1] * 0.59 + pix[k + 2] * 0.11]);
+      }
+      if (samp.length >= 6) {
+        samp.sort((a, b) => b[3] - a[3]); const top = samp.slice(0, Math.max(3, Math.floor(samp.length * 0.5)));
+        const avg = [0, 1, 2].map((j) => top.reduce((t, x) => t + x[j], 0) / top.length / 255);
+        col = new THREE.Color(avg[0] * 0.96, avg[1] * 0.93, avg[2] * 0.93).convertSRGBToLinear();
+      }
+    }
+    const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.62, envMapIntensity: 0.25 });
+    G.MATS && G.MATS.push(mat);
+    // The cap hugs the eyeball (just over the cornea), so the face around the opening hides its edge as real
+    // lids do; before, it was bigger than the eye and stood out past the lashes.
+    const lid = new THREE.Mesh(new THREE.SphereBufferGeometry(r * 1.035, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), mat);
+    lid.position.copy(c); lid.position.z -= r * 0.02; lid.rotation.x = Math.PI / 2 + 0.12;
     lid.castShadow = false; lid.visible = false; lid.userData.lid = true;
     model.parent.add(lid); lid.updateMatrixWorld(true); head.attach(lid);
     out.push(lid);
