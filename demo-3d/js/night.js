@@ -415,6 +415,8 @@ inter('hBed', [2.4, 0.6, 0.15], 1.25, 'Bed', async () => {
 }, () => herUp());
 // The front door won't open tonight.
 { const fd = findInter('frontdoor'), orig = fd && fd.raw; if (fd) rewire('frontdoor', async () => { if (night() && !S.flags.doorOpen) { await N('(It won’t open. It isn’t locked. It just won’t.)'); return; } return orig(); }); }
+// Noticing enough brings the door sooner: once you've heard the whistle and found three things that aren't right.
+G.TICKERS.add(() => { if (night() && S.flags.nightUp && !S.flags.doorOpen && !NIGHT.door.visible && NIGHT.whistles >= 1 && NIGHT.seen && NIGHT.seen.size >= 3 && !PLAYER.lie && !G.busy()) NIGHT.door.visible = true; });
 // Walking into the kitchen once the door is there.
 G.TICKERS.add(() => { if (night() && NIGHT.door.visible && !S.flags.doorOpen && !NIGHT.doorSaid && PLAYER.x > 11.3 && !G.busy()) { NIGHT.doorSaid = true; A.run(async () => { await N('(There’s a door in the kitchen wall. There has never been a door in the kitchen wall.)'); }); } });
 

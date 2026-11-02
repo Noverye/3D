@@ -694,6 +694,7 @@ const KINDS = {
 };
 const PLAN = { morning: ['light', 'clear', 'light', 'snow', 'light'], walk: ['clear', 'light', 'clear', 'light'], evening: ['snow', 'heavy', 'snow', 'light', 'snow'] };
 const WEATHER = (G.WEATHER = { kind: 'snow', t: 0, next: 150, i: 0, ch: null, hold: null });
+G.WEATHER_PLAN = PLAN;   // variety.js reshuffles it for each playthrough
 function setWeather(kind, quiet) {
   const K = KINDS[kind]; if (!K) return;
   WEATHER.kind = kind; STATE.snowTarget = K.snow; G.WIND.biasTarget = K.bias; STATE.fogK = K.fog;

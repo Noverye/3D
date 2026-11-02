@@ -961,7 +961,8 @@ CH.ending_foundme = async () => {
   G.bark('Kettle. Stay there and be warm.', 2.6);
   PARTNER.task = { o: { id: 'kettle', spot: { x: 12.6, z: -1.15 }, yaw: Math.PI, dur: [60, 60], stay: true, noReach: true }, phase: 'go', t: 0 };
   G.hint('(Take your time.)', 4);
-  await wait(14);
+  // The whistle comes when you go looking (out of the bedroom), or after a while if you don't.
+  { const t0 = G.simT; await until(() => (G.simT - t0 > 16 || (PLAYER.x > 5.2 && G.simT - t0 > 3)) && !G.busy()); }
   STATE.busy = true;
   await N('(From somewhere in the house: three notes. Slightly flat on the last one.)');
   const w = await choose(['Whistle back', 'Go and find her']);

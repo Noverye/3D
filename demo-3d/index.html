@@ -147,6 +147,11 @@
   .mg-dots { display: flex; gap: 6px; justify-content: center; margin-top: 4px; }
   .mg-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(244,233,216,0.2); }
   .mg-dots i.done { background: var(--amber); }
+  .mg-bar.fill .mg-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 999px; background: linear-gradient(90deg, rgba(244,233,216,0.55), rgba(255,240,215,0.95)); box-shadow: 0 0 10px rgba(255,230,190,0.5); }
+  .mg-stir { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .mg-pot { --heat: 0; position: relative; width: 84px; height: 84px; border-radius: 50%; background: radial-gradient(circle at 50% 45%, #6b3f26, #3a2216 70%); box-shadow: 0 0 0 4px rgba(244,233,216,0.25), 0 0 calc(4px + var(--heat) * 22px) rgba(240,176,100, calc(0.2 + var(--heat) * 0.7)); transition: box-shadow 0.2s; }
+  .mg-spoon { position: absolute; left: 50%; top: 50%; width: 4px; height: 36px; margin: -36px 0 0 -2px; transform-origin: 50% 100%; background: linear-gradient(#e9e2d6, #b9b0a4); border-radius: 3px; transition: transform 0.18s ease-out; }
+  .mg-time { width: 70%; height: 4px; border-radius: 4px; background: rgba(244,233,216,0.12); overflow: hidden; } .mg-time div { height: 100%; width: 0; background: var(--amber); }
   #together { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; gap: 8px; z-index: 19; flex-wrap: wrap; justify-content: center; width: min(560px, calc(100vw - 24px)); }
   #together button { border: 1px solid var(--line); background: rgba(16,12,12,0.78); backdrop-filter: blur(6px); padding: 10px 14px; border-radius: 999px; cursor: pointer; font-size: 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; opacity: 0; animation: endLine 0.25s ease forwards; }
   #together button .n { font: 600 10px var(--mono); color: var(--ink-dim); }
@@ -543,5 +548,6 @@
 <script src="js/powercut.js"></script>
 <script src="js/memories.js"></script>
 <script src="js/lists.js"></script>
+<script src="js/variety.js"></script>
 </body>
 </html>

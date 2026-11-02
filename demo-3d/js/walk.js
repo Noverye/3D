@@ -276,7 +276,7 @@ async function lake() {
   await P('I plan everything in the summer. Furthest one wins. Listen to them sing.', K());
   let mine = 0, hers = 0;
   for (let i = 0; i < 3; i++) {
-    const [sc] = await G.UI.timing({ title: i ? 'Another stone' : 'Slide a stone', rounds: 1, zone: [0.62, 0.74], speed: 1.05 + i * 0.12, labels: ['Plonk.', 'Not bad.', 'Beautiful.'] });
+    const [sc] = await G.UI.hold({ title: i ? 'Another stone' : 'Slide a stone', sub: i ? '' : (G.MOBILE ? 'Press and hold to wind up. Let go in the warm zone.' : 'Hold E or Space to wind up. Let go in the warm zone.'), zone: [0.66, 0.8], speed: 1.0 + i * 0.12, labels: ['Plonk.', 'Not bad.', 'Beautiful.'], over: 'It flies off into a snowdrift.' });
     PLAYER.forcePose = 'throw'; await wait(0.25); PLAYER.forcePose = null;
     const d = 2.5 + sc * 13 + Math.random() * 1.5;
     await slide(STONES[i * 2], V(SHORE.x + 0.4, G.LAKE.y, SHORE.z + 1.2), V(SHORE.x + 0.4 + (Math.random() - 0.5) * 2, G.LAKE.y, SHORE.z + 1.2 + d), 1.6 + sc);

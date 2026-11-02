@@ -720,7 +720,12 @@ Object.assign(Story, {
     await N('(Flour, eggs, milk, a pinch of salt. The pan hisses.)', { shot: 'keep' });
     k.pancakeInPan.visible = true;
     const col = (q) => (q > 0.75 ? '#e0ad66' : q > 0.35 ? '#c58a46' : '#5a3a22');
-    const sc = await G.UI.timing({ title: 'Flip the pancakes', rounds: 3, zone: [0.58, 0.74], labels: ['Charcoal.', 'Pancake-shaped.', 'Golden.'], onPress: (q) => { G.Audio.flip(); flipAnim(k.pancakeInPan, col(q)); } });
+    // Pour (hold and let go: too little is a coaster, too much is a lake), then flip them (timing).
+    k.pancakeInPan.visible = false;
+    const [pour] = await G.UI.hold({ title: 'Pour the batter', zone: [0.55, 0.72], speed: 1.05, labels: ['A coaster.', 'A bit lopsided.', 'Perfectly round.'], over: 'A lake. A pancake lake.', onHold: () => G.Audio.tone && G.Audio.tone(220, 0.25, 0.01), onTick: (v) => { k.pancakeInPan.visible = true; k.pancakeInPan.scale.setScalar(0.3 + v * 0.95); }, onRelease: () => G.Audio.sizzle(true) });
+    k.pancakeInPan.scale.setScalar(1); k.pancakeInPan.visible = true;
+    const flips = await G.UI.timing({ title: 'Flip the pancakes', rounds: 2, zone: [0.58, 0.74], labels: ['Charcoal.', 'Pancake-shaped.', 'Golden.'], onPress: (q) => { G.Audio.flip(); flipAnim(k.pancakeInPan, col(q)); } });
+    const sc = [pour, ...flips];
     const avg = sc.reduce((a, b) => a + b, 0) / sc.length;
     const q = (S.flags.pancakeQuality = avg > 0.7 ? 'golden' : avg > 0.38 ? 'fine' : 'burnt');
     k.burner.material.opacity = 0; G.Audio.sizzle(false); k.pancakeInPan.visible = false; G.steam('pan', 0, 0, 0, { off: true });

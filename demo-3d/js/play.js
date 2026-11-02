@@ -390,7 +390,9 @@ A.rewire('kettle', async () => {
   L.cocoaCh = S.chapter;
   await N('(Milk in the little pan, two big spoons of cocoa, and a pinch of salt, because she swears by it.)');
   G.Audio.sizzle(true);
-  const sc = await G.UI.timing({ title: 'Make cocoa', rounds: 3, zone: [0.56, 0.72], speed: 0.9, labels: ['Lumpy.', 'Drinkable.', 'Velvety.'], onPress: () => { for (let i = 0; i < 4; i++) G.Audio.tone(700 + Math.random() * 500, 0.02, 0.012, i * 0.06); } });
+  const [warm] = await G.UI.hold({ title: 'Warm the milk', sub: G.MOBILE ? 'Press and hold. Take it off before it boils.' : 'Hold E or Space. Take it off before it boils.', zone: [0.6, 0.8], speed: 0.85, labels: ['Barely warm.', 'Warm enough.', 'Just steaming.'], over: 'It boiled over. Mostly onto the hob.' });
+  const [stir] = await G.UI.rhythm({ title: 'Stir in the cocoa', labels: ['Lumpy.', 'Drinkable.', 'Velvety.'], fast: 'Slower, or it’ll go everywhere…', slow: 'Keep stirring…', onTap: () => { for (let i = 0; i < 2; i++) G.Audio.tone(700 + Math.random() * 500, 0.02, 0.01, i * 0.05); } });
+  const sc = [warm, stir, stir];
   G.Audio.sizzle(false);
   const q = sc.reduce((a, b) => a + b, 0) / sc.length;
   await N(q > 0.7 ? '(Two mugs of cocoa so smooth it’s almost suspicious.)' : q > 0.38 ? '(Two mugs of cocoa. A few heroic lumps, but cocoa.)' : '(Two mugs of something cocoa-adjacent. Mostly warm.)');

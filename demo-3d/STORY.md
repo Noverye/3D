@@ -104,6 +104,17 @@ Free time used to have nothing to aim for: you wandered until you happened on wh
 - **The night ("Not right"):** a torn page. Everything you notice about the one beside you goes on it: what it says that she never would (the score, the blanket, the halves, the icing, her line said exactly right) and what's out of place (three mugs, snow inside the sill, the wiped window, the third shape in the photograph). Looking at things while it's watching you raises its suspicion, and the line is marked "(it saw)". It doesn't always say anything; when it does, it's one of several things ("Come away from there.", "You keep looking at things."). Gentle nights skip that.
 - **The payoff:** at the door, with three things or more on the page, you tell it what gave it away, and it says it will practise. Every line also counts toward which morning you wake up to (a little more trust per thing noticed).
 
+## No two days the same (build 90)
+- **The weather** runs in a different order each playthrough (light snow, clear spells, proper snow, the odd short blizzard).
+- **The evening power cut** always happens the first time you play; after that, on about half of evenings. The night's echo of it only follows a real one.
+- **Small things that just happen**, two in each stretch of free time, drawn from a pool and steering away from last time's, only when she's with you and nothing else is going on: the roof letting go of its snow with a thump ("I'm not saying I jumped. I'm saying the house jumped."); her singing along to the radio, wrongly, for eleven years; a static shock from the jumper; hiccups; an owl ("He's very late. Or very early."); cold feet; the snow suddenly coming down in pillows.
+- **Hands-on moments feel different from each other** instead of all being the same timing bar:
+  - Pancakes: pour the batter (hold, and let go before it's a lake; the pancake grows in the pan as you pour), then flip them twice (timing).
+  - Cocoa: warm the milk (hold, take it off before it boils over), then stir in the cocoa (tap steadily, not too fast; the spoon goes round and the pot warms while you keep the rhythm).
+  - Stones on the lake: wind up and let go (hold).
+  - The pinecones and the snowball stay as quick timing throws.
+- **Less waiting:** in You Found Me her whistle comes when you go looking for her (out of the bedroom), not after a fixed wait. At night, once you've heard the whistle and found three things that aren't right, the door in the kitchen appears without waiting for the second whistle.
+
 ## Act II · Something Strange: the evening
 
 - She hadn't forgotten what day it is: the cake, five candles, a wish.

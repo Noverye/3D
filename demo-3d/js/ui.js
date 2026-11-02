@@ -103,6 +103,90 @@ UI.timing = (o) => new Promise((res) => {
   } };
 });
 
+/* Hold and let go: pouring, warming, winding up a throw. Hold E / Space / a finger down and the bar fills (a
+ * little faster as it goes); let go in the warm zone. Holding too long spills over. Resolves to scores, like timing. */
+UI.hold = (o) => new Promise((res) => {
+  const box = $('minigame'), zone = o.zone || [0.62, 0.78], rounds = o.rounds || 1;
+  box.innerHTML = `<div class="mg-title">${esc(G.fmt(o.title))}</div><div class="mg-bar fill"><div class="mg-zone" style="left:${zone[0] * 100}%;width:${(zone[1] - zone[0]) * 100}%"></div><div class="mg-fill"></div></div>
+    <div class="mg-sub">${esc(G.fmt(o.sub || (G.MOBILE ? 'Press and hold. Let go in the warm zone.' : 'Hold E or Space. Let go in the warm zone.')))}</div><div class="mg-res"></div><div class="mg-dots">${'<i></i>'.repeat(rounds)}</div>`;
+  box.hidden = false;
+  const fill = box.querySelector('.mg-fill'), resEl = box.querySelector('.mg-res'), dots = box.querySelectorAll('.mg-dots i');
+  const scores = []; let v = 0, held = false, cool = 0.3;
+  const speed = (o.speed || 1) * 0.42;
+  const L = o.labels || ['Too little.', 'Nearly.', 'Just right.'];
+  const done = () => { G.TICKERS.delete(tick); removeEventListener('keyup', up); removeEventListener('pointerup', up); modal = null; box.hidden = true; res(scores); };
+  const score = (sc, word) => {
+    scores.push(sc); dots[scores.length - 1].classList.add('done');
+    resEl.textContent = G.fmt(word || (sc > 0.75 ? L[2] : sc > 0.35 ? L[1] : L[0]));
+    if (o.onRelease) o.onRelease(sc, scores.length - 1);
+    held = false; cool = 0.8;
+    if (scores.length >= rounds) G.wait(1.1).then(done); else G.wait(0.7).then(() => { v = 0; fill.style.width = '0%'; });
+  };
+  const release = () => {
+    if (!held) return;
+    const c = (zone[0] + zone[1]) / 2, hw = (zone[1] - zone[0]) / 2, d = Math.abs(v - c);
+    score(d <= hw ? 1 - 0.3 * (d / hw) : Math.max(0, 0.62 - (d - hw) * 3.2));
+  };
+  const down = () => { if (cool > 0 || held || scores.length >= rounds) return; held = true; v = 0; if (o.onHold) o.onHold(); };
+  const up = (e) => { if (e.type === 'pointerup' || ['Enter', 'Space', 'KeyE'].includes(e.code)) release(); };
+  const tick = (dt) => {
+    cool -= dt;
+    if (!held) return;
+    v += dt * speed * (0.6 + v * 1.1) * (1 + scores.length * 0.12);   // slow at first, then it runs away from you
+    if (v >= 1) { v = 1; fill.style.width = '100%'; score(0.1, o.over || 'Too much!'); return; }
+    fill.style.width = (v * 100) + '%';
+    if (o.onTick) o.onTick(v, dt);
+  };
+  G.TICKERS.add(tick);
+  addEventListener('keyup', up); addEventListener('pointerup', up);
+  box.onpointerdown = (e) => { e.preventDefault(); down(); };
+  modal = { kind: 'minigame', key(e) {
+    if (['Enter', 'Space', 'KeyE'].includes(e.code)) { if (!e.repeat) down(); return; }
+    if (e.code === 'Escape' || e.code === 'KeyP') return;
+    return false;
+  } };
+});
+
+/* Keep a rhythm: stirring. Tap steadily, not too fast and not too slow; the spoon goes round with each tap, and
+ * the ring warms up while you're in time. A few seconds of it. Resolves to [score]. */
+UI.rhythm = (o) => new Promise((res) => {
+  const box = $('minigame'), dur = o.dur || 5, lo = o.lo || 0.26, hi = o.hi || 0.56;
+  box.innerHTML = `<div class="mg-title">${esc(G.fmt(o.title))}</div><div class="mg-stir"><div class="mg-pot"><i class="mg-spoon"></i></div><div class="mg-time"><div></div></div></div>
+    <div class="mg-sub">${esc(G.fmt(o.sub || (G.MOBILE ? 'Tap steadily. Not too fast.' : 'Tap E or Space steadily. Not too fast.')))}</div><div class="mg-res"></div>`;
+  box.hidden = false;
+  const pot = box.querySelector('.mg-pot'), spoon = box.querySelector('.mg-spoon'), bar = box.querySelector('.mg-time div'), resEl = box.querySelector('.mg-res');
+  const L = o.labels || ['Lumpy.', 'Fine.', 'Smooth.'];
+  let t = 0, last = -1, ang = 0, good = 0, taps = 0, heat = 0, over = false;
+  const press = () => {
+    if (over) return;
+    const now = t;
+    if (last >= 0) { const gap = now - last; taps++; if (gap >= lo && gap <= hi) { good++; heat = Math.min(1, heat + 0.25); resEl.textContent = ''; } else { heat = Math.max(0, heat - 0.35); resEl.textContent = G.fmt(gap < lo ? (o.fast || 'Slower…') : (o.slow || 'Keep going…')); } }
+    last = now; ang += 90;
+    spoon.style.transform = `rotate(${ang}deg)`;
+    if (o.onTap) o.onTap();
+  };
+  const tick = (dt) => {
+    if (over) return;
+    t += dt; heat = Math.max(0, heat - dt * 0.15);
+    bar.style.width = Math.min(100, (t / dur) * 100) + '%';
+    pot.style.setProperty('--heat', heat.toFixed(2));
+    if (last >= 0 && t - last > hi * 1.6 && !resEl.textContent) resEl.textContent = G.fmt(o.slow || 'Keep going…');
+    if (t >= dur) {
+      over = true;
+      const sc = taps ? Math.min(1, (good / Math.max(taps, dur / ((lo + hi) / 2) * 0.8)) * 1.05) : 0;
+      resEl.textContent = G.fmt(sc > 0.75 ? L[2] : sc > 0.35 ? L[1] : L[0]);
+      G.wait(1.1).then(() => { G.TICKERS.delete(tick); modal = null; box.hidden = true; res([sc]); });
+    }
+  };
+  G.TICKERS.add(tick);
+  box.onpointerdown = (e) => { e.preventDefault(); press(); };
+  modal = { kind: 'minigame', key(e) {
+    if (['Enter', 'Space', 'KeyE'].includes(e.code)) { if (!e.repeat) press(); return; }
+    if (e.code === 'Escape' || e.code === 'KeyP') return;
+    return false;
+  } };
+});
+
 /* The Together menu: a row of actions. Resolves to an action id, or null if closed. */
 UI.together = (acts) => new Promise((res) => {
   const box = $('together');
