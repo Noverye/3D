@@ -259,6 +259,10 @@
   #line { font-family: var(--ui); font-weight: 500; }
   #subs.narr #line { font-family: var(--display); font-weight: 400; font-size: calc(clamp(22px, 2.9vw, 30px) * var(--subK)); color: #f3ead9; }
   #subs::after { content: "E to continue"; font: 400 11px var(--ui); letter-spacing: 0; color: var(--ink-faint); margin-top: 10px; }
+  /* A soft, feathered dark backdrop behind the words: invisible indoors and at night, but it keeps white text
+   * readable over bright snow. (#subs is transformed, so ::before sits inside its stacking context.) */
+  #subs::before { content: ""; position: absolute; inset: -22px -48px -14px; z-index: -1; pointer-events: none;
+    background: radial-gradient(closest-side, rgba(6,9,15,0.5), rgba(6,9,15,0.32) 55%, rgba(6,9,15,0)); }
   @media (pointer: coarse) { #subs::after { content: "Tap to continue"; } }
 
   /* Choices: rows of glass; the one you're on lit from the left like a lamp in a window. */

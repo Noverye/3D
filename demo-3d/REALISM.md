@@ -194,6 +194,8 @@ blinks, dozing, hugs. Hats and the snow on them are handed to the model's own he
 
 ## Eyes and eyelids (build 86)
 
+- Subtitles have a soft, feathered dark backdrop (`#subs::before`, a radial gradient). It's barely visible indoors and at night, but keeps white words readable over bright snow, which the scene sheet showed they weren't.
+
 - Open eyes were always fine: brown irises, pupils and whites from the model's own eye texture. My earlier close-ups had caught her with her lids still shut.
 - Closed eyes (every blink, every bed scene) used a cap whose colour was the whole skin texture's average, darkened, which came out grey-brown. It was also bigger than the eye, so it stood out past the lashes.
   - The cap's colour is now sampled from the face skin round each eye (cheek, temple, brow bone), keeping the brighter half of the texels so the lashes, brows and the socket's painted shadow don't darken it, then a touch darker and warmer for a lid in shade.
