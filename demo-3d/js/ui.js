@@ -66,14 +66,20 @@ UI.reset = () => { modal = null; for (const id of ['choices', 'card']) { const b
 UI.act = (num, title, o = {}) => UI.card(['Act ' + num, title], { cls: ['act-n', 'act-t'], stagger: 0.45, hold: o.hold || 3.4, white: o.white });
 
 /* Timing minigame: stop the marker in the warm zone. Resolves to an array of scores in 0..1. */
+/* Easier little games (a setting): warm zones half as wide again, and everything a third slower. */
+const ease = (zone, speed) => {
+  if (!G.easyHands || !G.easyHands()) return [zone, speed];
+  const c = (zone[0] + zone[1]) / 2, hw = Math.min(0.2, (zone[1] - zone[0]) * 0.8);
+  return [[Math.max(0.05, c - hw), Math.min(0.97, c + hw)], speed * 0.68];
+};
 UI.timing = (o) => new Promise((res) => {
-  const box = $('minigame'), zone = o.zone || [0.6, 0.76], rounds = o.rounds || 3;
+  const box = $('minigame'), [zone, spd] = ease(o.zone || [0.6, 0.76], o.speed || 1), rounds = o.rounds || 3;
   box.innerHTML = `<div class="mg-title">${esc(G.fmt(o.title))}</div><div class="mg-bar"><div class="mg-zone" style="left:${zone[0] * 100}%;width:${(zone[1] - zone[0]) * 100}%"></div><div class="mg-needle"></div></div>
     <div class="mg-sub">${G.MOBILE ? 'Tap when the marker is in the warm zone' : 'Press E or Space when the marker is in the warm zone'}</div><div class="mg-res"></div><div class="mg-dots">${'<i></i>'.repeat(rounds)}</div>`;
   box.hidden = false;
   const needle = box.querySelector('.mg-needle'), resEl = box.querySelector('.mg-res'), dots = box.querySelectorAll('.mg-dots i');
   const scores = []; let t = Math.random() * 0.3, dir = 1, cool = 0.5;
-  const speed = (o.speed || 1) * 0.9;
+  const speed = spd * 0.9;
   const press = () => {
     if (cool > 0 || scores.length >= rounds) return;
     const c = (zone[0] + zone[1]) / 2, hw = (zone[1] - zone[0]) / 2, d = Math.abs(t - c);
@@ -106,13 +112,13 @@ UI.timing = (o) => new Promise((res) => {
 /* Hold and let go: pouring, warming, winding up a throw. Hold E / Space / a finger down and the bar fills (a
  * little faster as it goes); let go in the warm zone. Holding too long spills over. Resolves to scores, like timing. */
 UI.hold = (o) => new Promise((res) => {
-  const box = $('minigame'), zone = o.zone || [0.62, 0.78], rounds = o.rounds || 1;
+  const box = $('minigame'), [zone, spd] = ease(o.zone || [0.62, 0.78], o.speed || 1), rounds = o.rounds || 1;
   box.innerHTML = `<div class="mg-title">${esc(G.fmt(o.title))}</div><div class="mg-bar fill"><div class="mg-zone" style="left:${zone[0] * 100}%;width:${(zone[1] - zone[0]) * 100}%"></div><div class="mg-fill"></div></div>
     <div class="mg-sub">${esc(G.fmt(o.sub || (G.MOBILE ? 'Press and hold. Let go in the warm zone.' : 'Hold E or Space. Let go in the warm zone.')))}</div><div class="mg-res"></div><div class="mg-dots">${'<i></i>'.repeat(rounds)}</div>`;
   box.hidden = false;
   const fill = box.querySelector('.mg-fill'), resEl = box.querySelector('.mg-res'), dots = box.querySelectorAll('.mg-dots i');
   const scores = []; let v = 0, held = false, cool = 0.3;
-  const speed = (o.speed || 1) * 0.42;
+  const speed = spd * 0.42;
   const L = o.labels || ['Too little.', 'Nearly.', 'Just right.'];
   const done = () => { G.TICKERS.delete(tick); removeEventListener('keyup', up); removeEventListener('pointerup', up); modal = null; box.hidden = true; res(scores); };
   const score = (sc, word) => {
@@ -150,7 +156,7 @@ UI.hold = (o) => new Promise((res) => {
 /* Keep a rhythm: stirring. Tap steadily, not too fast and not too slow; the spoon goes round with each tap, and
  * the ring warms up while you're in time. A few seconds of it. Resolves to [score]. */
 UI.rhythm = (o) => new Promise((res) => {
-  const box = $('minigame'), dur = o.dur || 5, lo = o.lo || 0.26, hi = o.hi || 0.56;
+  const easy = G.easyHands && G.easyHands(), box = $('minigame'), dur = o.dur || 5, lo = (o.lo || 0.26) * (easy ? 0.6 : 1), hi = (o.hi || 0.56) * (easy ? 1.6 : 1);
   box.innerHTML = `<div class="mg-title">${esc(G.fmt(o.title))}</div><div class="mg-stir"><div class="mg-pot"><i class="mg-spoon"></i></div><div class="mg-time"><div></div></div></div>
     <div class="mg-sub">${esc(G.fmt(o.sub || (G.MOBILE ? 'Tap steadily. Not too fast.' : 'Tap E or Space steadily. Not too fast.')))}</div><div class="mg-res"></div>`;
   box.hidden = false;

@@ -82,7 +82,7 @@ inter('mBranch', [PINE.x + 0.9, 1.4, PINE.z], 1.3, 'Snowy branch', async () => {
   }
   addScrap('branch', c === 0 ? 'A branch full of snow on the path. She has sworn revenge.' : 'A branch full of snow on the path, and down the back of your neck.');
   S.flags.mBranch = 1; back();
-}, () => walkBefore() && !S.flags.mBranch && dist() < 7);
+}, () => walkBefore() && !S.flags.mBranch && S.flags.walkSkip !== 'mBranch' && dist() < 7);
 
 // Small tracks in the fresh snow, going off into the trees.
 const TRACKS = { z: 25.6, x: () => G.pathX(25.6) + 1.1, laid: false };
@@ -117,7 +117,7 @@ inter('mTracks', [TRACKS.x() + 0.6, 0.3, TRACKS.z + 0.3], 1.2, 'Tracks', async (
   }
   addScrap('fox', 'Fox tracks off into the trees. (A fox with opinions.)');
   S.flags.mTracks = 1; back();
-}, () => walkBefore() && !S.flags.mTracks);
+}, () => walkBefore() && !S.flags.mTracks && S.flags.walkSkip !== 'mTracks');
 
 // The ambush: half-way down the path she gets you first.
 async function ambush() {
@@ -159,8 +159,8 @@ async function ambush() {
 }
 G.TICKERS.add(() => {
   if (S.chapter !== 'walk') return;
-  layTracks();
-  if (walkBefore() && !S.flags.mAmbush && !G.busy() && PLAYER.z > 19.5 && PLAYER.z < 27 && !PARTNER.hidden && dist() < 9 && !STATE.noControl) A.run(ambush);
+  if (S.flags.walkSkip !== 'mTracks') layTracks();
+  if (walkBefore() && !S.flags.mAmbush && S.flags.walkSkip !== 'mAmbush' && !G.busy() && PLAYER.z > 19.5 && PLAYER.z < 27 && !PARTNER.hidden && dist() < 9 && !STATE.noControl) A.run(ambush);
 });
 // A new walk lays fresh tracks and a fresh branch.
 (G.onJump = G.onJump || []).push(() => { PINE.cap.visible = true; });

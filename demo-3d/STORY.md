@@ -113,6 +113,8 @@ Free time used to have nothing to aim for: you wandered until you happened on wh
   - Cocoa: warm the milk (hold, take it off before it boils over), then stir in the cocoa (tap steadily, not too fast; the spoon goes round and the pot warms while you keep the rhythm).
   - Stones on the lake: wind up and let go (hold).
   - The pinecones and the snowball stay as quick timing throws.
+- **The walk (build 91)** keeps two of its three little moments each time (the snowy branch, the fox tracks, the ambush), never skipping the same one twice running; whatever's skipped is never mentioned later. Her small surprises happen outdoors too (static, hiccups, cold feet), and one is only for the walk: she cups her hands and shouts to the valley, and the valley answers.
+- **Easier little games (build 91):** a setting on the title screen and in the pause menu ("Little games: Normal / Easier"). Easier makes every warm zone half as wide again and everything a third slower, and the stirring rhythm far more forgiving.
 - **Less waiting:** in You Found Me her whistle comes when you go looking for her (out of the bedroom), not after a fixed wait. At night, once you've heard the whistle and found three things that aren't right, the door in the kitchen appears without waiting for the second whistle.
 
 ## Act II · Something Strange: the evening

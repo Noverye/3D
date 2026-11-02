@@ -6,7 +6,8 @@
  *    (and the night's echo of it only follows a real one).
  *  - A couple of small unplanned things happen in each stretch of free time, drawn from a pool and steering away
  *    from last time's: the roof shedding its snow, her singing along to the radio, a static shock, hiccups, an owl,
- *    cold feet, the snow suddenly coming down in pillows. Each is short, and only when she's with you and nothing
+ *    cold feet, the snow suddenly coming down in pillows; outdoors, her shouting to the valley and the valley answering.
+ *  - The walk keeps two of its three little moments (the snowy branch, the fox tracks, the ambush), not always the same two. Each is short, and only when she's with you and nothing
  *    else is going on.
  * ========================================================================= */
 (G.afterBuild = G.afterBuild || []).push(() => {
@@ -38,23 +39,30 @@ const EVENTS = {
     later(3.5, () => { G.Audio.hum && G.Audio.hum(); say(pick(['♪ …something something, snow on the window, something something you… ♪', '♪ …and the kettle on, and the la la la la… ♪']), 3.6); });
     later(9, () => say(pick(['That’s not how it goes, is it.', 'I’ve sung that wrong for eleven years. I’m not stopping now.']), 3));
   } },
-  zap: { ch: ['morning', 'evening'], ok: () => dist() < 1.6, run: () => {
+  zap: { ch: ['morning', 'walk', 'evening'], ok: () => dist() < 1.6, run: () => {
     G.Audio.click && G.Audio.click(); G.Audio.tone && G.Audio.tone(2400, 0.04, 0.03);
     PARTNER.forcePose = 'wave'; G.wait(0.5).then(() => { PARTNER.forcePose = null; });
     say(pick(['Ow! You zapped me.', 'Ow! Static. You’re all static. It’s the jumper.']), 2.4);
     later(3, () => say(pick(['On purpose. I saw your face.', 'Do it again. No. Yes. No.']), 2.6));
   } },
-  hiccups: { ch: ['morning', 'evening'], run: () => {
+  hiccups: { ch: ['morning', 'walk', 'evening'], run: () => {
     say('*hic*', 1.2);
     later(2.5, () => say(pick(['Don’t— *hic* —look at me.', 'It’s nothing. It’s— *hic*. Oh, come on.']), 2.4));
     later(9, () => say('*hic*', 1.2));
     later(16, () => say(pick(['…They’ve gone. Don’t say anything, you’ll bring them back.', 'Gone. I held my breath for a hundred years.']), 3));
   } },
+  echo: { ch: ['walk'], ok: () => !G.inside(PLAYER.x, PLAYER.z), run: () => {
+    PARTNER.forcePose = 'wave'; G.wait(1.2).then(() => { PARTNER.forcePose = null; });
+    say(pick(['*cups her hands* HELLO!', '*cups her hands* IS ANYONE OUT THERE?']), 2);
+    for (let i = 0; i < 3; i++) G.wait(1.6 + i * 0.7).then(() => G.Audio.tone && G.Audio.tone(330 - i * 20, 0.25, 0.012 / (i + 1)));
+    G.wait(1.8).then(() => G.hint(pick(['(…hello… …ello… …lo…)', '(…out there… …there… …ere…)']), 3));
+    later(4.5, () => say(pick(['It answered. It always answers. It’s very polite, this valley.', 'Your turn. No? Coward. Lovingly.']), 3));
+  } },
   owl: { ch: ['evening'], run: () => {
     for (const [f, w] of [[392, 0], [349, 0.45], [392, 1.3], [349, 1.6]]) G.Audio.tone && G.Audio.tone(f, 0.32, 0.018, w);
     later(1.8, () => say(pick(['Did you hear that? An owl. He’s very late. Or very early.', 'An owl. In this weather. He must be furious.']), 3.2));
   } },
-  feet: { ch: ['morning', 'evening'], ok: () => dist() < 2.5, run: () => {
+  feet: { ch: ['morning', 'walk', 'evening'], ok: () => dist() < 2.5, run: () => {
     say(pick(['My feet are ice. Feel. No, don’t. Yes, do.', 'My toes have stopped speaking to me.']), 3);
     later(4, () => say(pick(['Socks. I own eleven pairs. I know where none of them are.', 'You’re warm. That’s just unfair.']), 3));
   } },
@@ -66,7 +74,8 @@ const EVENTS = {
 };
 // When something can just happen: free time, her up and about and near you, nothing else going on.
 function free(soft) {
-  if (!['morning', 'evening'].includes(S.chapter) || (G.herRoute && G.herRoute()) || STATE.asHer) return false;
+  if (!['morning', 'walk', 'evening'].includes(S.chapter) || (G.herRoute && G.herRoute()) || STATE.asHer || STATE.noControl) return false;
+  if (S.chapter === 'walk' && (S.flags.circleShown || PARTNER.hold)) return false;
   if (G.busy() || STATE.sceneShot || PARTNER.hidden || PARTNER.lie || PARTNER.script || PARTNER.task || (PARTNER.sit || 0) > 0.2) return false;
   if (S.chapter === 'evening' && (STATE.watchDoor || STATE.porchDone || (G._PC && G._PC.out))) return false;
   if (S.chapter === 'morning' && S.flags.breakfastDone) return false;
@@ -81,6 +90,15 @@ function plan() {
   V.todo = shuffle(all.filter((k) => !last.includes(k))).concat(shuffle(all.filter((k) => last.includes(k)))).slice(0, 2);
   store.set('snowed.var.last.' + ch, V.todo.slice());
   V.t = 0; V.next = 45 + Math.random() * 40;
+}
+
+/* ---------- the walk: two of its three little moments, not always the same two ---------- */
+function walkMoments() {
+  const all = ['mBranch', 'mTracks', 'mAmbush'];
+  if (all.some((k) => S.flags[k]) || S.flags.walkSkip) return;   // already under way
+  const last = store.get('snowed.var.walkSkip', null);
+  const skip = pick(all.filter((k) => k !== last));
+  S.flags.walkSkip = skip; store.set('snowed.var.walkSkip', skip);   // that one doesn't happen this time (moments.js)
 }
 
 /* ---------- the power cut: not every evening ---------- */
@@ -99,7 +117,8 @@ G.TICKERS.add((dt) => {
   if (V.key !== key) {
     const was = V.key; V.key = key;
     if (S.chapter === 'morning' && (!was || !was.endsWith(':morning'))) { shuffleWeather(); S.flags.pcRoll = null; }
-    if (['morning', 'evening'].includes(S.chapter)) plan(); else V.todo = [];
+    if (['morning', 'walk', 'evening'].includes(S.chapter)) plan(); else V.todo = [];
+    if (S.chapter === 'walk') walkMoments();
     if (S.chapter === 'evening') rollPowerCut();
   }
   // The power cut only comes on the evenings it's meant to (powercut.js waits for it otherwise).

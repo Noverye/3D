@@ -958,6 +958,7 @@ G.herSide = () => SETTINGS.playAs === 'partner' && !!G.S && HER_CH.test(G.S.chap
 G.herRoute = () => SETTINGS.playAs === 'partner';
 // Gentle nights (title screen): nothing chases you, nothing catches you, no heartbeat. The story is the same.
 G.gentle = () => SETTINGS.nights === 'gentle';
+G.easyHands = () => SETTINGS.hands === 'easy';
 // "You" is whoever you're playing: her in her chapters, in her own route, and whenever the bodies are swapped.
 G.labelsTurned = () => G.herSide() || !!(G.NIGHT && G.NIGHT.swapped) || (G.herRoute() && !!G.S && G.S.chapter === 'bedtime');
 const herLine = (who, text) => (who == null && G.herSide() && window.CBS_NARR_HER && window.CBS_NARR_HER[text]) || text;
@@ -1944,6 +1945,13 @@ function boot() {
   };
   document.querySelectorAll('[data-nights]').forEach((b) => b.addEventListener('click', () => { SETTINGS.nights = b.dataset.nights; saveSettings(); syncNights(); }));
   syncNights();
+  // The little games (pouring, stirring, flipping, throwing): normal, or easier (wider warm zones, slower).
+  const syncHands = () => {
+    document.querySelectorAll('[data-hands]').forEach((b) => b.setAttribute('aria-pressed', String((SETTINGS.hands || 'normal') === b.dataset.hands)));
+    if ($('handsNote')) $('handsNote').textContent = G.easyHands() ? 'Wider, slower.' : '';
+  };
+  document.querySelectorAll('[data-hands]').forEach((b) => b.addEventListener('click', () => { SETTINGS.hands = b.dataset.hands; saveSettings(); syncHands(); }));
+  syncHands();
   // The endings you've reached (kept in this browser), with a nudge towards the ones you haven't.
   const ENDINGS = [
     ['foundme', 'You Found Me', 'Follow the trail. Go home together.'],
