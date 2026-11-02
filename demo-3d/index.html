@@ -390,6 +390,8 @@
   #list.night .le { color: #9a948c; }
   @media (max-width: 560px), (max-height: 480px) { #listTab { font-size: 15px; padding: 7px 10px 6px; } #listBody li { font-size: 15px; line-height: 22px; } #listBody { padding: 10px 12px; background-image: none; } #listBody .lh { font-size: 18px; } }
   body:not(.playing) #list { display: none; }
+  /* Narrow screens (a phone held upright): the top bar runs nearly the full width, so the note sits below it. */
+  @media (max-width: 600px) { #list { top: calc(58px + env(safe-area-inset-top, 0px)); max-width: min(270px, calc(100vw - 24px)); } }
   /* Flowing dialogue: lighter subtitles that stay out of the way. No backdrop (a tight shadow on the letters keeps
    * them readable on snow), no "continue" prompt, a little smaller and lower, and the game underneath stays
    * clickable. Narration is quieter still. */
@@ -578,5 +580,6 @@
 <script src="js/memories.js"></script>
 <script src="js/lists.js"></script>
 <script src="js/variety.js"></script>
+<script src="js/habits.js"></script>
 </body>
 </html>

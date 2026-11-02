@@ -104,6 +104,14 @@ Free time used to have nothing to aim for: you wandered until you happened on wh
 - **The night ("Not right"):** a torn page. Everything you notice about the one beside you goes on it: what it says that she never would (the score, the blanket, the halves, the icing, her line said exactly right) and what's out of place (three mugs, snow inside the sill, the wiped window, the third shape in the photograph). Looking at things while it's watching you raises its suspicion, and the line is marked "(it saw)". It doesn't always say anything; when it does, it's one of several things ("Come away from there.", "You keep looking at things."). Gentle nights skip that.
 - **The payoff:** at the door, with three things or more on the page, you tell it what gave it away, and it says it will practise. Every line also counts toward which morning you wake up to (a little more trust per thing noticed).
 
+## Coming back, and her noticing you (build 94)
+- **"Previously…" when you continue a saved game:** a short card over black before the chapter starts, made from what happened in that playthrough ("Last time: the cake, a photograph nobody took, and a firefly in the snow. / Now: bed."; "Last time: a snow day. Perfect pancakes, for once. / Now: boots on. She has a plan.").
+- **Her noticing your habits across playthroughs** (kept in this browser; never on the first playthrough, at most one of each per playthrough, and only when she can say it):
+  - What you reach for first in the morning. If it's the same as last time, she says so, fondly ("Tea first. Always tea first. I love that about you."; "You always say good morning to Basil before me. I've noticed.").
+  - How the last playthrough ended comes back as a dream she half remembers, once you've been together a little while ("I dreamt you didn't come home. Silly. You're right here." after Stay or The Perfect Partner; "I dreamt I was outside, looking in. You were laughing." after Replaced; "I dreamt about the fair again. You whistled. Badly." after You Found Me).
+- **Fixed:** the Continue button on the title screen didn't appear for a save made from bedtime onwards (it was checked before those chapters were known).
+- **Phones:** on a phone held upright, her list now sits below the top bar instead of under it. Checked on phone-sized screens both ways round: the pour and stir games work by touch (press and hold, tap), and the panels and buttons fit.
+
 ## Dialogue that doesn't stop the game (build 92)
 - **Lines flow on by themselves.** Each one stays long enough to read comfortably (longer at the larger subtitle sizes), then the next one comes. E or a tap still moves things along. "Dialogue: Flows on / Press to continue" on the title screen and in the pause menu brings back waiting on every line.
 - **You can keep walking while people talk** (you always could in free time; now nothing is waiting on you). If the camera cut in to frame a conversation, it hands itself back the moment you move.

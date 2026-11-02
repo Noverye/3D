@@ -47,7 +47,8 @@ function checkpoint(chapter) {
   }
 }
 function loadSave() { try { const d = JSON.parse(localStorage.getItem(SAVE_KEY)); return d && d.v === 1 && CH[d.chapter] ? d : null; } catch (e) { return null; } }
-if (loadSave()) G.$('continue').hidden = false;
+// After every story file has registered its chapters (a save from the night or Act IV needs them to be known).
+setTimeout(() => { if (loadSave()) G.$('continue').hidden = false; }, 0);
 
 /* ---------- house state: lamps, fire, cake, breakfast, the bed ---------- */
 const K = () => G.KITCHEN;
@@ -677,11 +678,28 @@ const tableShot = (seat) => (seat === 'C' ? fixed(V(11.3, 1.42, 2.62), V(13.0, 1
  * Shared scenes
  * ===================================================================== */
 const Story = G.Story;
+// Continuing a saved game: a short "previously", from what actually happened in this playthrough.
+async function previously(ch) {
+  const F = S.flags, pick1 = (a) => a[Math.floor(Math.random() * a.length)];
+  const L = {
+    morning: ['Last time: the winter fair, a long time ago. A log, a lantern, somebody small.', 'Now: the first real snow.'],
+    walk: ['Last time: a snow day. ' + (F.pancakeQuality === 'burnt' ? 'Pancakes, mostly charcoal.' : F.pancakeQuality === 'golden' ? 'Perfect pancakes, for once.' : 'Pancakes, mostly pancake-shaped.'), 'Now: boots on. She has a plan.'],
+    evening: ['Last time: the meadow, the hill, the lake' + (F.circleShown ? ', and a ring of summer grass that shouldn’t have been there.' : '.'), 'Now: home, before dark.'],
+    bedtime: ['Last time: the cake, ' + (F.photoSeen ? 'a photograph nobody took, ' : '') + (F.firefly ? 'and a firefly in the snow.' : 'and the stars from the bench.'), 'Now: bed.'],
+    night: ['Last time: bed, warm, the snow still falling.', 'Now: three in the morning.'],
+    elsewhere: ['Last time: something in the house that was nearly her.', 'Now: earlier the same night.'],
+    lastbirthday: ['Last time: the door in the kitchen wall.', 'Now: the same day, again.'],
+    act4_home: ['Last time: you found her.', 'Now: the way home.'],
+  }[ch];
+  if (!L) return;
+  const f = G.$('fade'); f.style.background = '#000'; f.classList.add('on');
+  await G.UI.card([pick1(['Previously', 'Where you left off']), ...L], { hold: 4.2, stagger: 0.7 });
+}
 Object.assign(Story, {
   together,
   async begin(fromSave) {
     const sv = fromSave && loadSave();
-    if (sv) { Object.assign(S, fresh(), { vars: sv.vars, mem: sv.mem, scrap: sv.scrap || [], talked: sv.talked || {}, life: sv.life || {}, photos: sv.photos || [] }); Object.assign(S.flags, sv.flags || {}); if (G.onLoadSave) G.onLoadSave(S); return go(sv.chapter); }
+    if (sv) { Object.assign(S, fresh(), { vars: sv.vars, mem: sv.mem, scrap: sv.scrap || [], talked: sv.talked || {}, life: sv.life || {}, photos: sv.photos || [] }); Object.assign(S.flags, sv.flags || {}); if (G.onLoadSave) G.onLoadSave(S); await previously(sv.chapter); return go(sv.chapter); }
     Object.assign(S, fresh());
     return go('prologue');
   },
