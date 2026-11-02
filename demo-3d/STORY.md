@@ -157,7 +157,7 @@ You wake at night in a house that's almost exactly right: lamps on, perfectly ro
 ## Endings
 
 None of them is labelled good or bad. The end card names the ending you reached, and the endings you've seen are remembered in this browser.
-- **You Found Me:** an ordinary morning, holding on hard. Her three notes come from the kitchen, and you can whistle back.
+- **You Found Me:** an ordinary morning, holding on hard. When you're up, she goes off to put the kettle on (build 87), so her three notes really do come from the kitchen, and you can whistle back.
 - **Uncertain Morning:** the drying rack. Count the mugs. "…Did you get a new mug?"
 - **I Know It's You:** the sofa and the scrapbook, with pages neither of you is sure about. "I'm choosing it anyway."
 - **The Perfect Partner:** every day exactly right. Somewhere else, she sits in the last of the summer and whistles.
