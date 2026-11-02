@@ -390,6 +390,15 @@
   #list.night .le { color: #9a948c; }
   @media (max-width: 560px), (max-height: 480px) { #listTab { font-size: 15px; padding: 7px 10px 6px; } #listBody li { font-size: 15px; line-height: 22px; } #listBody { padding: 10px 12px; background-image: none; } #listBody .lh { font-size: 18px; } }
   body:not(.playing) #list { display: none; }
+  /* Flowing dialogue: lighter subtitles that stay out of the way. No backdrop (a tight shadow on the letters keeps
+   * them readable on snow), no "continue" prompt, a little smaller and lower, and the game underneath stays
+   * clickable. Narration is quieter still. */
+  #subs.flow { bottom: calc(4.5vh + env(safe-area-inset-bottom, 0px)); pointer-events: none; cursor: default; }
+  #subs.flow::before, #subs.flow::after { display: none; }
+  #subs.flow #line { font-size: calc(clamp(16px, 2vw, 20px) * var(--subK)); text-shadow: 0 1px 2px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.8), 0 0 12px rgba(0,0,0,0.75), 0 0 26px rgba(0,0,0,0.45); }
+  #subs.flow.narr #line { font-size: calc(clamp(17px, 2.2vw, 22px) * var(--subK)); color: rgba(243,234,217,0.92); }
+  #subs.flow #who { font-size: 12px; margin-bottom: 2px; opacity: 0.9; }
+  @media (pointer: coarse) and (min-height: 521px) { #subs.flow { bottom: calc(118px + env(safe-area-inset-bottom, 0px)); } }
 </style>
 </head>
 <body>
@@ -405,6 +414,7 @@
     <div class="opts">
       <div class="opt" hidden><span class="opt-l" id="asLabel">Play as</span><div class="seg" role="group" aria-labelledby="asLabel"><button class="btn small" data-as="player" type="button">Player</button><button class="btn small" data-as="partner" type="button">Partner</button></div></div>
       <div class="opt"><span class="opt-l" id="nightsLabel">Nights</span><div class="seg" role="group" aria-labelledby="nightsLabel"><button class="btn small" data-nights="tense" type="button">Tense</button><button class="btn small" data-nights="gentle" type="button">Gentle</button></div><span class="nights-note" id="nightsNote"></span></div>
+      <div class="opt"><span class="opt-l" id="flowLabel">Dialogue</span><div class="seg" role="group" aria-labelledby="flowLabel"><button class="btn small" data-flow="auto" type="button">Flows on</button><button class="btn small" data-flow="press" type="button">Press to continue</button></div></div>
       <div class="opt"><span class="opt-l" id="handsLabel">Little games</span><div class="seg" role="group" aria-labelledby="handsLabel"><button class="btn small" data-hands="normal" type="button">Normal</button><button class="btn small" data-hands="easy" type="button">Easier</button></div><span class="nights-note" id="handsNote"></span></div>
       <div class="opt"><label class="opt-l" for="chapterSel">Chapter</label><select id="chapterSel" aria-label="Jump to a chapter"></select></div>
     </div>
@@ -465,6 +475,12 @@
       <span>Nights</span>
       <div class="seg" role="group" aria-label="Nights">
         <button class="btn small" data-nights="tense" type="button">Tense</button><button class="btn small" data-nights="gentle" type="button">Gentle</button>
+      </div>
+    </div>
+    <div class="prow">
+      <span>Dialogue</span>
+      <div class="seg" role="group" aria-label="Dialogue">
+        <button class="btn small" data-flow="auto" type="button">Flows on</button><button class="btn small" data-flow="press" type="button">Press to continue</button>
       </div>
     </div>
     <div class="prow">

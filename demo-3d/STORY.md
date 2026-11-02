@@ -104,6 +104,12 @@ Free time used to have nothing to aim for: you wandered until you happened on wh
 - **The night ("Not right"):** a torn page. Everything you notice about the one beside you goes on it: what it says that she never would (the score, the blanket, the halves, the icing, her line said exactly right) and what's out of place (three mugs, snow inside the sill, the wiped window, the third shape in the photograph). Looking at things while it's watching you raises its suspicion, and the line is marked "(it saw)". It doesn't always say anything; when it does, it's one of several things ("Come away from there.", "You keep looking at things."). Gentle nights skip that.
 - **The payoff:** at the door, with three things or more on the page, you tell it what gave it away, and it says it will practise. Every line also counts toward which morning you wake up to (a little more trust per thing noticed).
 
+## Dialogue that doesn't stop the game (build 92)
+- **Lines flow on by themselves.** Each one stays long enough to read comfortably (longer at the larger subtitle sizes), then the next one comes. E or a tap still moves things along. "Dialogue: Flows on / Press to continue" on the title screen and in the pause menu brings back waiting on every line.
+- **You can keep walking while people talk** (you always could in free time; now nothing is waiting on you). If the camera cut in to frame a conversation, it hands itself back the moment you move.
+- **The subtitles stay out of the way:** no dark box behind them and no "E to continue" prompt; a little smaller and lower, sitting in the black film bars during scenes, with a tight shadow on the letters so they read on snow. Clicks go through them to the game.
+- Choices and the little games still wait for you.
+
 ## No two days the same (build 90)
 - **The weather** runs in a different order each playthrough (light snow, clear spells, proper snow, the odd short blizzard).
 - **The evening power cut** always happens the first time you play; after that, on about half of evenings. The night's echo of it only follows a real one.

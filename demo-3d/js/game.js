@@ -959,6 +959,8 @@ G.herRoute = () => SETTINGS.playAs === 'partner';
 // Gentle nights (title screen): nothing chases you, nothing catches you, no heartbeat. The story is the same.
 G.gentle = () => SETTINGS.nights === 'gentle';
 G.easyHands = () => SETTINGS.hands === 'easy';
+// Dialogue that flows on by itself (default), or waits for E / a tap on every line.
+G.flowing = () => SETTINGS.flow !== 'press';
 // "You" is whoever you're playing: her in her chapters, in her own route, and whenever the bodies are swapped.
 G.labelsTurned = () => G.herSide() || !!(G.NIGHT && G.NIGHT.swapped) || (G.herRoute() && !!G.S && G.S.chapter === 'bedtime');
 const herLine = (who, text) => (who == null && G.herSide() && window.CBS_NARR_HER && window.CBS_NARR_HER[text]) || text;
@@ -977,20 +979,24 @@ function pickShotFor(who, o) {
   if (who === 'partner') setShot(() => SHOTS.ots(her, him, 1));
   else if (who === 'player') setShot(() => SHOTS.ots(him, her, -1));
   else setShot(() => SHOTS.twoShot(), true);
+  DLG.autoShot = true;
 }
 function updateDialogue(dt) {
   const box = $('subs');
   if (!DLG.cur && DLG.q.length) {
     DLG.cur = DLG.q.shift(); DLG.shown = 0; DLG.t = 0;
-    box.className = 'show ' + (DLG.cur.who ? 'who-' + DLG.cur.who : 'narr');
+    box.className = 'show ' + (DLG.cur.who ? 'who-' + DLG.cur.who : 'narr') + (G.flowing() ? ' flow' : '');
     { const hs = G.labelsTurned(); $('who').textContent = DLG.cur.who === 'partner' ? (hs ? G.CFG.playerLabel : G.CFG.partnerLabel) : DLG.cur.who === 'player' ? (hs ? G.CFG.partnerLabel : G.CFG.playerLabel) : ''; }
     pickShotFor(DLG.cur.who, DLG.cur.o);
   }
-  if (!DLG.cur) { if (box.className !== '') { box.className = ''; if (!STATE.sceneShot && CAM.shot) releaseCamera(); } return; }
+  if (!DLG.cur) { if (box.className !== '') { box.className = ''; DLG.autoShot = false; if (!STATE.sceneShot && CAM.shot) releaseCamera(); } return; }
   const cur = DLG.cur;
   DLG.t += dt; DLG.shown = Math.min(cur.text.length, DLG.shown + dt * 42);
   $('line').textContent = cur.text.slice(0, Math.floor(DLG.shown));
-  const auto = cur.o.auto && DLG.t > cur.o.auto;
+  // Lines flow on by themselves (a setting): long enough to read comfortably, then the next one. E or a tap
+  // still moves things along, and "Press to continue" brings back waiting for you.
+  const read = Math.min(8, Math.max(1.6, 0.6 + cur.text.length * 0.05)) * (SETTINGS.subs === 'l' || SETTINGS.subs === 'xl' ? 1.15 : 1);
+  const auto = (cur.o.auto && DLG.t > cur.o.auto) || (G.flowing() && !cur.o.wait && DLG.shown >= cur.text.length && DLG.t > cur.text.length / 42 + read);
   if (auto || ((hit('KeyE', 'Space', 'Enter') || DLG.click) && DLG.t > 0.15)) {
     DLG.click = false; pressed.delete('KeyE'); pressed.delete('Space'); pressed.delete('Enter');
     if (!auto && DLG.shown < cur.text.length) DLG.shown = cur.text.length;
@@ -1581,6 +1587,8 @@ function step(dt, t) {
   const free = (!busy() || (STATE.started && !staged)) && !PLAYER.script && (PLAYER.sit || 0) < 0.05 && !PLAYER.rise && !PLAYER.lie && !STATE.noControl;
   if (!free) ix = iy = 0;
   if (Math.hypot(ix, iy) > 0.3 && busy()) CAM.lastMove = G.simT;
+  // Walking off mid-conversation: the camera that cut in for it hands itself back straight away.
+  if (free && Math.hypot(ix, iy) > 0.3 && DLG.autoShot && !STATE.sceneShot) { DLG.autoShot = false; releaseCamera(); }
   const l = Math.hypot(ix, iy);
   if (PLAYER.script) {
     const s = PLAYER.script;
@@ -1952,6 +1960,10 @@ function boot() {
   };
   document.querySelectorAll('[data-hands]').forEach((b) => b.addEventListener('click', () => { SETTINGS.hands = b.dataset.hands; saveSettings(); syncHands(); }));
   syncHands();
+  // Dialogue: flowing (each line moves on by itself), or press to continue.
+  const syncFlow = () => document.querySelectorAll('[data-flow]').forEach((b) => b.setAttribute('aria-pressed', String((SETTINGS.flow || 'auto') === b.dataset.flow)));
+  document.querySelectorAll('[data-flow]').forEach((b) => b.addEventListener('click', () => { SETTINGS.flow = b.dataset.flow; saveSettings(); syncFlow(); }));
+  syncFlow();
   // The endings you've reached (kept in this browser), with a nudge towards the ones you haven't.
   const ENDINGS = [
     ['foundme', 'You Found Me', 'Follow the trail. Go home together.'],
