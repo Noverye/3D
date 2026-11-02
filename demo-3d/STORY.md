@@ -94,6 +94,14 @@ You choose what to say:
 
 There are candles in the kitchen drawer, probably. You find them among the string and the spare key and something that was once a biscuit. You light three on the table by the fire, beside the cake: "This is better than the lamps. Don't tell the lamps." The power comes back a while later ("I was extremely brave throughout"). The candles stay lit for the rest of the evening.
 
+## Something to aim for (build 88)
+Free time used to have nothing to aim for: you wandered until you happened on whatever moved the story on. Now there's a note in the top-left corner (L, or a tap, opens and closes it).
+- **Her list, in the morning ("Snow day"):** tea (two sugars, which she denies), pancakes, water Basil, logs in the basket for tonight, and last, breakfast with her.
+- **Her list, in the evening ("Tonight"):** the table by the fire (the cake), then the frame in the hall, the candles if the power goes, the porch lanterns, cocoa, the sofa, and last, the stars from the bench.
+- The last line ends that stretch of the day, so everything else is yours to do or skip. Each line crossed off peeks the note open. Crossing off everything else first earns a line from her (when she can say it), a scrapbook page (the list itself, pinned up) and a little closeness, which the night and the endings notice.
+- **The night ("Not right"):** a torn page. Everything you notice about the one beside you goes on it: what it says that she never would (the score, the blanket, the halves, the icing, her line said exactly right) and what's out of place (three mugs, snow inside the sill, the wiped window, the third shape in the photograph). Looking at things while it's watching you raises its suspicion ("What are you looking at?") and the line is marked "(it saw)". Gentle nights skip that.
+- **The payoff:** at the door, with three things or more on the page, you tell it what gave it away, and it says it will practise. Every line also counts toward which morning you wake up to (a little more trust per thing noticed).
+
 ## Act II · Something Strange: the evening
 
 - She hadn't forgotten what day it is: the cake, five candles, a wish.

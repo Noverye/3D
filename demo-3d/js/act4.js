@@ -880,6 +880,15 @@ async function offer() {
   }
   await N(S.flags.herA4 ? '(It doesn’t have his face any more. It doesn’t have any face. It stands there like snow that has decided to stand.)' : '(It doesn’t have her face any more. It doesn’t have any face. It stands there like snow that has decided to stand.)', { shot });
   for (const t of said.slice(0, 2)) await E(t, { shot });
+  // What you noticed in the night (lists.js): you can tell it so. Three things or more and you're sure.
+  const clues = !S.flags.herA4 && G.LISTS ? G.LISTS.clues() : [];
+  if (clues.length >= 3) {
+    const SAY = { blanket: 'You gave the blanket back. She never gives it back.', score: 'You remembered the score. She never remembers the score.', mugs: 'You put three mugs on the rack.', nocheck: 'You didn’t check the halves. She always checks.', icing: 'You gave me the icing. She’d have fought me for it.', flinch: 'You didn’t flinch.', certain: 'You were sure. She’s never sure.', verbatim: 'You said her line exactly right. She never says it the same way twice.', gaveup: 'You let me have her line. She’d never.', toaster: 'You trusted the toaster.', frost: 'You wiped our drawing off the window.', sill: 'You let the snow in.', photo: 'You put yourself in our photograph.', photo2: 'You put yourself in my photograph.' };
+    await Y(SAY[clues[0]] || 'You got her wrong.', { shot });
+    await Y(clues.length >= 5 ? 'I wrote them down. All of them. That’s how I knew.' : 'Little things. That’s how I knew.', { shot });
+    await E('…I will practise.', { shot });
+    S.flags.toldIt = clues.length;
+  }
   await E('You could stay. I would remember all of it. Every bit you’d get wrong.', { shot });
   if (S.flags.herA4) {
     if ((S.vars.bond || 0) >= 5) await Y('…Your call, {toHer}. I’m with you. Either way.', { shot });
@@ -895,6 +904,8 @@ async function offer() {
   for (let t = 0; t <= 1; t += 1 / 40) { EXD.hinge.rotation.y = -t * 1.4; EXD.glow.material.opacity = t * 0.9; EXD.light.intensity = t * 4; await wait(1 / 30); }
   await N('(The door opens onto an ordinary hallway. Your hallway. It smells like toast.)', { shot });
   const acc = accepted();
+  // Everything you noticed was something you knew about her. It counts.
+  S.vars.trust = (S.vars.trust || 0) + Math.min(1, 0.25 * (G.LISTS ? G.LISTS.clues().length : 0));
   S.flags.ending = acc >= 2 ? 'iknow' : (acc >= 1 || (S.vars.trust || 0) < 2) ? 'uncertain' : 'foundme';
   await fade(true, 1.8, '#fff');
   return A.go('ending_' + S.flags.ending);

@@ -174,6 +174,21 @@ function paintSnap(cv, art) {
     fig(W * 0.34, H * 0.78, 1.0, '#2a2c32', '#1e140f'); fig(W * 0.66, H * 0.79, 0.88, '#b8a88e', '#5e3a26');
     c.fillStyle = '#4a3020'; c.fillRect(W * 0.18, H * 0.72, W * 0.64, H * 0.06);
     for (const [x, h] of [[0.42, 30], [0.5, 22], [0.58, 16]]) { c.fillStyle = '#efe6d6'; c.fillRect(W * x - 4, H * 0.72 - h, 8, h); c.fillStyle = '#ffd59a'; c.beginPath(); c.ellipse(W * x, H * 0.72 - h - 6, 3, 6, 0, 0, 7); c.fill(); }
+  } else if (art === 'list' || art === 'listpm') {
+    // Her list, pinned up: ruled paper, every line crossed off, and a small heart in the margin.
+    c.fillStyle = '#b9a58a'; c.fillRect(0, 0, W, H);
+    c.save(); c.translate(W / 2, H / 2); c.rotate(-0.05);
+    c.fillStyle = '#f6efe0'; c.fillRect(-W * 0.32, -H * 0.4, W * 0.64, H * 0.8);
+    c.strokeStyle = 'rgba(120,150,190,0.4)'; c.lineWidth = 1;
+    for (let i = 0; i < 6; i++) { const y = -H * 0.24 + i * H * 0.11; c.beginPath(); c.moveTo(-W * 0.28, y); c.lineTo(W * 0.28, y); c.stroke(); }
+    for (let i = 0; i < 5; i++) {
+      const y = -H * 0.24 + i * H * 0.11 - 4, w = W * (0.3 + ((i * 37) % 17) / 100);
+      c.strokeStyle = '#5a3a22'; c.lineWidth = 2; c.beginPath(); for (let x = 0; x < w; x += 6) c.lineTo(-W * 0.22 + x, y + Math.sin(x * 0.4 + i) * 1.6); c.stroke();
+      c.strokeStyle = '#b4553a'; c.lineWidth = 2; c.beginPath(); c.moveTo(-W * 0.24, y + 1); c.lineTo(-W * 0.22 + w + 4, y - 1); c.stroke();
+    }
+    c.fillStyle = '#c2504a'; c.beginPath(); const hx = W * 0.2, hy = H * 0.28; c.moveTo(hx, hy + 6); c.bezierCurveTo(hx - 12, hy - 4, hx - 4, hy - 12, hx, hy - 5); c.bezierCurveTo(hx + 4, hy - 12, hx + 12, hy - 4, hx, hy + 6); c.fill();
+    c.fillStyle = '#d6b25a'; c.beginPath(); c.arc(0, -H * 0.4, 5, 0, 7); c.fill();   // the pin
+    c.restore();
   } else {
     fig(W * 0.42, H * 0.86, 1.15, '#4a4d54', '#1e140f'); fig(W * 0.6, H * 0.88, 0.98, '#e4d7c2', '#5e3a26');
   }

@@ -359,6 +359,32 @@
     #together { bottom: calc(60px + env(safe-area-inset-bottom, 0px)); width: min(560px, calc(100vw - 380px)); }
     #subs #line { font-size: calc(17px * var(--subK)); } #subs.narr #line { font-size: calc(18px * var(--subK)); }
   }
+  /* Her list (free time) and, at night, what you've noticed (js/lists.js). */
+  #list { position: fixed; left: calc(12px + env(safe-area-inset-left, 0px)); top: calc(12px + env(safe-area-inset-top, 0px)); z-index: 24; max-width: min(300px, calc(100vw - 24px)); transition: opacity 0.5s; font-family: var(--display); }
+  #list[hidden] { display: none; }
+  #list.dim { opacity: 0; pointer-events: none; }
+  #listTab { display: flex; align-items: baseline; gap: 10px; font: italic 17px/1 var(--display); color: #3a2a1c; background: #f4ecdc; border: 0; border-radius: 3px 3px 3px 12px; padding: 8px 12px 7px; box-shadow: 0 2px 10px rgba(0,0,0,0.25); cursor: pointer; transform: rotate(-1.2deg); }
+  #listTab .ln { font: 500 12px/1 var(--ui); color: #8a6a4a; letter-spacing: 0.02em; }
+  #listBody { display: none; margin-top: 6px; background: #f4ecdc; color: #33261a; padding: 12px 16px 12px; border-radius: 2px; box-shadow: 0 6px 22px rgba(0,0,0,0.3); transform: rotate(-1.2deg); background-image: repeating-linear-gradient(transparent 0 25px, rgba(120,150,190,0.22) 25px 26px); background-position: 0 30px; }
+  #list.open #listBody { display: block; }
+  #list.open #listTab { display: none; }
+  #listBody .lh { font: italic 21px/1.1 var(--display); margin: 0 0 6px; color: #5a3a22; }
+  #listBody ul { list-style: none; margin: 0; padding: 0; }
+  #listBody li { font: italic 17px/26px var(--display); position: relative; padding-left: 20px; }
+  #listBody li::before { content: ''; position: absolute; left: 1px; top: 8px; width: 10px; height: 10px; border: 1.5px solid #7a5a3e; border-radius: 2px; }
+  #listBody li.done { color: #9a8a78; text-decoration: line-through; text-decoration-color: #b4553a; text-decoration-thickness: 1.5px; }
+  #listBody li.done::before { border-color: #b4553a; background: linear-gradient(45deg, transparent 42%, #b4553a 42% 58%, transparent 58%); }
+  #listBody li.last { margin-top: 4px; }
+  #listBody .le { margin: 6px 0 0; font: italic 13.5px/1.35 var(--display); color: #8a6a4a; }
+  #list.night #listTab, #list.night #listBody { background: #1d1f26; color: #d9d4ca; box-shadow: 0 6px 22px rgba(0,0,0,0.55); background-image: none; transform: rotate(0.8deg); }
+  #list.night #listTab .ln { color: #c97a6a; }
+  #list.night .lh { color: #e3b3a6; }
+  #list.night li::before { width: 6px; height: 6px; top: 10px; border: 0; border-radius: 50%; background: #c97a6a; }
+  #list.night li.seen { color: #e8a090; }
+  #list.night li.seen::after { content: ' (it saw)'; font-size: 13px; opacity: 0.8; }
+  #list.night .le { color: #9a948c; }
+  @media (max-width: 560px), (max-height: 480px) { #listTab { font-size: 15px; padding: 7px 10px 6px; } #listBody li { font-size: 15px; line-height: 22px; } #listBody { padding: 10px 12px; background-image: none; } #listBody .lh { font-size: 18px; } }
+  body:not(.playing) #list { display: none; }
 </style>
 </head>
 <body>
@@ -516,5 +542,6 @@
 <script src="js/companion.js"></script>
 <script src="js/powercut.js"></script>
 <script src="js/memories.js"></script>
+<script src="js/lists.js"></script>
 </body>
 </html>
