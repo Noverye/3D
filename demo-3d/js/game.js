@@ -1644,7 +1644,7 @@ function step(dt, t) {
   if (PLAYER.rise) {
     const R = PLAYER.rise; R.t += dt; const k = G.smooth(0, 0.55, R.t);
     PLAYER.x = lerp(R.from.x, R.to.x, k); PLAYER.z = lerp(R.from.z, R.to.z, k); PLAYER.yFloor = G.floorAt(PLAYER.x, PLAYER.z);
-    if (R.t > 0.6) { PLAYER.rise = null; if (R.to.yaw != null) PLAYER.yaw = R.to.yaw; }
+    if (R.t > 0.6) PLAYER.rise = null;   // (you stood up by walking off, so you face where you're going, not back the way you came in)
   }
   // Lying in bed: a push on the stick or the keys gets you up, if the story has a way to.
   if (PLAYER.lie && !busy() && Math.hypot(ix, iy) > 0.4 && G.lieMove) G.lieMove();
