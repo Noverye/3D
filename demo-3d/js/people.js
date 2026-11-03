@@ -421,6 +421,7 @@ async function attachBody(root, name, spec, bin) {
       if (spec.keepMaterials) u.realLids = makeRealLids(model);
       // Expressions: a smile, a sad look and raised brows, built as morph targets on the face and brows.
       if (spec.keepMaterials) u.expr = makeExpressions(model);
+      if (spec.keepMaterials) softenFace(model);
       // Eyes that turn: the eyes mesh split into two eyeballs on pivots at their centres, riding the head bone.
       if (spec.keepMaterials) u.realEyes = makeRealEyes(model);
       // The coat's seams (the skirt is split front and back, each half on its own leg): vertices that share a
@@ -626,6 +627,37 @@ function talkHead(c, u, dt, t) {
   u.head.rotation.x += (drift + nod) * amp;
   u.head.rotation.y += yaw * amp;
   u.head.rotation.z += (c._tiltK || 0) * 0.075 * amp * (c === G.PLAYER ? 1 : -1);
+}
+/* A softer, more natural face. The exports draw the lashes and brows as hard pure black: thick lower lashes read
+ * as heavy eyeliner, and the brows as broken black lines, and with dark irises the face seemed to stare.
+ *  - lower lashes: taken away (real ones are faint); upper lashes: very dark brown rather than black, a touch softer;
+ *  - brows: drawn softly (blended by their own alpha, not cut at a threshold), so they read as hair, not ink.
+ * Rest pose, character space. */
+function softenFace(model) {
+  let eyes = null; const lashes = [], brows = [];
+  model.traverse((o) => { if (!o.isMesh) return; const n = o.name.toLowerCase(); if (/kid/.test(n)) return; if (/high-?poly/.test(n)) eyes = o; else if (/eyelash/.test(n)) lashes.push(o); else if (/eyebrow/.test(n)) brows.push(o); });
+  if (!eyes) return;
+  model.updateMatrixWorld(true);
+  const v = new THREE.Vector3(), P = eyes.geometry.attributes.position;
+  let ey = 0; for (let i = 0; i < P.count; i++) ey += v.fromBufferAttribute(P, i).applyMatrix4(eyes.matrixWorld).y; ey /= P.count;
+  const her = !!lashes.concat(brows).find((o) => /partner/i.test(o.name));
+  for (const o of lashes) {
+    const g = o.geometry;
+    if (g.index && !g.userData.softened) {
+      const ix = g.index.array, pos = g.attributes.position, keep = [];
+      for (let t = 0; t < ix.length; t += 3) {
+        let below = 0; for (let j = 0; j < 3; j++) if (v.fromBufferAttribute(pos, ix[t + j]).applyMatrix4(o.matrixWorld).y < ey - 0.002) below++;
+        if (below < 3) keep.push(ix[t], ix[t + 1], ix[t + 2]);
+      }
+      g.setIndex(keep); g.userData.softened = true;
+    }
+    const m = o.material; m.emissive = new THREE.Color('#2a1a12'); m.emissiveIntensity = her ? 0.55 : 0.4; m.alphaTest = 0.55; m.needsUpdate = true;
+  }
+  for (const o of brows) {
+    // drawn softly (blended by the texture's own alpha) rather than cut at a threshold, in brown rather than black
+    const m = o.material; m.transparent = true; m.alphaTest = 0.03; m.depthWrite = false; m.opacity = 1;
+    m.color = new THREE.Color(her ? '#2e1c12' : '#20160f'); m.emissive = new THREE.Color('#000000'); m.needsUpdate = true; o.renderOrder = 2;
+  }
 }
 /* Expressions for heads that have none. Made and checked in Blender first (cozy_characters_expressions.blend:
  * shape keys smile, sad and browsUp on the face and the eyebrows), from the face's own landmarks: the eye centres,
