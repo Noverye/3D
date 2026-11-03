@@ -794,7 +794,7 @@ function makeExpressions(model) {
       tc[i * 3] = f; tc[i * 3 + 1] = f * 0.97; tc[i * 3 + 2] = f * 0.92;
     }
     tg.setAttribute('color', new THREE.BufferAttribute(tc, 3));
-    const tm = new THREE.MeshStandardMaterial({ color: new THREE.Color('#e4dccd').convertSRGBToLinear(), roughness: 0.4, envMapIntensity: 0.3, vertexColors: true, side: THREE.DoubleSide });
+    const tm = new THREE.MeshStandardMaterial({ color: new THREE.Color('#d4cab8').convertSRGBToLinear(), roughness: 0.4, envMapIntensity: 0.3, vertexColors: true, side: THREE.DoubleSide });
     G.MATS && G.MATS.push(tm);
     const teeth = new THREE.Mesh(tg, tm);
     teeth.position.set(M.x, M.y - L.mouth * k + (top + bot) / 2, M.z + F - R);
