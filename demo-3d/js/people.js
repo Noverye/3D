@@ -711,9 +711,8 @@ function makeExpressions(model) {
     else if (kind === 'browsUp') { const w = (1 - ss(dx / (1.05 * d))) * (1 - ss(Math.abs(up - (by + 0.006 * k)) / (0.03 * k))); out.y += 0.0055 * k * w; out.z += 0.0006 * k * w; }
     else if (kind === 'open') {
       // the jaw drops: everything below the line between the lips, down to under the chin, fading toward the ears
-      // The lips meet in a seam whose upper and lower edges are separate vertices in the same place; which lip a
-      // vertex belongs to is told by its neighbours (seam: -1 lower, 1 upper), so the mouth opens there cleanly.
-      const ue = seam && Math.abs(up - cz) < 0.0015 * k ? cz + seam * 0.002 * k : up;
+      // which lip a vertex is on (seam: 1 upper, -1 lower, worked out below), so the mouth opens between them cleanly
+      const ue = seam && Math.abs(up - cz) < 0.004 * k ? cz + seam * 0.002 * k : up;
       const lw = ss((cz - ue) / (0.002 * k)), hz = 1 - ss(dx / (1.25 * d)), vz = 1 - ss((cz - 0.045 * k - up) / (0.02 * k)), fz = ss((fwd + 0.02 * k) / (0.03 * k));
       const w = lw * hz * vz * fz; out.y -= w * 0.009 * k; out.z -= w * 0.0025 * k;
       const uw = (1 - ss((ue - cz) / (0.008 * k))) * (1 - ss(dx / (0.5 * d))) * (1 - lw); out.y += uw * 0.0012 * k;   // the upper lip lifts a touch
@@ -730,15 +729,26 @@ function makeExpressions(model) {
     const g = o.geometry;
     if (!g.userData.expr) {
       const pos = g.attributes.position, inv = new THREE.Matrix3().setFromMatrix4(o.matrixWorld).invert(), dw = new THREE.Vector3();
-      // each vertex's neighbours, higher or lower on average (for the lip seam)
-      const nb = new Float32Array(pos.count), nc = new Uint16Array(pos.count), Y = new Float32Array(pos.count);
-      for (let i = 0; i < pos.count; i++) Y[i] = v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).y;
-      if (g.index) { const ix = g.index.array; for (let t = 0; t < ix.length; t += 3) for (let q = 0; q < 3; q++) { const i0 = ix[t + q]; for (let r = 1; r < 3; r++) { nb[i0] += Y[ix[t + (q + r) % 3]]; nc[i0]++; } } }
+      // Which lip each vertex near the mouth belongs to. The lips meet with no gap, so position can't tell; but between
+      // the corners the upper and lower lip aren't joined, so each is what's connected to a point well above (or below)
+      // the line without going round a corner. Elsewhere (and where both or neither reach), position decides.
+      const lab = new Int8Array(pos.count);
+      if (o === skin && g.index) {
+        const ix = g.index.array, W = [], inBox = new Uint8Array(pos.count), U = new Float32Array(pos.count * 2);
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld); const dx = Math.abs(v.x - M.x), up = v.y - M.y + L.mouth * k, fwd = v.z - M.z;
+          U[i * 2] = up; if (dx < 0.018 * k && Math.abs(up) < 0.03 * k && fwd > -0.01 * k) inBox[i] = 1;
+        }
+        const adj = new Map();
+        for (let t = 0; t < ix.length; t += 3) for (let q = 0; q < 3; q++) { const i0 = ix[t + q]; if (!inBox[i0]) continue; for (let r = 1; r < 3; r++) { const j = ix[t + (q + r) % 3]; if (!inBox[j]) continue; let l = adj.get(i0); if (!l) adj.set(i0, l = []); l.push(j); } }
+        const reach = (pick) => { const seen = new Uint8Array(pos.count), st = []; for (const i of adj.keys()) if (pick(U[i * 2])) { seen[i] = 1; st.push(i); } while (st.length) { const i = st.pop(); for (const j of adj.get(i) || []) if (!seen[j]) { seen[j] = 1; st.push(j); } } return seen; };
+        const hi = reach((up) => up > 0.003 * k), lo = reach((up) => up < -0.003 * k);
+        for (let i = 0; i < pos.count; i++) if (hi[i] !== lo[i]) lab[i] = hi[i] ? 1 : -1;
+      }
       g.morphAttributes.position = EXPR_KINDS.map((kind) => {
         const a = new Float32Array(pos.count * 3);
         for (let i = 0; i < pos.count; i++) {
-          const sm = nc[i] ? nb[i] / nc[i] - Y[i] : 0;
-          field(kind, v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld), dw, sm < -1e-5 ? -1 : sm > 1e-5 ? 1 : 0);
+          field(kind, v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld), dw, lab[i]);
           if (dw.x || dw.y || dw.z) { dw.applyMatrix3(inv); a[i * 3] = dw.x; a[i * 3 + 1] = dw.y; a[i * 3 + 2] = dw.z; }
         }
         return new THREE.BufferAttribute(a, 3);
