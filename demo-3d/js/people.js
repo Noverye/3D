@@ -1162,7 +1162,7 @@ function plantFeet(c, u, sit, w, dt) {
  * slid a little (about a third of the walking speed). Now each foot, as it comes down (furthest forward under the
  * body), is pinned where it landed; while it carries the weight the hip and knee bend to keep it there, and it lets
  * go as the heel comes up, easing back into the step. Forward and back only: the sideways sway is the recording's. */
-const GAIT_H = 1.66;   // her height, which the step rate was measured on
+const GAIT_H = 1.6;   // her height, which the step rate was measured on
 const _lk = { a: new THREE.Vector3(), b: new THREE.Vector3(), f: new THREE.Vector3() };
 function ankleIn(c, L, out) { L.ft.getWorldPosition(out); return out; }
 function lockFeet(c, u, sit, w, dt) {
