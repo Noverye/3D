@@ -781,6 +781,25 @@ function makeExpressions(model) {
     cav.scale.set(0.022 * k, 0.012 * k, 0.011 * k); cav.position.set(M.x, M.y - L.mouth * k - 0.004 * k, M.z - 0.002 * k);
     cav.castShadow = cav.receiveShadow = false; cav.userData.mouth = true;
     model.parent.add(cav); cav.updateMatrixWorld(true); head.attach(cav);
+    // The upper teeth: a shallow arc just behind the upper lip, its edge 1.5 mm below the line between the lips, so
+    // they're hidden when the mouth is shut and a sliver shows when it opens. Shaded down toward the sides and the
+    // gum, where the mouth is in shadow, with the faintest line between each tooth. (They're the skull's, so they
+    // stay with the head; the lower ones would be behind the lower lip.)
+    const R = 0.022 * k, A = 0.7, top = 0.007 * k, bot = -0.0015 * k;
+    const tg = new THREE.CylinderBufferGeometry(R, R, top - bot, 40, 3, true, -A, 2 * A), tp = tg.attributes.position, tc = new Float32Array(tp.count * 3);
+    for (let i = 0; i < tp.count; i++) {
+      const th = Math.atan2(tp.getX(i), tp.getZ(i)), yy = (tp.getY(i) + (top - bot) / 2) / (top - bot), a = Math.abs(th) / A;
+      const gap = [0, 0.39, 0.7].some((b) => Math.abs(Math.abs(th) - b) < 0.025) ? 0.82 : 1;
+      const f = (1 - 0.6 * a * a) * (0.55 + 0.45 * (1 - yy)) * gap;
+      tc[i * 3] = f; tc[i * 3 + 1] = f * 0.97; tc[i * 3 + 2] = f * 0.92;
+    }
+    tg.setAttribute('color', new THREE.BufferAttribute(tc, 3));
+    const tm = new THREE.MeshStandardMaterial({ color: new THREE.Color('#e4dccd').convertSRGBToLinear(), roughness: 0.4, envMapIntensity: 0.3, vertexColors: true, side: THREE.DoubleSide });
+    G.MATS && G.MATS.push(tm);
+    const teeth = new THREE.Mesh(tg, tm);
+    teeth.position.set(M.x, M.y - L.mouth * k + (top + bot) / 2, M.z + 0.0125 * k - R);
+    teeth.castShadow = teeth.receiveShadow = false; teeth.userData.mouth = true;
+    model.parent.add(teeth); teeth.updateMatrixWorld(true); head.attach(teeth);
   }
   return { meshes, v: { smile: 0, sad: 0, browsUp: 0, open: 0, round: 0 } };
 }
