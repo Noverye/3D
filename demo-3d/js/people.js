@@ -800,7 +800,7 @@ const exprHash = (t) => { let h = 7; for (let i = 0; i < t.length; i++) h = (h *
 function exprRead(text) {
   const t = text.replace(/\([^)]*\)/g, ''), r = { smile: 0, sad: 0, q: /\?\s*[”"’]?\s*$/.test(t) }, vary = 0.85 + 0.25 * exprHash(t);
   if (EXPR_SAD.test(t)) r.sad = 0.55 * vary;
-  else if (EXPR_LAUGH.test(t)) r.smile = 0.85 * vary;
+  else if (EXPR_LAUGH.test(t)) { r.smile = 0.85 * vary; r.laugh = true; }
   else if (EXPR_WARM.test(t)) r.smile = 0.6 * vary;
   else if (EXPR_LIGHT.test(t)) r.smile = 0.32 * vary;
   return r;
@@ -855,6 +855,8 @@ function exprUpdate(c, u, dt) {
     if (speaker === c && c._th && c._th.line === D) { text = D.text; el = (G.DLG && G.DLG.t) || 0; dur = c._th.speak; }
     else if (isHer && c.bark && c.bark.text && !(speaker === c)) { const b = c.bark; if (b.t0 == null) b.t0 = b.t; text = b.text; el = b.t0 - b.t; dur = Math.max(0.6, Math.min(4, b.text.length / 15)); }
     if (text && el < dur) { const m = mouthAt(X, text, el / dur); T.open = m[0] * (c.lie ? 0.6 : 1); T.round = m[1]; }
+    // a laugh opens the smile for a moment, in little bursts
+    if (text && X.cache.text === text && X.cache.r.laugh && el < 1.3 && !night) T.open = Math.max(T.open, (0.22 + 0.14 * Math.sin(el * 15)) * (1 - el / 1.3));
   }
   const inf = [];
   for (const kind of EXPR_KINDS) {
