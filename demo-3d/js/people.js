@@ -419,6 +419,8 @@ async function attachBody(root, name, spec, bin) {
       u.fingers = findFingers(model);
       // Eyelids: the real heads have no blink shapes, so each eye gets a skin-coloured lid that rides the head bone.
       if (spec.keepMaterials) u.realLids = makeRealLids(model);
+      // Expressions: a smile, a sad look and raised brows, built as morph targets on the face and brows.
+      if (spec.keepMaterials) u.expr = makeExpressions(model);
       // Eyes that turn: the eyes mesh split into two eyeballs on pivots at their centres, riding the head bone.
       if (spec.keepMaterials) u.realEyes = makeRealEyes(model);
       // The coat's seams (the skirt is split front and back, each half on its own leg): vertices that share a
@@ -624,6 +626,103 @@ function talkHead(c, u, dt, t) {
   u.head.rotation.x += (drift + nod) * amp;
   u.head.rotation.y += yaw * amp;
   u.head.rotation.z += (c._tiltK || 0) * 0.075 * amp * (c === G.PLAYER ? 1 : -1);
+}
+/* Expressions for heads that have none. Made and checked in Blender first (cozy_characters_expressions.blend:
+ * shape keys smile, sad and browsUp on the face and the eyebrows), from the face's own landmarks: the eye centres,
+ * the line between the lips (5.8 cm below her eye line, 7.4 cm below his) and the mouth corners (0.41 of the eye
+ * spacing out from the middle). The same soft displacement fields are rebuilt here as morph targets when the
+ * models load, scaled by eye spacing, so the exported models stay as they are.
+ *  - smile: the corners up and out and a little back, the cheeks lifted;
+ *  - sad: the corners down, the inner brows up;
+ *  - browsUp: both brows raised. */
+const EXPR_LM = { partner: { d: 0.055, mouth: 0.058, brow: 0.012 }, player: { d: 0.0644, mouth: 0.074, brow: 0.010 } };
+const EXPR_KINDS = ['smile', 'sad', 'browsUp'];
+function makeExpressions(model) {
+  let eyes = null, skin = null, brow = null, who = null;
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    const n = o.name.toLowerCase();
+    if (/kid/.test(n)) return;
+    if (/high-?poly/.test(n)) eyes = o;
+    else if (/eyebrow/.test(n)) brow = o;
+    else if (/^human_(partner|player)$/.test(n)) { skin = o; who = RegExp.$1; }
+  });
+  if (!eyes || !skin || !who) return null;
+  model.updateMatrixWorld(true);
+  const v = new THREE.Vector3(), E = [];
+  const P = eyes.geometry.attributes.position;
+  let mx = 0; for (let i = 0; i < P.count; i++) mx += v.fromBufferAttribute(P, i).applyMatrix4(eyes.matrixWorld).x; mx /= P.count;
+  const acc = [new THREE.Vector3(), new THREE.Vector3()], cnt = [0, 0];
+  for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(eyes.matrixWorld); const k = v.x > mx ? 0 : 1; acc[k].add(v); cnt[k]++; }
+  if (!cnt[0] || !cnt[1]) return null;
+  const eA = acc[0].divideScalar(cnt[0]), eB = acc[1].divideScalar(cnt[1]), M = eA.clone().add(eB).multiplyScalar(0.5), d = eA.distanceTo(eB);
+  const L = EXPR_LM[who], k = d / L.d;
+  const ss = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+  const field = (kind, p, out) => {
+    const side = p.x > M.x ? 1 : -1, dx = (p.x - M.x) * side, up = p.y - M.y, fwd = p.z - M.z;
+    out.set(0, 0, 0);
+    if (fwd < -0.02 * k) return out;
+    const blob = (x0, z0, r, a, b, c) => { const w = 1 - ss(Math.hypot(dx - x0, up - z0) / r); out.x += w * a; out.y += w * b; out.z += w * c; };
+    const cx = 0.41 * d, cz = -L.mouth * k, by = L.brow * k;
+    if (kind === 'smile') { blob(cx, cz, 0.55 * d, 0.0045 * k, 0.0065 * k, -0.0015 * k); blob(0.62 * d, -0.5 * d, 0.45 * d, 0.001 * k, 0.0028 * k, 0.0012 * k); }
+    else if (kind === 'sad') { blob(cx, cz, 0.5 * d, -0.001 * k, -0.0045 * k, 0); blob(0.22 * d, by + 0.004 * k, 0.38 * d, 0, 0.004 * k, 0.0005 * k); }
+    else { const w = (1 - ss(dx / (1.05 * d))) * (1 - ss(Math.abs(up - (by + 0.006 * k)) / (0.03 * k))); out.y += 0.0055 * k * w; out.z += 0.0006 * k * w; }
+    out.x *= side; return out;
+  };
+  const meshes = [];
+  for (const o of [skin, brow]) {
+    if (!o) continue;
+    const g = o.geometry;
+    if (!g.userData.expr) {
+      const pos = g.attributes.position, inv = new THREE.Matrix3().setFromMatrix4(o.matrixWorld).invert(), dw = new THREE.Vector3();
+      g.morphAttributes.position = EXPR_KINDS.map((kind) => {
+        const a = new Float32Array(pos.count * 3);
+        for (let i = 0; i < pos.count; i++) {
+          field(kind, v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld), dw);
+          if (dw.x || dw.y || dw.z) { dw.applyMatrix3(inv); a[i * 3] = dw.x; a[i * 3 + 1] = dw.y; a[i * 3 + 2] = dw.z; }
+        }
+        return new THREE.BufferAttribute(a, 3);
+      });
+      g.morphTargetsRelative = true; g.userData.expr = true;
+    }
+    o.material.morphTargets = true; o.material.needsUpdate = true;
+    o.updateMorphTargets();
+    meshes.push(o);
+  }
+  return { meshes, v: { smile: 0, sad: 0, browsUp: 0 } };
+}
+/* What each face is doing: from the line being said (or her last bark), the moment, and who it is.
+ * Happy lines smile; questions raise the brows; sorry, cold, alone and the like look sad; the one listening
+ * half-mirrors the one talking. At rest she's very slightly smiling when you're near. The thing in the night
+ * smiles, pleasantly and evenly, the whole time. */
+const EXPR_HAPPY = /\b(ha(ha)?|laugh|love|lovely|perfect|happy|marry|warm|good|best|favourite|yes|kiss|gold star|snow day|beautiful|wonderful|hero)\b|!|\*grins?\*|\*smil/i;
+const EXPR_SAD = /\b(sorry|miss(ed)?|alone|afraid|scared|frightened|cold|lost|gone|can[’']t|never|please|don[’']t go|cry|dream)\b/i;
+function exprUpdate(c, u, dt) {
+  const X = u.expr; if (!X || c.hidden) return;
+  const D = G.DLG && G.DLG.cur, sw = !!(G.NIGHT && G.NIGHT.swapped);
+  const him = sw ? G.PARTNER : G.PLAYER, her = sw ? G.PLAYER : G.PARTNER, isHer = c === her;
+  const speaker = D && D.who === 'partner' ? her : D && D.who === 'player' ? him : null;
+  const T = { smile: 0, sad: 0, browsUp: 0 };
+  const read = (text, w) => {
+    if (!text) return;
+    const t = text.replace(/\([^)]*\)/g, '');
+    if (EXPR_SAD.test(t)) T.sad = Math.max(T.sad, 0.6 * w);
+    else if (EXPR_HAPPY.test(t)) T.smile = Math.max(T.smile, 0.7 * w);
+    if (/\?\s*[”"]?\s*$/.test(t)) T.browsUp = Math.max(T.browsUp, 0.55 * w);
+  };
+  const asleep = c.lidsClosed && c.lie;
+  const S = G.S, night = S && S.chapter === 'night' && isHer && !sw;
+  if (!asleep) {
+    if (speaker === c) read(D.text, 1);
+    else if (speaker && Math.hypot(speaker.x - c.x, speaker.z - c.z) < 4) read(D.text, 0.45);
+    if (isHer && c.bark && c.bark.text) read(c.bark.text, 0.8);
+    const near = Math.hypot(G.PLAYER.x - G.PARTNER.x, G.PLAYER.z - G.PARTNER.z) < 3;
+    if (isHer && near && !night) T.smile = Math.max(T.smile, 0.14);
+    if (night && !c.lie) { T.smile = 0.32; T.sad = 0; T.browsUp = 0; }   // it smiles. It doesn't stop.
+  }
+  const inf = [];
+  for (const kind of EXPR_KINDS) { X.v[kind] = G.damp(X.v[kind], T[kind], 3.5, dt); inf.push(X.v[kind]); }
+  for (const m of X.meshes) if (m.morphTargetInfluences) for (let i = 0; i < 3; i++) m.morphTargetInfluences[i] = inf[i];
 }
 /* Eyelids for a model whose head has no blink shapes: a cap over each eyeball (the eyes mesh split left and right),
  * attached to the head bone, in the face's average skin colour; shown while the eyes are shut. */
@@ -1320,6 +1419,7 @@ G.animate = (c, dt, t) => {
   u.head.rotation.set(c.lookUp * 0.6 + Math.sin(t * 0.7 + c.z) * 0.02 * (mb ? 0 : 1) + (c.headDown || 0), c.look * 0.55, (c.tilt || 0) * 0.6 + c.headSway);
   if (mb) { u.head.rotation.x += mb.head[0] * hk; u.head.rotation.y += mb.head[1] * hk; u.head.rotation.z += mb.head[2] * hk; }
   talkHead(c, u, dt, t);
+  exprUpdate(c, u, dt);
   plantFeet(c, u, sit, w, dt);
   springHead(c, u, dt);
   G.retarget(c.m);
