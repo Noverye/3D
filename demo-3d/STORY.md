@@ -117,6 +117,12 @@ Free time used to have nothing to aim for: you wandered until you happened on wh
   - **Timing:** each line's feeling is a little different in strength. It comes in quickly and fades slowly, so a smile lingers after the line.
   - **The listener** answers a smile with a smaller one and a sad line with a little concern, instead of copying the speaker's face.
   - **At rest,** when you're together, both are very slightly smiling. In the night, the imitation's smile is exactly the same the whole time, never more and never less.
+- **Eyelids that move (build 101).** A blink used to be a skin-coloured cap that popped on and off in one frame, and the rest of the time the eyes were wide open, which made them stare. Now each lid swings down over the eye and back up:
+  - **Blinks** come down fast (50 ms), stay shut for a moment, and go up a little slower. Sometimes there's a double blink.
+  - **People blink when they look somewhere new**, so a big glance or turn of the head usually comes with a blink.
+  - **At rest** the lids sit a touch down over the top of the iris, as relaxed eyes do. A smile softens them a little more, and so does sadness. The imitation, once it stops pretending (and stops blinking), opens them right up.
+  - **Falling asleep,** the lids close slowly.
+  - **The lid's edge darkens into a lash line,** so a lid part way down reads as a lid, not a patch of skin.
 - **Fixed: her eyes stayed shut after she got out of bed** in the morning (she'd closed them asleep, and nothing opened them), so she walked about with pale, blank eyes. Getting up opens them, and walking always opens anyone's eyes outside a hug or a scene.
 
 ## Suspense, not horror (build 95)

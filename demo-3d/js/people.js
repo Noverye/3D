@@ -796,6 +796,10 @@ function exprUpdate(c, u, dt) {
 }
 /* Eyelids for a model whose head has no blink shapes: a cap over each eyeball (the eyes mesh split left and right),
  * attached to the head bone, in the face's average skin colour; shown while the eyes are shut. */
+const LID_REST = 0.05, LID_COVER = Math.PI * 0.28, LID_SHUT = 1.36, LID_EDGE = 0.3;   // the cap: the top 50 degrees of the eye; swung 78 degrees forward it covers it. The first 30% of the swing is under the brow.
+function setRealLids(u, a) {   // a: 0 open, 1 shut (measured from the visible edge of the eye)
+  for (const pv of u.realLids) { const cap = pv.userData.cap; cap.rotation.x = (LID_EDGE + a * (1 - LID_EDGE)) * LID_SHUT; cap.visible = a > 0.01; }
+}
 function makeRealLids(model) {
   let eyes = null, skin = null, head = null;
   model.traverse((o) => { if (o.isMesh && /high-?poly/i.test(o.name)) eyes = o; if (o.isMesh && /body/.test(o.material.name || '')) skin = o; if (o.isBone && /Head$/.test(o.name)) head = o; });
@@ -840,11 +844,23 @@ function makeRealLids(model) {
     G.MATS && G.MATS.push(mat);
     // The cap hugs the eyeball (just over the cornea), so the face around the opening hides its edge as real
     // lids do; before, it was bigger than the eye and stood out past the lashes.
-    const lid = new THREE.Mesh(new THREE.SphereBufferGeometry(r * 1.035, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), mat);
-    lid.position.copy(c); lid.position.z -= r * 0.02; lid.rotation.x = Math.PI / 2 + 0.12;
+    // A real lid comes down over the eye and goes back up; it doesn't appear. So the cap sits over the top of the
+    // eyeball, tucked under the brow (its front edge at the upper lash line), and swings forward and down about the
+    // eye's centre to close: part way for a softer look when smiling, all the way for a blink or sleep.
+    const pivot = new THREE.Object3D(); pivot.position.copy(c); pivot.position.z -= r * 0.02;
+    // Its edge darkens into a lash line, and the lid itself sits a little in the brow's shade, so a lid part way down
+    // reads as a lid, not a patch of skin with a hard edge.
+    const lg = new THREE.SphereBufferGeometry(r * 1.035, 24, 14, 0, Math.PI * 2, 0, LID_COVER), lp = lg.attributes.position, cols = new Float32Array(lp.count * 3);
+    for (let i = 0; i < lp.count; i++) {
+      const t = Math.acos(Math.max(-1, Math.min(1, lp.getY(i) / (r * 1.035)))) / LID_COVER, e = Math.max(0, Math.min(1, (t - 0.72) / 0.28)), sh = 0.9 * (1 - 0.55 * e * e * (3 - 2 * e));
+      cols[i * 3] = sh; cols[i * 3 + 1] = sh * 0.97; cols[i * 3 + 2] = sh * 0.95;
+    }
+    lg.setAttribute('color', new THREE.BufferAttribute(cols, 3)); mat.vertexColors = true;
+    const lid = new THREE.Mesh(lg, mat);
     lid.castShadow = false; lid.visible = false; lid.userData.lid = true;
-    model.parent.add(lid); lid.updateMatrixWorld(true); head.attach(lid);
-    out.push(lid);
+    pivot.add(lid); pivot.userData.cap = lid;
+    model.parent.add(pivot); pivot.updateMatrixWorld(true); head.attach(pivot);
+    out.push(pivot);
   }
   return out.length ? out : null;
 }
@@ -1461,21 +1477,31 @@ G.animate = (c, dt, t) => {
   // Blinks on a natural, irregular rhythm (sometimes a double blink).
   c.blinkT = (c.blinkT == null ? Math.random() * 3 : c.blinkT) - dt;
   if (c.noBlink) c.blinkT = Math.max(c.blinkT, 1);   // the imitation, when it stops pretending
-  if (c.blinkT < -0.13) c.blinkT = Math.random() < 0.15 ? 0.18 : 2 + Math.random() * 4.5;
+  if (c.blinkT < -0.17) c.blinkT = Math.random() < 0.15 ? 0.2 : 2 + Math.random() * 4.5;
   const shut = c.lidsClosed || c.blinkT < 0;
-  if (u.realLids) u.realLids.forEach((ld) => (ld.visible = shut));
+  if (u.realLids) {
+    // A blink: down fast (50 ms), a moment shut, up a little slower. Falling asleep, the lids close slowly.
+    const s0 = -c.blinkT, b = c.blinkT >= 0 ? 0 : s0 < 0.05 ? s0 / 0.05 : s0 < 0.08 ? 1 : Math.max(0, 1 - (s0 - 0.08) / 0.09);
+    c.lidSleep = damp(c.lidSleep || 0, c.lidsClosed ? 1 : 0, c.lidsClosed ? 2.5 : 8, dt);
+    // At rest the lids sit a touch down over the top of the iris, as relaxed eyes do (wide-open eyes stare); a smile
+    // softens them a little more, and so does sadness. The imitation, once it stops pretending, opens them right up.
+    const X = u.expr && u.expr.v, soft = X && !c.noBlink ? LID_REST + Math.min(0.14, X.smile * 0.12 + X.sad * 0.09) : 0;
+    setRealLids(u, u.forceLid != null ? u.forceLid : Math.max(b, c.lidSleep, soft));   // forceLid: tests
+  }
   if (u.lids) u.lids.forEach((ld) => { ld.position.y = (shut ? 0.0085 : 0.0135) * k; ld.scale.y = (shut ? 0.0125 : 0.0072) * k; });
   // With nothing to look at, glance around now and then.
   let tgt = c.lie ? null : c.lookAt;
   if (c.lie) { c.look = damp(c.look || 0, c.lieLook || 0, 3, dt); c.lookUp = damp(c.lookUp || 0, 0, 3, dt); }
   else if (!tgt && idle > 0.5 && !c.lockHead) {
     c.glanceT = (c.glanceT || 0) - dt;
-    if (c.glanceT <= 0) { c.glanceT = 2.5 + Math.random() * 4; c.glance = Math.random() < 0.35 ? 0 : (Math.random() - 0.5) * 1.6; c.glanceUp = (Math.random() - 0.4) * 0.5; }
+    if (c.glanceT <= 0) { const g0 = c.glance || 0; c.glanceT = 2.5 + Math.random() * 4; c.glance = Math.random() < 0.35 ? 0 : (Math.random() - 0.5) * 1.6; c.glanceUp = (Math.random() - 0.4) * 0.5; if (Math.abs(c.glance - g0) > 0.6 && c.blinkT > 0.4 && Math.random() < 0.7) c.blinkT = 0; }   // people blink as they look somewhere new
     if (c.glance) { const a = c.yaw + c.glance; tgt = { x: c.x + Math.sin(a) * 3, z: c.z + Math.cos(a) * 3, headY: c.y + u.H * 0.93 + (c.glanceUp || 0) * 3 }; }
   }
   if (tgt) {
     const dx = tgt.x - c.x, dz = tgt.z - c.z;
     let a = Math.atan2(dx, dz) - c.yaw; while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI;
+    if (c._tgtA != null && Math.abs(a - c._tgtA) > 0.7 && c.blinkT > 0.4 && Math.random() < 0.8) c.blinkT = 0;   // a big turn of the head: a blink with it
+    c._tgtA = a;
     // Something behind: keep looking over the same shoulder instead of whipping across to the other one.
     if (Math.abs(a) > 2.1 && c._lookSide) a = c._lookSide * Math.abs(a); else c._lookSide = Math.sign(a) || c._lookSide || 1;
     c.look = damp(c.look || 0, clamp(a, -1.1, 1.1), 4, dt);
