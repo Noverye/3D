@@ -1177,9 +1177,9 @@ function lockFeet(c, u, sit, w, dt) {
     const dir = st.prev == null ? 0 : Math.sign(rel - st.prev);
     if (walking && !st.on && st.dir > 0 && dir < 0) { st.on = true; st.t = 0; st.x = A.x; st.z = A.z; }
     st.prev = rel; if (dir) st.dir = dir;
-    if (st.on) { st.t += dt; if (st.t > period * 0.5 || !walking) st.on = false; }
-    // weight: in over 0.05 s, out over the last fifth of the stance (and quickly if the walk stops)
-    const tgt = st.on ? Math.min(1, st.t / 0.05) * Math.min(1, (period * 0.5 - st.t) / (period * 0.1)) : 0;
+    if (st.on) { st.t += dt; if (st.t > period * 0.6 || !walking) st.on = false; }
+    // weight: in over 0.05 s, out over the last fifth of the stance (60% of the stride, as for real feet) (and quickly if the walk stops)
+    const tgt = st.on ? Math.min(1, st.t / 0.05) * Math.min(1, (period * 0.6 - st.t) / (period * 0.12)) : 0;
     st.k = st.on ? tgt : G.damp(st.k, 0, 14, dt);
     if (st.k < 0.01) return;
     // where the foot should be, forward/back along the walk (world → the body's forward axis)
