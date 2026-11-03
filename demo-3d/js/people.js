@@ -781,11 +781,11 @@ function makeExpressions(model) {
     cav.scale.set(0.022 * k, 0.012 * k, 0.011 * k); cav.position.set(M.x, M.y - L.mouth * k - 0.004 * k, M.z - 0.002 * k);
     cav.castShadow = cav.receiveShadow = false; cav.userData.mouth = true;
     model.parent.add(cav); cav.updateMatrixWorld(true); head.attach(cav);
-    // The upper teeth: a shallow arc just behind the upper lip, its edge 1.5 mm below the line between the lips, so
+    // The upper teeth: a shallow arc just behind the upper lip, its edge 1.5 mm (his 2.8) below the line between the lips, so
     // they're hidden when the mouth is shut and a sliver shows when it opens. Shaded down toward the sides and the
     // gum, where the mouth is in shadow, with the faintest line between each tooth. (They're the skull's, so they
     // stay with the head; the lower ones would be behind the lower lip.)
-    const R = 0.022 * k, A = 0.7, top = 0.007 * k, bot = -0.0015 * k;
+    const R = 0.022 * k, A = 0.7, top = 0.007 * k, bot = (who === 'player' ? -0.0028 : -0.0015) * k, F = (who === 'player' ? 0.014 : 0.0125) * k;   // his lips are fuller
     const tg = new THREE.CylinderBufferGeometry(R, R, top - bot, 40, 3, true, -A, 2 * A), tp = tg.attributes.position, tc = new Float32Array(tp.count * 3);
     for (let i = 0; i < tp.count; i++) {
       const th = Math.atan2(tp.getX(i), tp.getZ(i)), yy = (tp.getY(i) + (top - bot) / 2) / (top - bot), a = Math.abs(th) / A;
@@ -797,7 +797,7 @@ function makeExpressions(model) {
     const tm = new THREE.MeshStandardMaterial({ color: new THREE.Color('#e4dccd').convertSRGBToLinear(), roughness: 0.4, envMapIntensity: 0.3, vertexColors: true, side: THREE.DoubleSide });
     G.MATS && G.MATS.push(tm);
     const teeth = new THREE.Mesh(tg, tm);
-    teeth.position.set(M.x, M.y - L.mouth * k + (top + bot) / 2, M.z + 0.0125 * k - R);
+    teeth.position.set(M.x, M.y - L.mouth * k + (top + bot) / 2, M.z + F - R);
     teeth.castShadow = teeth.receiveShadow = false; teeth.userData.mouth = true;
     model.parent.add(teeth); teeth.updateMatrixWorld(true); head.attach(teeth);
   }
