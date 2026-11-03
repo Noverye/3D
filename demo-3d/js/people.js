@@ -696,8 +696,18 @@ function makeExpressions(model) {
     if (fwd < -0.02 * k) return out;
     const blob = (x0, z0, r, a, b, c) => { const w = 1 - ss(Math.hypot(dx - x0, up - z0) / r); out.x += w * a; out.y += w * b; out.z += w * c; };
     const cx = 0.41 * d, cz = -L.mouth * k, by = L.brow * k;
-    if (kind === 'smile') { blob(cx, cz, 0.55 * d, 0.0045 * k, 0.0065 * k, -0.0015 * k); blob(0.62 * d, -0.5 * d, 0.45 * d, 0.001 * k, 0.0028 * k, 0.0012 * k); }
-    else if (kind === 'sad') { blob(cx, cz, 0.5 * d, -0.001 * k, -0.0045 * k, 0); blob(0.22 * d, by + 0.004 * k, 0.38 * d, 0, 0.004 * k, 0.0005 * k); }
+    // the mouth corners, not the whole mouth: the middle of the lips stays put, so the line curves rather than lifts
+    const corner = (r) => (1 - ss(Math.hypot(dx - cx, up - cz) / r)) * (0.2 + 0.8 * ss(dx / cx));
+    const band = (x0, y0, rx, ry) => (1 - ss(Math.abs(dx - x0) / rx)) * (1 - ss(Math.abs(up - y0) / ry));
+    if (kind === 'smile') {
+      const w = corner(0.42 * d); out.x += w * 0.0042 * k; out.y += w * 0.0052 * k; out.z -= w * 0.0016 * k;      // corners up, out and back
+      blob(0.5 * d, -0.45 * d, 0.4 * d, 0.0004 * k, 0.0024 * k, 0.0012 * k);                                    // the cheeks lift and round
+      const lid = band(0.5 * d, -0.3 * d, 0.42 * d, 0.16 * d); out.y += lid * 0.0011 * k; out.z += lid * 0.0004 * k;  // and the eyes smile too
+    } else if (kind === 'sad') {
+      const w = corner(0.42 * d); out.x -= w * 0.0008 * k; out.y -= w * 0.0034 * k;                               // corners down
+      blob(0.18 * d, by + 0.003 * k, 0.36 * d, -0.0008 * k, 0.0048 * k, 0.0004 * k);                            // inner brows up and together
+      blob(0.85 * d, by, 0.3 * d, 0, -0.0012 * k, 0);                                                            // the outer ends drop a little
+    }
     else { const w = (1 - ss(dx / (1.05 * d))) * (1 - ss(Math.abs(up - (by + 0.006 * k)) / (0.03 * k))); out.y += 0.0055 * k * w; out.z += 0.0006 * k * w; }
     out.x *= side; return out;
   };
@@ -724,36 +734,64 @@ function makeExpressions(model) {
   return { meshes, v: { smile: 0, sad: 0, browsUp: 0 } };
 }
 /* What each face is doing: from the line being said (or her last bark), the moment, and who it is.
- * Happy lines smile; questions raise the brows; sorry, cold, alone and the like look sad; the one listening
- * half-mirrors the one talking. At rest she's very slightly smiling when you're near. The thing in the night
- * smiles, pleasantly and evenly, the whole time. */
-const EXPR_HAPPY = /\b(ha(ha)?|laugh|love|lovely|perfect|happy|marry|warm|good|best|favourite|yes|kiss|gold star|snow day|beautiful|wonderful|hero)\b|!|\*grins?\*|\*smil/i;
-const EXPR_SAD = /\b(sorry|miss(ed)?|alone|afraid|scared|frightened|cold|lost|gone|can[’']t|never|please|don[’']t go|cry|dream)\b/i;
+ *  - Only clear feeling moves the face: laughter and love smile most, a plain "good" or "!" only a little; sorry,
+ *    alone, afraid and the like look sad. Everyday words (cold, never, please) don't.
+ *  - A question lifts the brows as it's asked, then they settle; they don't stay up the whole line.
+ *  - Each line's feeling is a little different in strength, comes in quickly and goes slowly, so a smile lingers.
+ *  - The one listening answers a smile with a smaller one, and a sad line with a little concern; never a copy.
+ *  - At rest, when you're together, both are very slightly smiling. The thing in the night smiles, evenly, the
+ *    whole time: the same smile, never more, never less. */
+const EXPR_LAUGH = /\b(ha(ha)+|hah|laugh(ing|s)?|giggl\w*)\b|\*grins?\*|\*smil|\*laugh/i;
+const EXPR_WARM = /\b(love|lovely|perfect|happy|marry|kiss|gold star|snow day|beautiful|wonderful|hero|favourite|best)\b/i;
+const EXPR_LIGHT = /\b(good|nice|yes|warm|great|thank(s| you)|clever|cosy|cozy|fun)\b|!/i;
+const EXPR_SAD = /\b(sorry|miss(ed|ing)?|alone|lonely|afraid|scared|frightened|lost|cry(ing)?|don[’']t go|don[’']t leave|wish you|i[’']m tired)\b/i;
+const exprHash = (t) => { let h = 7; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return ((h >>> 0) % 1000) / 1000; };
+function exprRead(text) {
+  const t = text.replace(/\([^)]*\)/g, ''), r = { smile: 0, sad: 0, q: /\?\s*[”"’]?\s*$/.test(t) }, vary = 0.85 + 0.25 * exprHash(t);
+  if (EXPR_SAD.test(t)) r.sad = 0.55 * vary;
+  else if (EXPR_LAUGH.test(t)) r.smile = 0.85 * vary;
+  else if (EXPR_WARM.test(t)) r.smile = 0.6 * vary;
+  else if (EXPR_LIGHT.test(t)) r.smile = 0.32 * vary;
+  return r;
+}
 function exprUpdate(c, u, dt) {
   const X = u.expr; if (!X || c.hidden) return;
   const D = G.DLG && G.DLG.cur, sw = !!(G.NIGHT && G.NIGHT.swapped);
   const him = sw ? G.PARTNER : G.PLAYER, her = sw ? G.PLAYER : G.PARTNER, isHer = c === her;
   const speaker = D && D.who === 'partner' ? her : D && D.who === 'player' ? him : null;
   const T = { smile: 0, sad: 0, browsUp: 0 };
-  const read = (text, w) => {
+  if (!X.cache) X.cache = { text: null, r: null };
+  const read = (text, w, own, t) => {
     if (!text) return;
-    const t = text.replace(/\([^)]*\)/g, '');
-    if (EXPR_SAD.test(t)) T.sad = Math.max(T.sad, 0.6 * w);
-    else if (EXPR_HAPPY.test(t)) T.smile = Math.max(T.smile, 0.7 * w);
-    if (/\?\s*[”"]?\s*$/.test(t)) T.browsUp = Math.max(T.browsUp, 0.55 * w);
+    if (X.cache.text !== text) X.cache = { text, r: exprRead(text) };
+    const r = X.cache.r;
+    if (own) {
+      T.smile = Math.max(T.smile, r.smile * w); T.sad = Math.max(T.sad, r.sad * w);
+      // brows: up as the question is asked, then back down
+      if (r.q) T.browsUp = Math.max(T.browsUp, 0.45 * w * (t < 0.15 ? t / 0.15 : t < 1.8 ? 1 : Math.max(0.2, 1 - (t - 1.8) / 0.8)));
+    } else {
+      T.smile = Math.max(T.smile, r.smile * 0.45 * w);                       // a smaller smile back
+      if (r.sad) { T.sad = Math.max(T.sad, 0.25 * w); T.browsUp = Math.max(T.browsUp, 0.1 * w); }   // concern, not a copy
+    }
   };
   const asleep = c.lidsClosed && c.lie;
   const S = G.S, night = S && S.chapter === 'night' && isHer && !sw;
   if (!asleep) {
-    if (speaker === c) read(D.text, 1);
-    else if (speaker && Math.hypot(speaker.x - c.x, speaker.z - c.z) < 4) read(D.text, 0.45);
-    if (isHer && c.bark && c.bark.text) read(c.bark.text, 0.8);
+    const t = (G.DLG && G.DLG.t) || 0;
+    if (speaker === c) read(D.text, 1, true, t);
+    else if (speaker && Math.hypot(speaker.x - c.x, speaker.z - c.z) < 4) read(D.text, 1, false, t);
+    if (isHer && c.bark && c.bark.text) read(c.bark.text, 0.8, true, 1);
     const near = Math.hypot(G.PLAYER.x - G.PARTNER.x, G.PLAYER.z - G.PARTNER.z) < 3;
-    if (isHer && near && !night) T.smile = Math.max(T.smile, 0.14);
-    if (night && !c.lie) { T.smile = 0.32; T.sad = 0; T.browsUp = 0; }   // it smiles. It doesn't stop.
+    if (near && !night && !T.sad) T.smile = Math.max(T.smile, isHer ? 0.16 : 0.08);
+    if (night && !c.lie) { T.smile = 0.3; T.sad = 0; T.browsUp = 0; }   // it smiles. It doesn't stop.
   }
   const inf = [];
-  for (const kind of EXPR_KINDS) { X.v[kind] = G.damp(X.v[kind], T[kind], 3.5, dt); inf.push(X.v[kind]); }
+  for (const kind of EXPR_KINDS) {
+    const cur = X.v[kind], to = T[kind];
+    X.v[kind] = night ? to : G.damp(cur, to, to > cur ? 4 : kind === 'browsUp' ? 2.5 : 1.1, dt);   // quick in, slow out (the night's never moves)
+    inf.push(X.v[kind]);
+  }
+  if (X.forced) inf.splice(0, 3, ...X.forced);   // tests
   for (const m of X.meshes) if (m.morphTargetInfluences) for (let i = 0; i < 3; i++) m.morphTargetInfluences[i] = inf[i];
 }
 /* Eyelids for a model whose head has no blink shapes: a cap over each eyeball (the eyes mesh split left and right),
