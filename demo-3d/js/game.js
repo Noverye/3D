@@ -1045,10 +1045,11 @@ function updateDialogue(dt) {
   if (!DLG.cur && DLG.q.length) {
     DLG.cur = DLG.q.shift(); DLG.shown = 0; DLG.t = 0;
     box.className = 'show ' + (DLG.cur.who ? 'who-' + DLG.cur.who : 'narr') + (G.flowing() ? ' flow' : '');
+    document.body.classList.toggle('talking', G.flowing());
     { const hs = G.labelsTurned(); $('who').textContent = DLG.cur.who === 'partner' ? (hs ? G.CFG.playerLabel : G.CFG.partnerLabel) : DLG.cur.who === 'player' ? (hs ? G.CFG.partnerLabel : G.CFG.playerLabel) : ''; }
     pickShotFor(DLG.cur.who, DLG.cur.o);
   }
-  if (!DLG.cur) { if (box.className !== '') { box.className = ''; DLG.autoShot = false; if (!STATE.sceneShot && CAM.shot) releaseCamera(); } return; }
+  if (!DLG.cur) { if (box.className !== '') { box.className = ''; document.body.classList.remove('talking'); DLG.autoShot = false; if (!STATE.sceneShot && CAM.shot) releaseCamera(); } return; }
   const cur = DLG.cur;
   DLG.t += dt; DLG.shown = Math.min(cur.text.length, DLG.shown + dt * 42);
   $('line').textContent = cur.text.slice(0, Math.floor(DLG.shown));
@@ -1974,7 +1975,7 @@ function boot() {
     $('fade').classList.add('on'); $('fade').style.background = '#000';
     await wait(0.6);
     if (!STATE.started) { $('title').classList.add('hide'); STATE.started = true; document.body.classList.add('playing'); $('begin').disabled = true; G.Audio.start(); }
-    DLG.q.length = 0; DLG.cur = null; $('subs').className = '';
+    DLG.q.length = 0; DLG.cur = null; $('subs').className = ''; document.body.classList.remove('talking');
     G.UI.reset && G.UI.reset();
     $('endcard').classList.remove('show'); document.body.classList.remove('ending');
     STATE.nightDone = false; STATE.ending = null; STATE.paused = false; STATE.watchDoor = false;

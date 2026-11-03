@@ -401,6 +401,12 @@
   #subs.flow.narr #line { font-size: calc(clamp(17px, 2.2vw, 22px) * var(--subK)); color: rgba(243,234,217,0.92); }
   #subs.flow #who { font-size: 12px; margin-bottom: 2px; opacity: 0.9; }
   @media (pointer: coarse) and (min-height: 521px) { #subs.flow { bottom: calc(118px + env(safe-area-inset-bottom, 0px)); } }
+  /* Behind flowing subtitles: not a box, a soft darkening along the bottom edge of the picture while someone's
+   * talking, just enough for pale words over snow, bedding or a bright window. */
+  #subshade { position: fixed; left: 0; right: 0; bottom: 0; height: 30vh; pointer-events: none; z-index: 13; opacity: 0; transition: opacity 0.5s;
+    background: linear-gradient(to top, rgba(8,8,12,0.62), rgba(8,8,12,0.34) 38%, rgba(8,8,12,0) 100%); }
+  body.talking #subshade { opacity: 1; }
+  #subs.flow.narr #line { font-size: calc(clamp(18px, 2.3vw, 23px) * var(--subK)); color: #f6efe2; }
 </style>
 </head>
 <body>
@@ -438,6 +444,7 @@
 <div id="fade"></div>
 <div id="flash"></div>
 <div id="polaroid"><img alt=""><p></p></div>
+<div id="subshade"></div>
 <div id="subs" role="dialog" aria-live="polite"><div id="who"></div><div id="line"></div></div>
 
 <div id="endcard" role="dialog" aria-labelledby="endHeading">
