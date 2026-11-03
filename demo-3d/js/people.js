@@ -737,7 +737,7 @@ function makeExpressions(model) {
         const ix = g.index.array, W = [], inBox = new Uint8Array(pos.count), U = new Float32Array(pos.count * 2);
         for (let i = 0; i < pos.count; i++) {
           v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld); const dx = Math.abs(v.x - M.x), up = v.y - M.y + L.mouth * k, fwd = v.z - M.z;
-          U[i * 2] = up; if (dx < 0.018 * k && Math.abs(up) < 0.03 * k && fwd > -0.01 * k) inBox[i] = 1;
+          U[i * 2] = up; U[i * 2 + 1] = dx < 0.03 * k && Math.abs(up) < 0.03 * k && fwd > -0.01 * k ? 1 : 0; if (dx < 0.018 * k && Math.abs(up) < 0.03 * k && fwd > -0.01 * k) inBox[i] = 1;
         }
         const adj = new Map();
         for (let t = 0; t < ix.length; t += 3) for (let q = 0; q < 3; q++) { const i0 = ix[t + q]; if (!inBox[i0]) continue; for (let r = 1; r < 3; r++) { const j = ix[t + (q + r) % 3]; if (!inBox[j]) continue; let l = adj.get(i0); if (!l) adj.set(i0, l = []); l.push(j); } }
@@ -750,8 +750,8 @@ function makeExpressions(model) {
         if (UV && !g.attributes.color) {
           const col = new Float32Array(pos.count * 3).fill(1), sc = UV.array instanceof Uint16Array ? 1 / 65535 : 1;
           for (let i = 0; i < pos.count; i++) {
-            if (!inBox[i] && !(Math.abs(U[i * 2]) < 0.03 * k)) continue;
-            const lining = UV.getY(i) * sc > 0.76 && inBox[i], innerLip = lab[i] && Math.abs(U[i * 2]) < 0.0025 * k;
+            if (!U[i * 2 + 1]) continue;
+            const lining = UV.getY(i) * sc > 0.76, innerLip = lab[i] && Math.abs(U[i * 2]) < 0.0025 * k;
             const f = lining ? 0.16 : innerLip ? 0.5 : 1;
             col[i * 3] = f; col[i * 3 + 1] = f * 0.9; col[i * 3 + 2] = f * 0.9;
           }
@@ -778,7 +778,7 @@ function makeExpressions(model) {
   if (head && model.parent) {
     const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#1c0d0b').convertSRGBToLinear(), roughness: 0.9, envMapIntensity: 0, side: THREE.DoubleSide });
     const cav = new THREE.Mesh(new THREE.SphereBufferGeometry(1, 16, 10), mat);
-    cav.scale.set(0.015 * k, 0.012 * k, 0.01 * k); cav.position.set(M.x, M.y - L.mouth * k - 0.004 * k, M.z - 0.002 * k);
+    cav.scale.set(0.022 * k, 0.012 * k, 0.011 * k); cav.position.set(M.x, M.y - L.mouth * k - 0.004 * k, M.z - 0.002 * k);
     cav.castShadow = cav.receiveShadow = false; cav.userData.mouth = true;
     model.parent.add(cav); cav.updateMatrixWorld(true); head.attach(cav);
   }
