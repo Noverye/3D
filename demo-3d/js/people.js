@@ -744,6 +744,19 @@ function makeExpressions(model) {
         const reach = (pick) => { const seen = new Uint8Array(pos.count), st = []; for (const i of adj.keys()) if (pick(U[i * 2])) { seen[i] = 1; st.push(i); } while (st.length) { const i = st.pop(); for (const j of adj.get(i) || []) if (!seen[j]) { seen[j] = 1; st.push(j); } } return seen; };
         const hi = reach((up) => up > 0.003 * k), lo = reach((up) => up < -0.003 * k);
         for (let i = 0; i < pos.count; i++) if (hi[i] !== lo[i]) lab[i] = hi[i] ? 1 : -1;
+        // Inside the mouth in shadow: the mouth's lining (its own patch of the texture, painted flat red) and the
+        // inner faces of the lips, which only show when it opens. Darkened through vertex colours.
+        const UV = g.attributes.uv;
+        if (UV && !g.attributes.color) {
+          const col = new Float32Array(pos.count * 3).fill(1), sc = UV.array instanceof Uint16Array ? 1 / 65535 : 1;
+          for (let i = 0; i < pos.count; i++) {
+            if (!inBox[i] && !(Math.abs(U[i * 2]) < 0.03 * k)) continue;
+            const lining = UV.getY(i) * sc > 0.76 && inBox[i], innerLip = lab[i] && Math.abs(U[i * 2]) < 0.0025 * k;
+            const f = lining ? 0.16 : innerLip ? 0.5 : 1;
+            col[i * 3] = f; col[i * 3 + 1] = f * 0.9; col[i * 3 + 2] = f * 0.9;
+          }
+          g.setAttribute('color', new THREE.BufferAttribute(col, 3)); o.material.vertexColors = true;
+        }
       }
       g.morphAttributes.position = EXPR_KINDS.map((kind) => {
         const a = new Float32Array(pos.count * 3);
