@@ -1580,7 +1580,8 @@ G.animate = (c, dt, t) => {
     if (sit > 0.5) {
       // Seated hands don't stay glued to the thighs: they settle in different places now and then (on the thighs,
       // clasped in the lap, one hand up on the knee), each person on their own slow clock, easing between them.
-      const rest = [[-0.42, 0.16, -0.95, 0.25], [-0.36, 0.24, -1.2, 0.38], i ? [-0.58, 0.18, -0.72, 0.2] : [-0.42, 0.16, -0.95, 0.25], [-0.48, 0.2, -0.85, 0.18]];
+      // (Upper arms nearly straight down: reaching further forward, the hands floated above the knees.)
+      const rest = [[-0.14, 0.16, -0.97, 0.25], [-0.1, 0.24, -1.2, 0.38], i ? [-0.24, 0.18, -0.66, 0.2] : [-0.14, 0.16, -0.97, 0.25], [-0.2, 0.2, -0.88, 0.18]];
       const cyc = (t * 0.045 + sd * 0.31) % rest.length, a0 = Math.floor(cyc), f = G.smooth(0.8, 1, cyc - a0), A0 = rest[a0], A1 = rest[(a0 + 1) % rest.length];
       sx = L(A0[0], A1[0], f) + own; sz = s * L(A0[1], A1[1], f); ex = L(A0[2], A1[2], f); sy = s * L(A0[3], A1[3], f);
     }
