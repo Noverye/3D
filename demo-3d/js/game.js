@@ -738,6 +738,9 @@ function steer(c, tx, tz, speed, dt, stopAt = 0.06) {
   const dx = w.x - c.x, dz = w.z - c.z, l = Math.hypot(dx, dz) || 1;
   const slow = nav.path && nav.path.length === 1 ? clamp(l / 0.5, 0.35, 1) : 1;
   c.speed = damp(c.speed, speed * slow, 5, dt);
+  // Arriving: slow down over the last step or two, as if braking evenly, then gently into the stop, so the walk
+  // ends at a near standstill rather than from walking pace in a single frame.
+  c.speed = Math.min(c.speed, Math.sqrt(2 * 2.2 * Math.max(0, dGoal - stopAt)) + 0.05, (dGoal - stopAt) * 4 + 0.12);
   c.yaw = angDamp(c.yaw, Math.atan2(dx, dz), 9, dt);
   // Move along the waypoint direction (not the smoothed facing) so corners are taken cleanly.
   moveChar(c, dx / l * c.speed * dt, dz / l * c.speed * dt);
@@ -748,14 +751,14 @@ function steer(c, tx, tz, speed, dt, stopAt = 0.06) {
     if (nav.unstuck > 2) { const o = nearestOpen(...cellOf(c.x, c.z), 4); if (o) { const p = cellPos(o[0], o[1]); c.x = p.x; c.z = p.z; c.yFloor = G.floorAt(c.x, c.z); } nav.unstuck = 0; } }
   return false;
 }
-function placeChar(c, x, z, yaw) { c.x = x; c.z = z; c.yaw = yaw; c.yFloor = G.floorAt(x, z); c.y = c.yFloor; c.speed = 0; c.nav = null; c._prevYaw = yaw; }
+function placeChar(c, x, z, yaw) { c.turnTo = null; c.settle = false; c.x = x; c.z = z; c.yaw = yaw; c.yFloor = G.floorAt(x, z); c.y = c.yFloor; c.speed = 0; c.nav = null; c._prevYaw = yaw; }
 G.placeChar = placeChar;
 G.gaze = (c, pos, dur = 2.2) => { c.gaze = { x: pos[0], z: pos[2], headY: pos[1], t: dur }; };
 G.slideTo = (c, x, z, yaw, dur = 0.55) => new Promise((res) => { c.script = null; c.nav = null; c.slide = { from: { x: c.x, z: c.z }, x, z, yaw, dur, t: 0, res }; });
 // Sit down from where you stand: slide into the seat while the legs fold.
 G.sitDown = (c, x, z, yaw, seatY, dur = 0.6) => { c.seatY = seatY; c.sitTarget = 1; return G.slideTo(c, x, z, yaw, dur); };
 G.sitAt = (c, x, z, yaw, seatY) => { c.script = null; c.lie = false; placeChar(c, x, z, yaw); c.seatY = seatY; c.sitTarget = 1; c.sit = 1; };
-G.standAt = (c, x, z, yaw) => { c.script = null; c.lie = false; c.sitTarget = 0; c.sit = 0; c.freeSit = null; c.rise = null; placeChar(c, x, z, yaw); };
+G.standAt = (c, x, z, yaw) => { c.script = null; c.turnTo = null; c.lie = false; c.sitTarget = 0; c.sit = 0; c.freeSit = null; c.rise = null; placeChar(c, x, z, yaw); };
 // In bed: feet at (x, zFeet), head toward the headboard; roll turns onto one side, look turns the head.
 // The two of them in bed together, close: him on his back turned a little towards her, her on her side against him with
 // her head at his shoulder, her arm across his chest and her knees drawn up; his arm round her. (The imitation's nights
@@ -1090,10 +1093,14 @@ function partnerAI(dt, t) {
   const p = PARTNER;
   p.holdOn = PLAYER.holdOn = false;   // set again below only while she's actually walking hand in hand
   if (p.bark) { p.bark.t -= dt; if (p.bark.t <= 0) p.bark = null; }
+  // The last of the walk's pace runs out over a moment (it ends near a standstill already), not in one frame.
+  if (p.settle) { if (p.script || p.slide || p.lie) p.settle = false; else { p.speed = damp(p.speed, 0, 12, dt); if (p.speed < 0.01) { p.speed = 0; p.settle = false; } } }
+  // Turning to face where a walk said to (a quick turn on the spot, with little steps), not a snap round.
+  if (p.turnTo != null) { if (p.script || p.slide || p.lie || (p.sit || 0) > 0.2) p.turnTo = null; else { p.yaw = angDamp(p.yaw, p.turnTo, 9, dt); let e = p.turnTo - p.yaw; e = Math.atan2(Math.sin(e), Math.cos(e)); if (Math.abs(e) < 0.01) { p.yaw = p.turnTo; p.turnTo = null; } } }
   if (p.script) {
     const s = p.script;
     s.t = (s.t || 0) + dt;
-    if (steer(p, s.x, s.z, s.speed || 1.2, dt, 0.08) || s.t > 12) { p.script = null; p.speed = 0; if (s.yaw != null) p.yaw = s.yaw; s.res && s.res(); }
+    if (steer(p, s.x, s.z, s.speed || 1.2, dt, 0.08) || s.t > 12) { p.script = null; p.settle = true; if (s.yaw != null) p.turnTo = s.yaw; s.res && s.res(); }
     p.lookAt = null;
     return;
   }
