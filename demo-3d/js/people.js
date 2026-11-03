@@ -1158,6 +1158,50 @@ function plantFeet(c, u, sit, w, dt) {
     L.th.rotation.x -= dl * 0.5; L.kn.rotation.x += dl; L.ft.rotation.x -= dl * 0.5;
   });
 }
+/* Feet that grip the floor. Walking, the body glides at an even speed but a recorded step doesn't, so a planted foot
+ * slid a little (about a third of the walking speed). Now each foot, as it comes down (furthest forward under the
+ * body), is pinned where it landed; while it carries the weight the hip and knee bend to keep it there, and it lets
+ * go as the heel comes up, easing back into the step. Forward and back only: the sideways sway is the recording's. */
+const _lk = { a: new THREE.Vector3(), b: new THREE.Vector3(), f: new THREE.Vector3() };
+function ankleIn(c, L, out) { L.ft.getWorldPosition(out); return out; }
+function lockFeet(c, u, sit, w, dt) {
+  if (!u.legs || u.legs.length !== 2 || c.lie || sit > 0.05 || c.angel || c.hugWith || G.NO_FOOTLOCK) { c._lock = null; return; }
+  const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw);
+  const S = c._lock || (c._lock = u.legs.map(() => ({ x: 0, z: 0, on: false, t: 0, k: 0, prev: null, dir: 0 })));
+  const period = c.gaitRate > 0.5 ? (2 * Math.PI) / c.gaitRate : 1, walking = w > 0.3 && (c.speed || 0) > 0.25 && !c.reach;
+  c.m.updateMatrixWorld(true);
+  u.legs.forEach((L, i) => {
+    const st = S[i], A = ankleIn(c, L, _lk.a);
+    const rel = (A.x - c.x) * fx + (A.z - c.z) * fz;   // how far ahead of the body this ankle is
+    // the foot coming down: it was moving forward relative to the body and now goes back
+    const dir = st.prev == null ? 0 : Math.sign(rel - st.prev);
+    if (walking && !st.on && st.dir > 0 && dir < 0) { st.on = true; st.t = 0; st.x = A.x; st.z = A.z; }
+    st.prev = rel; if (dir) st.dir = dir;
+    if (st.on) { st.t += dt; if (st.t > period * 0.5 || !walking) st.on = false; }
+    // weight: in over 0.05 s, out over the last fifth of the stance (and quickly if the walk stops)
+    const tgt = st.on ? Math.min(1, st.t / 0.05) * Math.min(1, (period * 0.5 - st.t) / (period * 0.1)) : 0;
+    st.k = st.on ? tgt : G.damp(st.k, 0, 14, dt);
+    if (st.k < 0.01) return;
+    // where the foot should be, forward/back along the walk (world → the body's forward axis)
+    const want = ((st.x - A.x) * fx + (st.z - A.z) * fz) * st.k;
+    if (Math.abs(want) < 0.002) return;
+    // Two passes of a small numerical solve: how the ankle moves (forward, up) for a touch of hip and of knee.
+    for (let pass = 0; pass < 2; pass++) {
+      const A0 = ankleIn(c, L, _lk.a).clone(), e = 0.02;
+      const fwd0 = (A0.x - c.x) * fx + (A0.z - c.z) * fz;
+      const probe = (bone) => { bone.rotation.x += e; L.th.updateMatrixWorld(true); const P = ankleIn(c, L, _lk.b); const r = [((P.x - c.x) * fx + (P.z - c.z) * fz - fwd0) / e, (P.y - A0.y) / e]; bone.rotation.x -= e; L.th.updateMatrixWorld(true); return r; };
+      const jt = probe(L.th), jk = probe(L.kn);
+      const gF = ((st.x - A0.x) * fx + (st.z - A0.z) * fz) * st.k, gU = 0;   // forward/back to the pinned spot, at the same height
+      if (Math.abs(gF) < 0.002) break;
+      const det = jt[0] * jk[1] - jk[0] * jt[1]; if (Math.abs(det) < 1e-4) break;
+      let dth = (gF * jk[1] - jk[0] * gU) / det, dkn = (jt[0] * gU - gF * jt[1]) / det;
+      dth = Math.max(-0.35, Math.min(0.35, dth)); dkn = Math.max(-0.5, Math.min(0.5, dkn));
+      if (L.kn.rotation.x + dkn < 0.02) dkn = 0.02 - L.kn.rotation.x;   // never past straight
+      L.th.rotation.x += dth; L.kn.rotation.x += dkn; L.ft.rotation.x -= dth + dkn;   // the foot stays as it was to the floor
+      L.th.updateMatrixWorld(true);
+    }
+  });
+}
 /* Neck and head on a critically damped spring toward where the pose wants them: a head moves with ease-in
  * and ease-out, never jumps, whatever sets its target (a glance, a new look-at, a doze, a hug, a clip change).
  * A cut (a long frame, or c.snapHead) puts it straight there. */
@@ -1393,7 +1437,10 @@ G.animate = (c, dt, t) => {
   if (c.lie) c.m.rotation.set(-Math.PI / 2 + (c.lieTilt == null ? 0.09 : c.lieTilt), c.lieRoll || 0, 0);   // tilt: head up on the pillow
   else c.m.rotation.set(0, c.yaw, -c.turnLean);
   const prevPh = c.phase;
-  c.phase += dt * (G.GAIT ? G.GAIT(c.speed) : (4.0 + sp * 3.0) * Math.min(1, sp * 2));
+  // Steps per second to match the speed, so the stride covers the ground the body does (the recorded stride is a
+  // fixed length): measured, the feet stop sliding forward or back at about 2.2 + 4.4 × speed (radians a second).
+  c.gaitRate = G.GAIT ? G.GAIT(c.speed) : (2.2 + 4.4 * Math.min(2.4, c.speed)) * Math.min(1, sp * 2);
+  c.phase += dt * c.gaitRate;
   const ph = c.phase, w = Math.min(1, sp);
   // Turning on the spot: small steps round, one foot then the other, so the feet don't swivel on the ground.
   const yawRate = Math.abs(dy) / Math.max(dt, 1e-3);
@@ -1610,6 +1657,7 @@ G.animate = (c, dt, t) => {
   talkHead(c, u, dt, t);
   exprUpdate(c, u, dt);
   plantFeet(c, u, sit, w, dt);
+  lockFeet(c, u, sit, w, dt);
   springHead(c, u, dt);
   G.retarget(c.m);
   if (u.realEyes) aimEyes(c, u, tgt ? new THREE.Vector3(tgt.x, tgt.headY != null ? tgt.headY : c.y + u.H * 0.93, tgt.z) : null, dt);
