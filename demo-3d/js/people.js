@@ -772,6 +772,16 @@ function makeExpressions(model) {
     o.updateMorphTargets();
     meshes.push(o);
   }
+  // The mouth's lining doesn't close at the back, so an open mouth would show through the head (to the scarf, say).
+  // A dark pocket inside the head, behind the lining, where only the open mouth can see it.
+  let head = null; model.traverse((o) => { if (o.isBone && /Head$/.test(o.name) && !head) head = o; });
+  if (head && model.parent) {
+    const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#1c0d0b').convertSRGBToLinear(), roughness: 0.9, envMapIntensity: 0, side: THREE.DoubleSide });
+    const cav = new THREE.Mesh(new THREE.SphereBufferGeometry(1, 16, 10), mat);
+    cav.scale.set(0.015 * k, 0.012 * k, 0.01 * k); cav.position.set(M.x, M.y - L.mouth * k - 0.004 * k, M.z - 0.002 * k);
+    cav.castShadow = cav.receiveShadow = false; cav.userData.mouth = true;
+    model.parent.add(cav); cav.updateMatrixWorld(true); head.attach(cav);
+  }
   return { meshes, v: { smile: 0, sad: 0, browsUp: 0, open: 0, round: 0 } };
 }
 /* What each face is doing: from the line being said (or her last bark), the moment, and who it is.
