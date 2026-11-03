@@ -1162,6 +1162,7 @@ function plantFeet(c, u, sit, w, dt) {
  * slid a little (about a third of the walking speed). Now each foot, as it comes down (furthest forward under the
  * body), is pinned where it landed; while it carries the weight the hip and knee bend to keep it there, and it lets
  * go as the heel comes up, easing back into the step. Forward and back only: the sideways sway is the recording's. */
+const GAIT_H = 1.66;   // her height, which the step rate was measured on
 const _lk = { a: new THREE.Vector3(), b: new THREE.Vector3(), f: new THREE.Vector3() };
 function ankleIn(c, L, out) { L.ft.getWorldPosition(out); return out; }
 function lockFeet(c, u, sit, w, dt) {
@@ -1446,7 +1447,8 @@ G.animate = (c, dt, t) => {
   const prevPh = c.phase;
   // Steps per second to match the speed, so the stride covers the ground the body does (the recorded stride is a
   // fixed length): measured, the feet stop sliding forward or back at about 2.2 + 4.4 × speed (radians a second).
-  c.gaitRate = G.GAIT ? G.GAIT(c.speed) : (2.2 + 4.4 * Math.min(2.4, c.speed)) * Math.min(1, sp * 2);
+  // Taller, longer legs: slower, longer steps (measured: him at about 0.9 of her rate); the children quicker.
+  c.gaitRate = G.GAIT ? G.GAIT(c.speed) : (2.2 + 4.4 * Math.min(2.4, c.speed)) * Math.min(1, sp * 2) * clamp(GAIT_H / (u.H || GAIT_H), 0.85, 1.3);
   c.phase += dt * c.gaitRate;
   const ph = c.phase, w = Math.min(1, sp);
   // Turning on the spot: small steps round, one foot then the other, so the feet don't swivel on the ground.
