@@ -123,6 +123,11 @@ Free time used to have nothing to aim for: you wandered until you happened on wh
   - **At rest** the lids sit a touch down over the top of the iris, as relaxed eyes do. A smile softens them a little more, and so does sadness. The imitation, once it stops pretending (and stops blinking), opens them right up.
   - **Falling asleep,** the lids close slowly.
   - **The lid's edge darkens into a lash line,** so a lid part way down reads as a lid, not a patch of skin.
+- **Mouths that move with the words (build 102).** Before, their mouths stayed shut while they talked. Now the mouth follows the line as it's spoken, letter by letter at the speed of the words:
+  - **Open sounds** (a, e, i, h) drop the jaw, more for "a" than "i". **Round ones** (o, u, w) bring the lips in and forward. **m, b and p** close the lips, and spaces and punctuation let the mouth rest.
+  - It moves quickly but smoothly from shape to shape, a little different each letter, so it reads as talking rather than flapping. Lying down it's smaller. Her little comments to herself move her mouth too.
+  - **The mouth opens between the lips.** The lips meet with no gap in the models, so which lip each point belongs to is worked out from how the face is joined together, and the mouth parts cleanly there.
+  - **Inside is in shadow.** The mouth's lining is darkened, and a dark pocket sits behind it inside the head, since the lining is open at the back and an open mouth showed straight through to her scarf.
 - **Fixed: her eyes stayed shut after she got out of bed** in the morning (she'd closed them asleep, and nothing opened them), so she walked about with pale, blank eyes. Getting up opens them, and walking always opens anyone's eyes outside a hug or a scene.
 
 ## Suspense, not horror (build 95)
