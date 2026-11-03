@@ -244,6 +244,20 @@ function nightLoops(run) {
       if (lv >= 2 && dist() > 2 && !G.gentle()) { PARTNER.mode = 'script'; await G.walkTo(PARTNER, PLAYER.x + 0.5, PLAYER.z + 0.3, 1.5); if (live() && !S.flags.fakeWithdrawn) PARTNER.mode = 'follow'; }
     }
   })();
+  // The night running down: the longer you're up, the lower the fire, the dimmer the kitchen lamp and the heavier the
+  // snow at the windows. Nothing on screen says so; four minutes or so from first light to last.
+  { let t = 0, fireCtl = true; const lamps = G.LAMPS.filter((L) => L.on);
+    G.TICKERS.add(function down(dt) {
+      if (!live()) { G.TICKERS.delete(down); return; }
+      if (PLAYER.lie || G.busy()) return;
+      t += dt; const k = Math.min(1, t / 240);
+      const F = G.FIRE, want = Math.max(0.12, 0.6 - 0.48 * k);
+      if (fireCtl && F.on) { if (F.fuel > want + 0.3 && k > 0.02) fireCtl = false; else F.fuel = Math.min(F.fuel, want); }   // (if it builds the fire up itself, let it)
+      for (const L of lamps) if (L.on && L.power0) L.power = L.power0 * 0.9 * (1 - 0.55 * k);
+      STATE.snowTarget = 0.25 + 0.6 * k;
+      NIGHT.runDown = k;
+    });
+  }
   // It repeats what you said this evening, word for word. She argued with you; it agrees. (lists.js writes it down.)
   (async () => {
     const F = S.flags, said = [];
@@ -435,7 +449,7 @@ inter('hBed', [2.4, 0.6, 0.15], 1.25, 'Bed', async () => {
 // Noticing enough brings the door sooner: once you've heard the whistle and found three things that aren't right.
 G.TICKERS.add(() => { if (night() && S.flags.nightUp && !S.flags.doorOpen && !NIGHT.door.visible && NIGHT.whistles >= 1 && NIGHT.seen && NIGHT.seen.size >= 3 && !PLAYER.lie && !G.busy()) NIGHT.door.visible = true; });
 // Walking into the kitchen once the door is there.
-G.TICKERS.add(() => { if (night() && NIGHT.door.visible && !S.flags.doorOpen && !NIGHT.doorSaid && PLAYER.x > 11.3 && !G.busy()) { NIGHT.doorSaid = true; A.run(async () => { await N('(There’s a door in the kitchen wall. There has never been a door in the kitchen wall.)'); }); } });
+G.TICKERS.add(() => { if (night() && NIGHT.door.visible && !S.flags.doorOpen && !NIGHT.doorSaid && PLAYER.x > 11.3 && !G.busy()) { NIGHT.doorSaid = true; A.run(async () => { G.beatHush && G.beatHush(5); await wait(1.2); await N('(There’s a door in the kitchen wall. There has never been a door in the kitchen wall.)'); }); } });
 
 /* ---------- the door, and Elsewhere ---------- */
 inter('nDoor', [14.6, 1, 2.45], 0.9, 'The door', async () => {

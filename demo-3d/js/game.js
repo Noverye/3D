@@ -118,7 +118,7 @@ G.Audio = (() => {
     }
   }
   let humPos = null;
-  let tickHoldUntil = 0;
+  let tickHoldUntil = 0, tickVol = 1;
   let nextTick = 0, tickN = 0, radioOut = null, radioOn = false, radioNext = 0, radioBar = 0;
   /* The radio plays something soft: a four-chord loop on an electric-piano-ish voice, a wandering
    * melody over it, brushed noise on the beat, and a little crackle. Scheduled a bar ahead. */
@@ -147,7 +147,7 @@ G.Audio = (() => {
     }
     // The clock: a tick and a slightly different tock, once a second.
     if (now < tickHoldUntil) { if (nextTick < now) nextTick = now + 1; }   // the clock, holding its breath (oddities.js)
-    else if (now > nextTick - 0.05) { if (nextTick < now) nextTick = now + 0.05; burst(0.025, tickN % 2 ? 2600 : 3200, 0.05, 'bandpass', 6, nextTick - now, SPOTS.clock.in); tickN++; nextTick += 1; }
+    else if (now > nextTick - 0.05) { if (nextTick < now) nextTick = now + 0.05; burst(0.025, tickN % 2 ? 2600 : 3200, 0.05 * tickVol, 'bandpass', 6, nextTick - now, SPOTS.clock.in); tickN++; nextTick += 1; }
     radioTick(now);
     if (humPos && SPOTS.hum) { const pn = SPOTS.hum.panner; if (pn.positionX) { pn.positionX.setTargetAtTime(humPos.x, now, 0.1); pn.positionY.setTargetAtTime(humPos.y, now, 0.1); pn.positionZ.setTargetAtTime(humPos.z, now, 0.1); } else pn.setPosition(humPos.x, humPos.y, humPos.z); SPOTS.hum.room = roomOf(humPos.x, humPos.z); }
     const gust = G.WIND.gust;
@@ -224,6 +224,7 @@ G.Audio = (() => {
     },
     click() { tone(1800, 0.01, 0.03); },
     tickHold(sec) { if (ctx) tickHoldUntil = ctx.currentTime + sec; },
+    tickLoud(v) { tickVol = v; },
     score(o) { scoreTick(o); return ctx ? scoreNext - ctx.currentTime : 0; },   // (seconds until the next phrase)
     // A heartbeat, felt more than heard: two low thumps (lub-dub).
     heart(v = 1) { burst(0.11, 65, 0.2 * v, 'lowpass', 1.2); burst(0.09, 55, 0.14 * v, 'lowpass', 1.2, 0.26); },
@@ -448,9 +449,11 @@ function Audio_ambience(focus, dt, fp) {
   const eerie = !!G.S && (G.S.chapter === 'night' || (G.S.chapter === 'lastbirthday' && !G.S.flags.reunited));
   // The quiet piano: warm indoors, sparse outside, almost nothing at night; off for the radio, the title screen,
   // the power cut and the Music setting; a little quieter while someone's talking.
-  G.Audio.score({ on: SETTINGS.music !== 'off' && STATE.started && !G.Audio.radioOn() && !(G._PC && G._PC.out) && !document.body.classList.contains('ending'),
+  const still = G.simT < (STATE.quietUntil || 0);
+  G.Audio.tickLoud(still ? 2.2 : 1);
+  G.Audio.score({ on: !still && SETTINGS.music !== 'off' && STATE.started && !G.Audio.radioOn() && !(G._PC && G._PC.out) && !document.body.classList.contains('ending'),
     mood: eerie ? 'night' : inside ? 'warm' : 'sparse', duck: !!DLG.cur });
-  G.Audio.set({ doorOpen: !!STATE.doorOpen, fire: fp, wind: (inside ? 0.35 : 0.45 + STATE.tod * 0.15) + gust * 0.55, pad: (STATE.started ? 1 : 0.6) * (eerie ? 0.3 : 1), drone: eerie && !STATE.hush ? 1 : 0, droneFast: !!STATE.hush, inside });
+  G.Audio.set({ doorOpen: !!STATE.doorOpen, fire: fp, wind: (inside ? 0.35 : 0.45 + STATE.tod * 0.15) + gust * 0.55, pad: (STATE.started ? 1 : 0.6) * (eerie ? 0.3 : 1) * (still ? 0 : 1), drone: eerie && !STATE.hush ? 1 : 0, droneFast: !!STATE.hush, inside });
   G.Audio.crackle(dt, fp * (dFire < 12 ? 1 : 0));
   const cp = G.camera.position, fw = tmpV.set(0, 0, -1).applyQuaternion(G.camera.quaternion);
   const room = inside ? (focus.x < 5 ? 'bed' : focus.x < 11 ? 'liv' : 'kit') : 'out';
@@ -1013,6 +1016,8 @@ G.herRoute = () => SETTINGS.playAs === 'partner';
 // Gentle nights (title screen): nothing chases you, nothing catches you, no heartbeat. The story is the same.
 G.gentle = () => SETTINGS.nights === 'gentle';
 G.easyHands = () => SETTINGS.hands === 'easy';
+// Just before a big moment: the music and the warm chords drop away, and the clock gets louder.
+G.beatHush = (sec = 5) => { STATE.quietUntil = G.simT + sec; };
 // Dialogue that flows on by itself (default), or waits for E / a tap on every line.
 G.flowing = () => SETTINGS.flow !== 'press';
 // "You" is whoever you're playing: her in her chapters, in her own route, and whenever the bodies are swapped.

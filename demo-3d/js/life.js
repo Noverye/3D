@@ -668,11 +668,11 @@ function updateFire(dt) {
     if (F.fuel <= 0) { F.outT = (F.outT || 0) + dt; if (F.outT > 50) { F.on = false; F.outT = 0; freeBark('Oh. The fire’s gone out.', 2.6); } } else F.outT = 0;
     // Low, with logs in the basket and her at a loose end nearby: she sees to it herself.
     const p = PARTNER;
-    if (F.fuel < 0.28 && L.basket > 0 && G.simT - STOKE.at > 30 && !G.busy() && p.mode === 'follow' && !p.task && !p.lead && !p.hold && !p.hidden && !p.lie && !p.carry && G.inside(p.x, p.z) && Math.hypot(p.x - 8, p.z - 0.2) < 8 && /^(morning|evening|ending_|firstsnow)/.test(S.chapter || '')) {
+    if (F.fuel < 0.28 && S.chapter !== 'night' && L.basket > 0 && G.simT - STOKE.at > 30 && !G.busy() && p.mode === 'follow' && !p.task && !p.lead && !p.hold && !p.hidden && !p.lie && !p.carry && G.inside(p.x, p.z) && Math.hypot(p.x - 8, p.z - 0.2) < 8 && /^(morning|evening|ending_|firstsnow)/.test(S.chapter || '')) {
       STOKE.at = G.simT;
       p.task = { o: STOKE, phase: 'go', t: 0 };
     }
-    if (F.fuel < 0.2 && !L.lowWarned) { L.lowWarned = 1; freeBark(pick(['The fire’s getting sleepy, {dear}.', 'Is it me, or is it getting colder in here?']), 3); }
+    if (F.fuel < 0.2 && !L.lowWarned && S.chapter !== 'night') { L.lowWarned = 1; freeBark(pick(['The fire’s getting sleepy, {dear}.', 'Is it me, or is it getting colder in here?']), 3); }
     if (F.fuel > 0.4) L.lowWarned = 0;
   }
   F.level = !F.on ? 0 : F.fuel > 0.02 ? 0.3 + 0.7 * smooth(0, 0.55, F.fuel) : 0.14;   // embers when it's nearly out

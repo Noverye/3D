@@ -853,7 +853,7 @@ async function walkTalk(run) {
 }
 // The Entity, at last, asks. It has been watching how you play, and it says so.
 async function offer() {
-  STATE.busy = true;
+  STATE.busy = true; G.beatHush(7);
   const shot = fixed(V(EXIT.x + 2.6, fy(EXIT.x, EXIT.z) + 1.6, EXIT.z + 3.4), V(EXIT.x, fy(EXIT.x, EXIT.z) + 1.2, EXIT.z), 44, 0.01);
   STATE.sceneShot = true; G.setShot(shot);
   ENT.g.position.set(EXIT.x + 1.3, fy(EXIT.x + 1.3, EXIT.z - 0.4), EXIT.z - 0.4); ENT.g.visible = true;
@@ -888,6 +888,17 @@ async function offer() {
     await Y(clues.length >= 5 ? 'I wrote them down. All of them. That’s how I knew.' : 'Little things. That’s how I knew.', { shot });
     await E('…I will practise.', { shot });
     S.flags.toldIt = clues.length;
+  }
+  // One question, before it lets you choose. It knows everything that happened, exactly. What it doesn't know is
+  // that the two of you never remembered it the same way. (His route.)
+  if (!S.flags.herA4) {
+    const said = ['“Are you lost?”', '“Is this seat taken?”', '“Nothing. I just sat down.”'][S.flags.fairOpen] || '“Are you lost?”';
+    await E('One question. Then you can go, if you still want to.', { shot });
+    await E('The first thing you ever said to her. On the log, by the lanterns. What was it?', { shot });
+    const q = await choose([said, '“Nice hat.” (Her version.)', '“We’ve never agreed on it.”']);
+    if (q === 0) { await E('Yes. Exactly that. I remember it too. I remember it perfectly.', { shot }); await N('(It sounds pleased. It sounds like it’s been waiting for someone to say it right.)', { shot }); S.vars.corruption = (S.vars.corruption || 0) + 0.5; S.flags.doorAnswer = 'exact'; }
+    else if (q === 1) { await E('That is her version. It is wrong. You know it is wrong.', { shot }); await Y('I know. I like hers better.', { shot }); S.vars.trust = (S.vars.trust || 0) + 0.5; S.flags.doorAnswer = 'hers'; }
+    else { await E('…That isn’t an answer.', { shot }); await Y('It is, though. It’s ours. We argue about it every year.', { shot }); await E('I would never argue with you.', { shot }); await Y('I know. That’s how I know.', { shot }); S.vars.trust = (S.vars.trust || 0) + 1; S.flags.doorAnswer = 'argue'; }
   }
   await E('You could stay. I would remember all of it. Every bit you’d get wrong.', { shot });
   if (S.flags.herA4) {
@@ -927,7 +938,8 @@ G.TICKERS.add(() => { const it = findInter('aSign'); if (it) { const p = SIGN.po
  * ===================================================================== */
 // Home again. Lying together: close over the foot of the bed (a higher shot caught the bedside lamps).
 function home(lyingBoth) {
-  quiet(); STATE.busy = true; STATE.sceneShot = true; MUG3.visible = false; STATE.watchDoor = false;
+  quiet(); G.beatHush(4);   // the morning after: a few seconds of nothing but the clock
+  STATE.busy = true; STATE.sceneShot = true; MUG3.visible = false; STATE.watchDoor = false;
   if (G.NIGHT && G.NIGHT.swapped) G.swapBodies();
   G.WALK && G.WALK.showCircle(false); SIGN.g.visible = false; TRAIL.g.visible = false; EXD.g.visible = false; ENT.g.visible = false;
   G.useKids(false); G.setDressed(PLAYER, false); G.setDressed(PARTNER, false);
