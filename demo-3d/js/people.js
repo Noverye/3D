@@ -1200,6 +1200,13 @@ function lockFeet(c, u, sit, w, dt) {
       L.th.rotation.x += dth; L.kn.rotation.x += dkn; L.ft.rotation.x -= dth + dkn;   // the foot stays as it was to the floor
       L.th.updateMatrixWorld(true);
     }
+    // and sideways, with a touch of the hip out or in (the hips' sway would otherwise drag the planted foot)
+    const A1 = ankleIn(c, L, _lk.a).clone(), sx = fz, sz = -fx, gS = ((st.x - A1.x) * sx + (st.z - A1.z) * sz) * st.k;
+    if (Math.abs(gS) > 0.002) {
+      L.th.rotation.z += 0.02; L.th.updateMatrixWorld(true); const P = ankleIn(c, L, _lk.b), js = ((P.x - A1.x) * sx + (P.z - A1.z) * sz) / 0.02; L.th.rotation.z -= 0.02;
+      if (Math.abs(js) > 0.05) { const dz = Math.max(-0.15, Math.min(0.15, gS / js)); L.th.rotation.z += dz; L.ft.rotation.z -= dz; }
+      L.th.updateMatrixWorld(true);
+    }
   });
 }
 /* Neck and head on a critically damped spring toward where the pose wants them: a head moves with ease-in
