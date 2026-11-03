@@ -945,6 +945,58 @@ function isRealGlb(buf) {
 function isMeshopt(bin) {
   try { const v = new DataView(bin), n = v.getUint32(12, true); return new TextDecoder().decode(new Uint8Array(bin, 20, n)).includes('EXT_meshopt_compression'); } catch (e) { return false; }
 }
+/* Hair moves with the head and nothing else. In the exports some hair points are weighted partly to the neck, so
+ * when the head turns on a pillow those triangles stretch into long thin strands across the face. Every hair
+ * point goes to the head bone, fully. */
+function pinToHead(o, u) {
+  if (!o.isSkinnedMesh || !o.skeleton || o.geometry.userData.pinnedHead) return;
+  const bones = o.skeleton.bones;
+  let hi = bones.indexOf(u.head);
+  if (hi < 0) hi = bones.findIndex((b) => /head$/i.test(b.name));
+  if (hi < 0) return;
+  const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight;
+  if (!si || !sw) return;
+  // (weights can be stored as normalised integers: "1" is then the type's largest value)
+  const one = sw.normalized ? (sw.array instanceof Uint8Array ? 255 : sw.array instanceof Uint16Array ? 65535 : 1) : 1;
+  for (let i = 0; i < si.count; i++) { si.setXYZW(i, hi, 0, 0, 0); sw.setXYZW(i, one, 0, 0, 0); }
+  si.needsUpdate = true; sw.needsUpdate = true; o.geometry.userData.pinnedHead = true;
+}
+/* Loose strands in front of the face. Her hair has a dozen thin separate wisps hanging at the temples and over the
+ * forehead, and the tips of his fringe reach down onto the brow; seen up close (in bed, on a pillow) they read as
+ * dark scratches across the face. Found and checked in Blender (cozy_characters_hair.blend, where the same cut was
+ * made); done here at load so the exported models stay as they are:
+ *  - her: any separate little piece of hair (20 faces or fewer) lying wholly in the front third of the hair;
+ *  - him: fringe faces lying wholly in the lower 47% of the fringe (its strand tips, below the hairline).
+ * Measured against each hair piece's own extent (the Blender cut, as fractions), so it doesn't depend on where the
+ * game's head joint sits. Rest pose, character space, facing +z. */
+function trimHair(o, u) {
+  const g = o.geometry, n = o.name.toLowerCase();
+  if (!g.index || g.userData.trimmed || /kid/.test(n)) return;
+  const her = /partner/.test(n) && /ponytail/.test(n), him = /player/.test(n) && /fringe/.test(n);
+  if (!her && !him) return;
+  const P = g.attributes.position, idx = g.index.array;
+  const pos = []; const v = new THREE.Vector3(); let y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9;
+  for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld); pos.push(v.x, v.y, v.z); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); z0 = Math.min(z0, v.z); z1 = Math.max(z1, v.z); }
+  const keep = [];
+  if (him) {
+    const cut = y0 + 0.47 * (y1 - y0);
+    for (let t = 0; t < idx.length; t += 3) { const a = idx[t], b = idx[t + 1], c = idx[t + 2]; if (!(pos[a * 3 + 1] < cut && pos[b * 3 + 1] < cut && pos[c * 3 + 1] < cut)) keep.push(a, b, c); }
+  } else {
+    // pieces by shared position (welded, so a UV seam doesn't split one piece in two)
+    const key = new Map(), root = [], find = (x) => { while (root[x] !== x) { root[x] = root[root[x]]; x = root[x]; } return x; };
+    const vid = new Int32Array(P.count);
+    for (let i = 0; i < P.count; i++) { const kk = Math.round(pos[i * 3] * 1e4) + ',' + Math.round(pos[i * 3 + 1] * 1e4) + ',' + Math.round(pos[i * 3 + 2] * 1e4); if (!key.has(kk)) { key.set(kk, root.length); root.push(root.length); } vid[i] = key.get(kk); }
+    for (let t = 0; t < idx.length; t += 3) { const a = find(vid[idx[t]]), b = find(vid[idx[t + 1]]), c = find(vid[idx[t + 2]]); root[b] = a; root[find(c)] = a; }
+    const tris = new Map(), back = new Map(), front = z1 - 0.32 * (z1 - z0);
+    for (let t = 0; t < idx.length; t += 3) {
+      const r = find(vid[idx[t]]); tris.set(r, (tris.get(r) || 0) + 1);
+      for (let j = 0; j < 3; j++) { const z = pos[idx[t + j] * 3 + 2]; back.set(r, Math.min(back.has(r) ? back.get(r) : 1e9, z)); }
+    }
+    for (let t = 0; t < idx.length; t += 3) { const r = find(vid[idx[t]]); if (!(tris.get(r) <= 40 && back.get(r) > front)) keep.push(idx[t], idx[t + 1], idx[t + 2]); }
+  }
+  const removed = (idx.length - keep.length) / 3;
+  g.setIndex(keep); g.userData.trimmed = removed;
+}
 /* Rest-pose measurements of a realistic model, in the character's own space (root at the origin, facing +z):
  * the top and width of the skull, the depth of the knitwear through the chest, the collar, the feet. */
 function measureFit(model, u) {
@@ -969,7 +1021,7 @@ function measureFit(model, u) {
     if (!key) return;
     cat[key] = cat[key] || [];
     if (key === 'top') u.realTop = (u.realTop || []).concat(o);
-    if (key === 'hair') u.realBun = (u.realBun || []).concat(o);   // tucked under the winter hat (life.js)
+    if (key === 'hair') { u.realBun = (u.realBun || []).concat(o); pinToHead(o, u); trimHair(o, u); }   // tucked under the winter hat (life.js)
     const p = o.geometry.attributes.position;
     for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); cat[key].push(v.x, v.y, v.z); }
   });

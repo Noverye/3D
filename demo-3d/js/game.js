@@ -1750,6 +1750,8 @@ function step(dt, t) {
     if (cyc !== c._cyc) { c._cyc = cyc; if (!G.inside(c.x, c.z) && !(G.noBreath && G.noBreath(c))) G.breathe(c, (c.speed > 2 ? 1.3 : 1) * (1 + (c.cold || 0) * 0.7)); }   // colder, heavier
   }
   PLAYER.lookAt = PLAYER.lookFix || (Math.hypot(PARTNER.x - PLAYER.x, PARTNER.z - PLAYER.z) < 3 && !PARTNER.hidden ? head(PARTNER) : null);   // lookFix: a scene wants you looking at something
+  // Nobody walks around with their eyes shut: whatever closed them (sleep, a hug, a scene), walking opens them.
+  for (const c of [PLAYER, PARTNER]) if (c.lidsClosed && !c.lie && !STATE.hugging && !STATE.sceneShot && (c.speed || 0) > 0.4) c.lidsClosed = false;
   // Interaction prompt
   // While a line is on screen E advances it, so no prompts then (you can still walk).
   const it = free && !DLG.cur ? nearest() : null;

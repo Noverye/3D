@@ -706,7 +706,7 @@ Object.assign(Story, {
   partnerGetsUp(silent) {
     const p = PARTNER;
     if (!p.lie) return;
-    G.standAt(p, 3.72, -0.85, -Math.PI / 2); p.mode = 'follow';
+    G.standAt(p, 3.72, -0.85, -Math.PI / 2); p.mode = 'follow'; p.lidsClosed = false;   // awake: eyes open
     G.shapeBed({});
     STATE.autonomy = true;
     if (!silent) G.bark(['*an enormous yawn* Good morning, {toHim}.', '*stretches* I’m up. Spiritually and now physically.'], 2.6);
