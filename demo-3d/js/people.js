@@ -1393,7 +1393,7 @@ G.animate = (c, dt, t) => {
   if (c.lie) c.m.rotation.set(-Math.PI / 2 + (c.lieTilt == null ? 0.09 : c.lieTilt), c.lieRoll || 0, 0);   // tilt: head up on the pillow
   else c.m.rotation.set(0, c.yaw, -c.turnLean);
   const prevPh = c.phase;
-  c.phase += dt * (4.0 + sp * 3.0) * Math.min(1, sp * 2);
+  c.phase += dt * (G.GAIT ? G.GAIT(c.speed) : (4.0 + sp * 3.0) * Math.min(1, sp * 2));
   const ph = c.phase, w = Math.min(1, sp);
   // Turning on the spot: small steps round, one foot then the other, so the feet don't swivel on the ground.
   const yawRate = Math.abs(dy) / Math.max(dt, 1e-3);
