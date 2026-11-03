@@ -244,6 +244,23 @@ function nightLoops(run) {
       if (lv >= 2 && dist() > 2 && !G.gentle()) { PARTNER.mode = 'script'; await G.walkTo(PARTNER, PLAYER.x + 0.5, PLAYER.z + 0.3, 1.5); if (live() && !S.flags.fakeWithdrawn) PARTNER.mode = 'follow'; }
     }
   })();
+  // It repeats what you said this evening, word for word. She argued with you; it agrees. (lists.js writes it down.)
+  (async () => {
+    const F = S.flags, said = [];
+    if (F.saidScarf === 'red') said.push(['scarf', 'The scarf was red. You were right. You’re always right about the scarf.']);
+    else if (F.saidScarf === 'blue') said.push(['scarf', 'The scarf was blue. Like you said. We agreed, remember? We always agree.']);
+    else if (F.saidScarf === 'none') said.push(['scarf', 'There wasn’t a scarf. You said so. I believe you.']);
+    if (F.saidTrees === 'two') said.push(['trees', 'Two trees, by the log. Two. You remembered it so well.']);
+    else if (F.saidTrees === 'forest') said.push(['trees', 'A whole forest. That’s how you said it. A whole forest.']);
+    if (!said.length) return;
+    await wait(35 + Math.random() * 15);
+    for (const [k, line] of said.slice(0, 2)) {
+      await until(() => !live() || (!G.busy() && !PARTNER.hidden && !PARTNER.lie && !S.flags.fakeWithdrawn && dist() < 4 && !PARTNER.bark));
+      if (!live()) return;
+      G.bark(line, 4); NIGHT.seen.add('said_' + k);
+      await wait(40 + Math.random() * 20);
+    }
+  })();
   // A hint, if you've heard the whistle and stood about a while.
   (async () => { await wait(70); if (live() && NIGHT.whistles > 0 && !G.busy()) G.hint('(The whistling seems to come from the kitchen.)', 6); })();
 }

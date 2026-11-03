@@ -118,6 +118,7 @@ G.Audio = (() => {
     }
   }
   let humPos = null;
+  let tickHoldUntil = 0;
   let nextTick = 0, tickN = 0, radioOut = null, radioOn = false, radioNext = 0, radioBar = 0;
   /* The radio plays something soft: a four-chord loop on an electric-piano-ish voice, a wandering
    * melody over it, brushed noise on the beat, and a little crackle. Scheduled a bar ahead. */
@@ -145,7 +146,8 @@ G.Audio = (() => {
       s.lp.frequency.setTargetAtTime(f, now, 0.25);
     }
     // The clock: a tick and a slightly different tock, once a second.
-    if (now > nextTick - 0.05) { if (nextTick < now) nextTick = now + 0.05; burst(0.025, tickN % 2 ? 2600 : 3200, 0.05, 'bandpass', 6, nextTick - now, SPOTS.clock.in); tickN++; nextTick += 1; }
+    if (now < tickHoldUntil) { if (nextTick < now) nextTick = now + 1; }   // the clock, holding its breath (oddities.js)
+    else if (now > nextTick - 0.05) { if (nextTick < now) nextTick = now + 0.05; burst(0.025, tickN % 2 ? 2600 : 3200, 0.05, 'bandpass', 6, nextTick - now, SPOTS.clock.in); tickN++; nextTick += 1; }
     radioTick(now);
     if (humPos && SPOTS.hum) { const pn = SPOTS.hum.panner; if (pn.positionX) { pn.positionX.setTargetAtTime(humPos.x, now, 0.1); pn.positionY.setTargetAtTime(humPos.y, now, 0.1); pn.positionZ.setTargetAtTime(humPos.z, now, 0.1); } else pn.setPosition(humPos.x, humPos.y, humPos.z); SPOTS.hum.room = roomOf(humPos.x, humPos.z); }
     const gust = G.WIND.gust;
@@ -221,6 +223,7 @@ G.Audio = (() => {
       if (t > nextChord) { chordI = (chordI + 1) % CHORDS.length; CHORDS[chordI].forEach((fr, i) => pad[i].frequency.setTargetAtTime(fr, t, 1.8)); nextChord = t + 9 + Math.random() * 3; }
     },
     click() { tone(1800, 0.01, 0.03); },
+    tickHold(sec) { if (ctx) tickHoldUntil = ctx.currentTime + sec; },
     score(o) { scoreTick(o); return ctx ? scoreNext - ctx.currentTime : 0; },   // (seconds until the next phrase)
     // A heartbeat, felt more than heard: two low thumps (lub-dub).
     heart(v = 1) { burst(0.11, 65, 0.2 * v, 'lowpass', 1.2); burst(0.09, 55, 0.14 * v, 'lowpass', 1.2, 0.26); },
@@ -295,8 +298,9 @@ G.Audio = (() => {
     chime() { bell(1046.5, 0, 0.03); bell(1568, 0.09, 0.025); },
     // The three-note whistle they made up at the fair ("if one of us gets lost"): up, down, up-and-hold.
     // pitch: a child's is higher; wobble: a first, uncertain try.
-    whistle(pitch = 1, wobble = 0) {
+    whistle(pitch = 1, wobble = 0, opt = {}) {
       if (!ctx) return 0;
+      const dest = opt.at && SPOTS[opt.at] ? SPOTS[opt.at].in : outF, vol = opt.vol || 0.03;   // o.at: from a place in the house
       const notes = [[1318.5, 0.22], [987.8, 0.22], [1568, 0.5]];
       let at = ctx.currentTime + 0.05;
       for (const [f0, d] of notes) {
@@ -304,8 +308,8 @@ G.Audio = (() => {
         o.type = 'sine';
         o.frequency.setValueAtTime(f * 0.94, at); o.frequency.exponentialRampToValueAtTime(f, at + 0.05);
         if (wobble) { o.frequency.setValueAtTime(f, at + d * 0.5); o.frequency.linearRampToValueAtTime(f * (1 - 0.04 * wobble), at + d); }
-        g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(0.03, at + 0.03); g.gain.setValueAtTime(0.03, at + d - 0.06); g.gain.exponentialRampToValueAtTime(0.0001, at + d);
-        o.connect(g); g.connect(outF); o.start(at); o.stop(at + d + 0.02);
+        g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(vol, at + 0.03); g.gain.setValueAtTime(vol, at + d - 0.06); g.gain.exponentialRampToValueAtTime(0.0001, at + d);
+        o.connect(g); g.connect(dest); o.start(at); o.stop(at + d + 0.02);
         at += d + 0.07;
       }
       return at - ctx.currentTime;

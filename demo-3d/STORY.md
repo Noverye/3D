@@ -104,6 +104,14 @@ Free time used to have nothing to aim for: you wandered until you happened on wh
 - **The night ("Not right"):** a torn page. Everything you notice about the one beside you goes on it: what it says that she never would (the score, the blanket, the halves, the icing, her line said exactly right) and what's out of place (three mugs, snow inside the sill, the wiped window, the third shape in the photograph). Looking at things while it's watching you raises its suspicion, and the line is marked "(it saw)". It doesn't always say anything; when it does, it's one of several things ("Come away from there.", "You keep looking at things."). Gentle nights skip that.
 - **The payoff:** at the door, with three things or more on the page, you tell it what gave it away, and it says it will practise. Every line also counts toward which morning you wake up to (a little more trust per thing noticed).
 
+## Suspense, not horror (build 95)
+- **Small things that aren't quite right, in the daytime.** Two per playthrough, drawn from four, steering away from last time's. Nothing is explained and nobody makes a fuss:
+  - **The clock** stops ticking for a few seconds. Look at it then: "(The clock is four minutes slow.) (You look again. Four minutes fast, the way it's always been.)"
+  - **The whistle:** standing right beside her, you hear her three notes from the kitchen. She doesn't seem to hear them (sometimes: "You've gone all still.").
+  - **The frame:** in the morning, from across the room, the empty frame in the hall has a photograph in it. Walk closer and it's empty. (By the evening it won't be.)
+  - **The prints:** on the walk, a line of footprints comes out of the trees and up to the bottom step, and doesn't go back. "Postman, probably." "We don't have a postman."
+- **It remembers exactly what you said.** In the evening, when she and you can't agree about the photograph (the scarf's colour, how many trees), your answers are kept. In the night, the one beside you repeats them back, word for word, and agrees ("The scarf was red. You were right. You're always right about the scarf."). She argued; it agrees. Each goes on the "Not right" page, and at the door you can tell it: "You agreed with me about the scarf. She has never once agreed with me about the scarf."
+
 ## Coming back, and her noticing you (build 94)
 - **"Previously…" when you continue a saved game:** a short card over black before the chapter starts, made from what happened in that playthrough ("Last time: the cake, a photograph nobody took, and a firefly in the snow. / Now: bed."; "Last time: a snow day. Perfect pancakes, for once. / Now: boots on. She has a plan.").
 - **Her noticing your habits across playthroughs** (kept in this browser; never on the first playthrough, at most one of each per playthrough, and only when she can say it):

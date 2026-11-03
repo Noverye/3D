@@ -1242,11 +1242,13 @@ inter('frame', [7.75, 1.4, 4.15], 0.8, () => (EVE.photo.visible ? 'Photograph' :
   // What do you remember? You agree on almost nothing.
   await P('All right. What do you remember. The scarf: it was blue.', { shot });
   const c1 = await choose(['“It was red.”', '“It was blue.”', '“There wasn’t a scarf.”']);
+  S.flags.saidScarf = ['red', 'blue', 'none'][c1];   // (the night remembers exactly what you said)
   if (c1 === 0) await P(S.flags.scarfGiven ? 'It was blue. Red is the one you have now. You’re mixing them up.' : 'Blue. I would stake the cake on it. What’s left of the cake.', { shot });
   else if (c1 === 1) await P('…Now you agree with me I’m not sure. That’s very unsettling, {toHim}.', { shot });
   else await P('There is a scarf right there in the photograph. …Although I don’t remember it.', { shot });
   await P('There were three trees. By the log.', { shot });
   const c2 = await choose(['“Two.”', '“A whole forest.”', '“I don’t remember any trees.”']);
+  S.flags.saidTrees = ['two', 'forest', 'none'][c2];
   await P(['Three. One of them was leaning.', 'It was a fair, {dear}, not a forest. There were three.', 'You were looking at something else, then.'][c2], { shot });
   if (c2 === 2) await N('(You were. You don’t say what.)', { shot });
   await P('And the first thing you said to me. What was it?', { shot });

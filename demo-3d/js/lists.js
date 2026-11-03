@@ -93,6 +93,8 @@ const NOTES = {
   sill: 'Snow on the inside of the window.',
   frost: 'Our drawing on the window: wiped clean.',
   photo2: 'Someone at the edge of my photograph.',
+  said_scarf: 'It agreed with me about the scarf. Word for word. She never agrees about the scarf.',
+  said_trees: 'It knew what I said about the trees. Exactly what I said.',
 };
 const THINGS = new Set(['mugs', 'photo', 'sill', 'frost', 'photo2']);   // things you look at (it can see you looking)
 const WATCHED = ['What are you looking at, {toHim}?', 'Is something wrong?', 'Come away from there.', 'Leave that. Come here.', 'You keep looking at things, {dear}.', 'It’s late. Nothing in here needs looking at.'];
