@@ -668,7 +668,7 @@ function softenFace(model) {
  *  - sad: the corners down, the inner brows up;
  *  - browsUp: both brows raised. */
 const EXPR_LM = { partner: { d: 0.055, mouth: 0.058, brow: 0.012 }, player: { d: 0.0644, mouth: 0.074, brow: 0.010 } };
-const EXPR_KINDS = ['smile', 'sad', 'browsUp'];
+const EXPR_KINDS = ['smile', 'sad', 'browsUp', 'open', 'round'];
 function makeExpressions(model) {
   let eyes = null, skin = null, brow = null, who = null;
   model.traverse((o) => {
@@ -690,7 +690,7 @@ function makeExpressions(model) {
   const eA = acc[0].divideScalar(cnt[0]), eB = acc[1].divideScalar(cnt[1]), M = eA.clone().add(eB).multiplyScalar(0.5), d = eA.distanceTo(eB);
   const L = EXPR_LM[who], k = d / L.d;
   const ss = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
-  const field = (kind, p, out) => {
+  const field = (kind, p, out, seam) => {
     const side = p.x > M.x ? 1 : -1, dx = (p.x - M.x) * side, up = p.y - M.y, fwd = p.z - M.z;
     out.set(0, 0, 0);
     if (fwd < -0.02 * k) return out;
@@ -708,7 +708,20 @@ function makeExpressions(model) {
       blob(0.18 * d, by + 0.003 * k, 0.36 * d, -0.0008 * k, 0.0048 * k, 0.0004 * k);                            // inner brows up and together
       blob(0.85 * d, by, 0.3 * d, 0, -0.0012 * k, 0);                                                            // the outer ends drop a little
     }
-    else { const w = (1 - ss(dx / (1.05 * d))) * (1 - ss(Math.abs(up - (by + 0.006 * k)) / (0.03 * k))); out.y += 0.0055 * k * w; out.z += 0.0006 * k * w; }
+    else if (kind === 'browsUp') { const w = (1 - ss(dx / (1.05 * d))) * (1 - ss(Math.abs(up - (by + 0.006 * k)) / (0.03 * k))); out.y += 0.0055 * k * w; out.z += 0.0006 * k * w; }
+    else if (kind === 'open') {
+      // the jaw drops: everything below the line between the lips, down to under the chin, fading toward the ears
+      // The lips meet in a seam whose upper and lower edges are separate vertices in the same place; which lip a
+      // vertex belongs to is told by its neighbours (seam: -1 lower, 1 upper), so the mouth opens there cleanly.
+      const ue = seam && Math.abs(up - cz) < 0.0015 * k ? cz + seam * 0.002 * k : up;
+      const lw = ss((cz - ue) / (0.002 * k)), hz = 1 - ss(dx / (1.25 * d)), vz = 1 - ss((cz - 0.045 * k - up) / (0.02 * k)), fz = ss((fwd + 0.02 * k) / (0.03 * k));
+      const w = lw * hz * vz * fz; out.y -= w * 0.009 * k; out.z -= w * 0.0025 * k;
+      const uw = (1 - ss((ue - cz) / (0.008 * k))) * (1 - ss(dx / (0.5 * d))) * (1 - lw); out.y += uw * 0.0012 * k;   // the upper lip lifts a touch
+      out.x -= corner(0.3 * d) * 0.0015 * k;                                                                      // and the corners come in
+    } else {
+      // rounded (oo, w): the lips come in from the corners and push forward
+      const r0 = 1 - ss(Math.hypot(dx / (0.55 * d), (up - cz) / (0.02 * k))); out.x -= dx * 0.25 * r0; out.z += r0 * 0.003 * k;
+    }
     out.x *= side; return out;
   };
   const meshes = [];
@@ -717,10 +730,15 @@ function makeExpressions(model) {
     const g = o.geometry;
     if (!g.userData.expr) {
       const pos = g.attributes.position, inv = new THREE.Matrix3().setFromMatrix4(o.matrixWorld).invert(), dw = new THREE.Vector3();
+      // each vertex's neighbours, higher or lower on average (for the lip seam)
+      const nb = new Float32Array(pos.count), nc = new Uint16Array(pos.count), Y = new Float32Array(pos.count);
+      for (let i = 0; i < pos.count; i++) Y[i] = v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).y;
+      if (g.index) { const ix = g.index.array; for (let t = 0; t < ix.length; t += 3) for (let q = 0; q < 3; q++) { const i0 = ix[t + q]; for (let r = 1; r < 3; r++) { nb[i0] += Y[ix[t + (q + r) % 3]]; nc[i0]++; } } }
       g.morphAttributes.position = EXPR_KINDS.map((kind) => {
         const a = new Float32Array(pos.count * 3);
         for (let i = 0; i < pos.count; i++) {
-          field(kind, v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld), dw);
+          const sm = nc[i] ? nb[i] / nc[i] - Y[i] : 0;
+          field(kind, v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld), dw, sm < -1e-5 ? -1 : sm > 1e-5 ? 1 : 0);
           if (dw.x || dw.y || dw.z) { dw.applyMatrix3(inv); a[i * 3] = dw.x; a[i * 3 + 1] = dw.y; a[i * 3 + 2] = dw.z; }
         }
         return new THREE.BufferAttribute(a, 3);
@@ -731,7 +749,7 @@ function makeExpressions(model) {
     o.updateMorphTargets();
     meshes.push(o);
   }
-  return { meshes, v: { smile: 0, sad: 0, browsUp: 0 } };
+  return { meshes, v: { smile: 0, sad: 0, browsUp: 0, open: 0, round: 0 } };
 }
 /* What each face is doing: from the line being said (or her last bark), the moment, and who it is.
  *  - Only clear feeling moves the face: laughter and love smile most, a plain "good" or "!" only a little; sorry,
@@ -753,6 +771,18 @@ function exprRead(text) {
   else if (EXPR_WARM.test(t)) r.smile = 0.6 * vary;
   else if (EXPR_LIGHT.test(t)) r.smile = 0.32 * vary;
   return r;
+}
+/* Mouth shapes from the letters of what's being said, read along at the speed it's spoken: open vowels open the
+ * jaw, o / u / w round the lips, m / b / p close them, the rest part them a little. Spaces and punctuation rest.
+ * Not true speech sounds, but enough for the mouth to move with the words rather than flap. */
+const MOUTH = { a: [0.7, 0], e: [0.45, 0], i: [0.35, 0], o: [0.5, 0.65], u: [0.25, 0.85], w: [0.15, 0.9], y: [0.3, 0], h: [0.4, 0], r: [0.25, 0.3], m: [0, 0], b: [0, 0], p: [0, 0], f: [0.08, 0], v: [0.08, 0] };
+function mouthAt(X, text, f) {
+  if (X.mText !== text) { X.mText = text; X.mClean = text.replace(/\*[^*]*\*|\([^)]*\)|<[^>]*>/g, '').toLowerCase(); }
+  const s = X.mClean, n = s.length; if (!n) return [0, 0];
+  const p = Math.min(n - 1, f * n), i = Math.floor(p), ch = s[i];
+  if (!/[a-z]/.test(ch)) return [0, 0];
+  const m = MOUTH[ch] || [0.2, 0], g = 0.8 + 0.4 * (((i * 2654435761) >>> 0) % 100) / 100;   // a little variety, letter to letter
+  return [m[0] * g, m[1]];
 }
 function exprUpdate(c, u, dt) {
   const X = u.expr; if (!X || c.hidden) return;
@@ -785,14 +815,23 @@ function exprUpdate(c, u, dt) {
     if (near && !night && !T.sad) T.smile = Math.max(T.smile, isHer ? 0.16 : 0.08);
     if (night && !c.lie) { T.smile = 0.3; T.sad = 0; T.browsUp = 0; }   // it smiles. It doesn't stop.
   }
+  // The mouth, while speaking: the sounds of the words as they're reached
+  T.open = 0; T.round = 0;
+  if (!asleep) {
+    let text = null, el = 0, dur = 0;
+    if (speaker === c && c._th && c._th.line === D) { text = D.text; el = (G.DLG && G.DLG.t) || 0; dur = c._th.speak; }
+    else if (isHer && c.bark && c.bark.text && !(speaker === c)) { const b = c.bark; if (b.t0 == null) b.t0 = b.t; text = b.text; el = b.t0 - b.t; dur = Math.max(0.6, Math.min(4, b.text.length / 15)); }
+    if (text && el < dur) { const m = mouthAt(X, text, el / dur); T.open = m[0] * (c.lie ? 0.6 : 1); T.round = m[1]; }
+  }
   const inf = [];
   for (const kind of EXPR_KINDS) {
     const cur = X.v[kind], to = T[kind];
-    X.v[kind] = night ? to : G.damp(cur, to, to > cur ? 4 : kind === 'browsUp' ? 2.5 : 1.1, dt);   // quick in, slow out (the night's never moves)
+    X.v[kind] = kind === 'open' || kind === 'round' ? G.damp(cur, to, 20, dt)
+      : night ? to : G.damp(cur, to, to > cur ? 4 : kind === 'browsUp' ? 2.5 : 1.1, dt);   // quick in, slow out (the night's never moves)
     inf.push(X.v[kind]);
   }
-  if (X.forced) inf.splice(0, 3, ...X.forced);   // tests
-  for (const m of X.meshes) if (m.morphTargetInfluences) for (let i = 0; i < 3; i++) m.morphTargetInfluences[i] = inf[i];
+  if (X.forced) inf.splice(0, X.forced.length, ...X.forced);   // tests
+  for (const m of X.meshes) if (m.morphTargetInfluences) for (let i = 0; i < inf.length; i++) m.morphTargetInfluences[i] = inf[i];
 }
 /* Eyelids for a model whose head has no blink shapes: a cap over each eyeball (the eyes mesh split left and right),
  * attached to the head bone, in the face's average skin colour; shown while the eyes are shut. */
