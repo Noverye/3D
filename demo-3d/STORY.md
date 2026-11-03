@@ -129,6 +129,10 @@ Free time used to have nothing to aim for: you wandered until you happened on wh
   - **The mouth opens between the lips.** The lips meet with no gap in the models, so which lip each point belongs to is worked out from how the face is joined together, and the mouth parts cleanly there.
   - **Inside is in shadow.** The mouth's lining is darkened, and a dark pocket sits behind it inside the head, since the lining is open at the back and an open mouth showed straight through to her scarf.
 - **Teeth (build 103).** With the mouth moving, an open mouth was all dark. Now there are upper teeth just behind the upper lip: hidden when the mouth is shut, a sliver when it opens, in an ivory that darkens toward the sides and the gums, with the faintest line between each tooth. Placed from each face's own measurements so they never show through the lips (a little lower on him, whose lips are fuller).
+- **Feet that grip the floor (build 104).** Walking, their feet slid along the floor: measured, a planted foot was moving at about a third of the walking speed. Two reasons, both fixed:
+  - **The step rate didn't match the speed.** The recorded stride is a fixed length, so at a brisk pace the legs stepped too slowly and the feet skated forward. Now the steps quicken with the speed, at the rate that, measured, keeps the feet still.
+  - **A recorded step doesn't move at an even pace, but the body does.** Now each foot is pinned where it lands, and while it carries the weight the hip and knee bend to keep it there (forward and back, and sideways against the sway of the hips). It lets go as the heel comes up, easing back into the step.
+  - Her planted foot now slides at about an eighth of her walking speed (it was over a quarter), his at about a fifth (it was a third). Standing, sitting, turning on the spot, hugs and reaching for things are unchanged.
 - **Fixed: her eyes stayed shut after she got out of bed** in the morning (she'd closed them asleep, and nothing opened them), so she walked about with pale, blank eyes. Getting up opens them, and walking always opens anyone's eyes outside a hug or a scene.
 
 ## Suspense, not horror (build 95)
