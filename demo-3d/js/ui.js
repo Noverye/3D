@@ -279,6 +279,24 @@ function paintSnap(cv, art) {
     c.fillStyle = '#c2504a'; c.beginPath(); const hx = W * 0.2, hy = H * 0.28; c.moveTo(hx, hy + 6); c.bezierCurveTo(hx - 12, hy - 4, hx - 4, hy - 12, hx, hy - 5); c.bezierCurveTo(hx + 4, hy - 12, hx + 12, hy - 4, hx, hy + 6); c.fill();
     c.fillStyle = '#d6b25a'; c.beginPath(); c.arc(0, -H * 0.4, 5, 0, 7); c.fill();   // the pin
     c.restore();
+  } else if (art === 'firstsnow') {
+    // The first snow: a window going blue, the first flakes, two mugs on the sill gone cold, and three notes, a little flat.
+    c.fillStyle = '#6a4a34'; c.fillRect(0, 0, W, H);   // the wall round the window
+    const wx = W * 0.14, wy = H * 0.1, ww = W * 0.72, wh = H * 0.56;
+    const out = c.createLinearGradient(0, wy, 0, wy + wh); out.addColorStop(0, '#5a6c90'); out.addColorStop(1, '#a8b6cc'); c.fillStyle = out; c.fillRect(wx, wy, ww, wh);
+    c.fillStyle = '#e8eef6'; c.beginPath(); c.moveTo(wx, wy + wh); c.quadraticCurveTo(wx + ww * 0.35, wy + wh * 0.74, wx + ww, wy + wh * 0.86); c.lineTo(wx + ww, wy + wh); c.fill();   // snow on the ground outside
+    c.fillStyle = '#3e5048'; for (const [x, h] of [[0.2, 0.3], [0.32, 0.22], [0.78, 0.34]]) { c.beginPath(); c.moveTo(wx + ww * x, wy + wh * (0.84 - h)); c.lineTo(wx + ww * (x - 0.06), wy + wh * 0.86); c.lineTo(wx + ww * (x + 0.06), wy + wh * 0.86); c.fill(); }
+    c.fillStyle = 'rgba(255,255,255,0.9)'; for (let i = 0; i < 26; i++) { const x = wx + ((i * 53) % 97) / 97 * ww, y = wy + ((i * 31) % 89) / 89 * wh * 0.8; c.beginPath(); c.arc(x, y, 1.2 + (i % 3) * 0.6, 0, 7); c.fill(); }
+    c.fillStyle = '#efe6d6'; c.fillRect(wx + ww / 2 - 3, wy, 6, wh); c.fillRect(wx, wy + wh * 0.48 - 3, ww, 6);   // the glazing bars
+    c.strokeStyle = '#efe6d6'; c.lineWidth = 6; c.strokeRect(wx, wy, ww, wh);
+    c.fillStyle = '#d8c8b0'; c.fillRect(wx - 10, wy + wh + 2, ww + 20, 10);   // the sill
+    for (const [x, col] of [[W * 0.4, '#8a3a2e'], [W * 0.6, '#efe7da']]) {   // two mugs, no steam: gone cold
+      c.fillStyle = col; c.fillRect(x - 14, wy + wh - 30, 28, 32);
+      c.strokeStyle = col; c.lineWidth = 4; c.beginPath(); c.arc(x + 16, wy + wh - 14, 7, -1.3, 1.3); c.stroke();
+      c.fillStyle = '#4a2a18'; c.fillRect(x - 12, wy + wh - 30, 24, 4);
+    }
+    c.fillStyle = '#f3ead8'; c.font = 'bold 20px serif'; c.textAlign = 'center';
+    [[0.3, 0.86, -0.15], [0.5, 0.82, 0.05], [0.7, 0.88, 0.25]].forEach(([x, y, r]) => { c.save(); c.translate(W * x, H * y); c.rotate(r); c.fillText('♪', 0, 0); c.restore(); });
   } else {
     fig(W * 0.42, H * 0.86, 1.15, '#4a4d54', '#1e140f'); fig(W * 0.6, H * 0.88, 0.98, '#e4d7c2', '#5e3a26');
   }
