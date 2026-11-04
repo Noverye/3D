@@ -1205,9 +1205,10 @@ function partnerHold(p, dt, t) {
     steer(p, tx, tz, clamp(d * 2, 1, 3.2), dt, 0.05);
   } else {
     const k = 1 - Math.exp(-10 * dt);
+    const ox = p.x, oz = p.z;
     moveChar(p, dx * k, dz * k);
-    p.speed = damp(p.speed, PLAYER.speed, 10, dt);
-    p.phase = PLAYER.phase + Math.PI * 0.08;   // in step with you, more or less
+    // Her own stride for how fast she is really moving: locked to your (longer) steps her feet slid.
+    p.speed = damp(p.speed, dt > 0 ? Math.min(3, Math.hypot(p.x - ox, p.z - oz) / dt) : p.speed, 8, dt);
     p.yaw = angDamp(p.yaw, PLAYER.speed > 0.2 ? PLAYER.yaw : Math.atan2(PLAYER.x - p.x, PLAYER.z - p.z) * 0.3 + PLAYER.yaw * 0.7, 8, dt);
   }
   const close = Math.hypot(PLAYER.x - p.x, PLAYER.z - p.z) < 0.75;
