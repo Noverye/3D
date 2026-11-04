@@ -1199,14 +1199,26 @@ function partnerLead(p, dt, t) {
 function partnerHold(p, dt, t) {
   const side = p.holdSide2 || 1;   // which side of you she walks on (+1 = your left)
   const lx = Math.cos(PLAYER.yaw), lz = -Math.sin(PLAYER.yaw);   // your left, for a character facing (sin yaw, cos yaw)
-  const tx = PLAYER.x + lx * side * 0.46, tz = PLAYER.z + lz * side * 0.46;
+  // Beside you, or, where furniture fills that spot, tucked in a little behind your shoulder until it clears.
+  if (!NAV.open) buildNav();
+  const bx = -Math.sin(PLAYER.yaw), bz = -Math.cos(PLAYER.yaw);
+  // (When nowhere is open, she keeps to the last spot that was.)
+  let tx = p._holdT ? PLAYER.x + p._holdT.x : PLAYER.x + lx * side * 0.46, tz = p._holdT ? PLAYER.z + p._holdT.z : PLAYER.z + lz * side * 0.46;
+  for (const [s, b] of [[0.46, 0], [0.34, 0.3], [0.22, 0.45], [0.08, 0.55], [0, 0.6]]) {
+    const x = PLAYER.x + lx * side * s + bx * b, z = PLAYER.z + lz * side * s + bz * b, c = cellOf(x, z);
+    if (isOpen(c[0], c[1])) { tx = x; tz = z; break; }
+  }
+  // Ease between those spots rather than jumping as cells open and close under you (that zig-zagged her).
+  const H = p._holdT || (p._holdT = { x: tx - PLAYER.x, z: tz - PLAYER.z }), kh = 1 - Math.exp(-4 * dt);
+  H.x += (tx - PLAYER.x - H.x) * kh; H.z += (tz - PLAYER.z - H.z) * kh;
+  tx = PLAYER.x + H.x; tz = PLAYER.z + H.z;
   const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz);
   if (d > 0.7) {
     steer(p, tx, tz, clamp(d * 2, 1, 3.2), dt, 0.05);
   } else {
     const k = 1 - Math.exp(-10 * dt);
-    const ox = p.x, oz = p.z;
-    moveChar(p, dx * k, dz * k);
+    const ox = p.x, oz = p.z, cap = ((PLAYER.speed || 0) + 0.7) * dt, mv = Math.hypot(dx, dz) * k, sc = mv > cap ? cap / mv : 1;
+    moveChar(p, dx * k * sc, dz * k * sc);   // never more than a little faster than you, or she surges and stalls
     // Her own stride for how fast she is really moving: locked to your (longer) steps her feet slid.
     p.speed = damp(p.speed, dt > 0 ? Math.min(3, Math.hypot(p.x - ox, p.z - oz) / dt) : p.speed, 8, dt);
     p.yaw = angDamp(p.yaw, PLAYER.speed > 0.2 ? PLAYER.yaw : Math.atan2(PLAYER.x - p.x, PLAYER.z - p.z) * 0.3 + PLAYER.yaw * 0.7, 8, dt);
@@ -1221,7 +1233,7 @@ function partnerHold(p, dt, t) {
 G.setHold = (on) => {
   const p = PARTNER;
   if (on) { const rx = Math.cos(PLAYER.yaw), rz = -Math.sin(PLAYER.yaw); p.holdSide2 = ((p.x - PLAYER.x) * rx + (p.z - PLAYER.z) * rz) > 0 ? 1 : -1; }
-  p.hold = on; p.holdTimer = null; if (!on) { p.holdOn = false; PLAYER.holdOn = false; }
+  p.hold = on; p.holdTimer = null; p._holdT = null; if (!on) { p.holdOn = false; PLAYER.holdOn = false; }
 };
 // Scripted walk. An unreachable target (inside furniture) is moved to the nearest open spot, and a
 // walk that still can't finish gives up after a while, so a story beat can never hang on it.
