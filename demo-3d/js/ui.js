@@ -222,8 +222,9 @@ UI.together = (acts) => new Promise((res) => {
 /* ---------- scrapbook ---------- */
 // Little painted snapshots for each page, drawn on a canvas like the polaroids in the cabin.
 function paintSnap(cv, art) {
+  art = { lastbday: 'circle', iknow: 'list', ambush: 'blanket' }[art] || art;   // pages that share a painting
   const c = cv.getContext('2d'), W = cv.width, H = cv.height;
-  const sky = { snowman: ['#c8d6e8', '#e8eef6'], angels: ['#eef2f8', '#eef2f8'], cocoa: ['#e8d0b0', '#b0805a'], reading: ['#e0c8a8', '#a87c58'], cards: ['#dfe6da', '#a8b49a'], pinecones: ['#cfdcec', '#e8eef6'], hill: ['#bcd0e8', '#e6eef8'], lake: ['#c8d4e4', '#dfe8f2'], circle: ['#f0d8b8', '#e8c8a0'], pancakes: ['#f3d9b0', '#e7b780'], blanket: ['#efe3d0', '#c9b59a'], snowkids: ['#1a2440', '#4a5a86'], tea: ['#e8d8c0', '#b89470'], basil: ['#dfe8d6', '#9db08c'], study: ['#e9dcc8', '#b39a7c'], hug: ['#f0d6c0', '#d39a7a'], default: ['#d8dde6', '#9aa6b8'] }[art] || ['#d8dde6', '#9aa6b8'];
+  const sky = { snowman: ['#c8d6e8', '#e8eef6'], angels: ['#eef2f8', '#eef2f8'], cocoa: ['#e8d0b0', '#b0805a'], reading: ['#e0c8a8', '#a87c58'], cards: ['#dfe6da', '#a8b49a'], pinecones: ['#cfdcec', '#e8eef6'], hill: ['#bcd0e8', '#e6eef8'], lake: ['#c8d4e4', '#dfe8f2'], circle: ['#f0d8b8', '#e8c8a0'], pancakes: ['#f3d9b0', '#e7b780'], blanket: ['#efe3d0', '#c9b59a'], snowkids: ['#1a2440', '#4a5a86'], tea: ['#e8d8c0', '#b89470'], basil: ['#dfe8d6', '#9db08c'], study: ['#e9dcc8', '#b39a7c'], hug: ['#f0d6c0', '#d39a7a'], dance: ['#e8c89a', '#c0905e'], fox: ['#c8d4e4', '#e8eef6'], globe: ['#e8d8c0', '#b89470'], snowball: ['#cfdcec', '#eef3f9'], branch: ['#c8d6e8', '#e8eef6'], foundme: ['#f3e2c4', '#e0bc90'], default: ['#d8dde6', '#9aa6b8'] }[art] || ['#d8dde6', '#9aa6b8'];
   const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, sky[0]); g.addColorStop(1, sky[1]); c.fillStyle = g; c.fillRect(0, 0, W, H);
   const fig = (x, y, s, col, hair) => { c.fillStyle = '#e8c0a0'; c.beginPath(); c.arc(x, y - 34 * s, 10 * s, 0, 7); c.fill(); c.fillStyle = hair; c.beginPath(); c.arc(x, y - 37 * s, 10.5 * s, Math.PI, 0); c.fill(); c.fillStyle = col; c.beginPath(); c.roundRect ? c.roundRect(x - 11 * s, y - 24 * s, 22 * s, 30 * s, 6 * s) : c.rect(x - 11 * s, y - 24 * s, 22 * s, 30 * s); c.fill(); };
   if (art === 'pancakes') {
@@ -297,6 +298,59 @@ function paintSnap(cv, art) {
     }
     c.fillStyle = '#f3ead8'; c.font = 'bold 20px serif'; c.textAlign = 'center';
     [[0.3, 0.86, -0.15], [0.5, 0.82, 0.05], [0.7, 0.88, 0.25]].forEach(([x, y, r]) => { c.save(); c.translate(W * x, H * y); c.rotate(r); c.fillText('♪', 0, 0); c.restore(); });
+  } else if (art === 'dance') {
+    // The slow dance: the kitchen, the radio on the shelf, and the two of them close together.
+    c.fillStyle = '#c8a07a'; c.fillRect(0, H * 0.74, W, H * 0.26);
+    c.fillStyle = '#5a3a26'; c.fillRect(W * 0.66, H * 0.2, W * 0.28, 6); c.fillStyle = '#8a4a30'; c.fillRect(W * 0.72, H * 0.2 - 20, 34, 20); c.fillStyle = '#e8d0a0'; c.beginPath(); c.arc(W * 0.72 + 24, H * 0.2 - 10, 5, 0, 7); c.fill();
+    c.fillStyle = '#7a4a30'; c.font = '16px serif'; c.textAlign = 'center'; c.fillText('♪', W * 0.62, H * 0.18); c.fillText('♫', W * 0.56, H * 0.28);
+    fig(W * 0.44, H * 0.86, 1.15, '#2a2c32', '#1e140f'); fig(W * 0.54, H * 0.88, 0.98, '#e4d7c2', '#5e3a26');
+  } else if (art === 'fox') {
+    c.fillStyle = '#e8eef6'; c.fillRect(0, H * 0.5, W, H * 0.5);
+    c.fillStyle = '#3e5048'; for (const [x, h] of [[0.12, 70], [0.3, 54], [0.74, 80], [0.9, 60]]) { c.beginPath(); c.moveTo(W * x, H * 0.52 - h); c.lineTo(W * x - 18, H * 0.54); c.lineTo(W * x + 18, H * 0.54); c.fill(); }
+    c.fillStyle = 'rgba(90,100,130,0.55)'; for (let i = 0; i < 9; i++) { const t = i / 8, x = W * (0.3 + 0.32 * t + Math.sin(i * 1.7) * 0.03), y = H * (0.95 - 0.38 * t); c.beginPath(); c.ellipse(x + (i % 2 ? 5 : -5), y, 3.5 - t * 1.5, 2.5 - t, 0, 0, 7); c.fill(); }
+  } else if (art === 'frost') {
+    c.fillStyle = '#6a4a34'; c.fillRect(0, 0, W, H);
+    const fg = c.createLinearGradient(0, H * 0.1, 0, H * 0.9); fg.addColorStop(0, '#c8d8ea'); fg.addColorStop(1, '#eef3f9'); c.fillStyle = fg; c.fillRect(W * 0.12, H * 0.1, W * 0.76, H * 0.8);
+    c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 1; for (let i = 0; i < 18; i++) { const x = W * 0.12 + ((i * 47) % 100) / 100 * W * 0.76, y = H * 0.1 + ((i * 29) % 100) / 100 * H * 0.8; c.beginPath(); c.moveTo(x, y); c.lineTo(x + 8, y - 6); c.moveTo(x, y); c.lineTo(x - 7, y - 5); c.stroke(); }
+    const heart = (x, y, k, r) => { c.save(); c.translate(x, y); c.rotate(r); c.beginPath(); c.moveTo(0, 14 * k); c.bezierCurveTo(-24 * k, -4 * k, -10 * k, -22 * k, 0, -9 * k); c.bezierCurveTo(10 * k, -22 * k, 24 * k, -4 * k, 0, 14 * k); c.stroke(); c.restore(); };
+    c.strokeStyle = 'rgba(110,130,160,0.8)'; c.lineWidth = 3; heart(W * 0.4, H * 0.48, 1.3, 0); heart(W * 0.62, H * 0.52, 1.1, 0.35);   // one lopsided, on purpose
+    c.strokeStyle = '#efe6d6'; c.lineWidth = 6; c.strokeRect(W * 0.12, H * 0.1, W * 0.76, H * 0.8);
+  } else if (art === 'globe') {
+    c.fillStyle = '#b89470'; c.fillRect(0, H * 0.76, W, H * 0.24);
+    c.fillStyle = '#5a3a26'; c.beginPath(); c.moveTo(W * 0.32, H * 0.8); c.lineTo(W * 0.68, H * 0.8); c.lineTo(W * 0.63, H * 0.68); c.lineTo(W * 0.37, H * 0.68); c.fill();
+    c.fillStyle = 'rgba(200,220,240,0.55)'; c.beginPath(); c.arc(W / 2, H * 0.44, H * 0.28, 0, 7); c.fill();
+    c.fillStyle = '#f4f7fb'; c.beginPath(); c.ellipse(W / 2, H * 0.64, H * 0.24, H * 0.06, 0, 0, 7); c.fill();
+    c.fillStyle = '#3e5048'; for (let i = 0; i < 7; i++) { const x = W / 2 + (i - 3) * 12, h = 22 + (i % 3) * 8; c.beginPath(); c.moveTo(x, H * 0.63 - h); c.lineTo(x - 7, H * 0.63); c.lineTo(x + 7, H * 0.63); c.fill(); }
+    c.fillStyle = '#8a5a2e'; c.fillRect(W / 2 - 10, H * 0.62, 20, 4);   // the cinnamon-stick log
+    c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 3; c.beginPath(); c.arc(W / 2, H * 0.44, H * 0.24, -2.4, -1.6); c.stroke();
+  } else if (art === 'snowball') {
+    c.fillStyle = '#e8eef6'; c.fillRect(0, H * 0.7, W, H * 0.3);
+    fig(W * 0.22, H * 0.86, 1.0, '#4a4d54', '#1e140f'); fig(W * 0.78, H * 0.88, 0.9, '#c8b49a', '#5e3a26');
+    c.strokeStyle = 'rgba(255,255,255,0.8)'; c.setLineDash([3, 5]); c.lineWidth = 2; c.beginPath(); c.moveTo(W * 0.3, H * 0.55); c.quadraticCurveTo(W * 0.5, H * 0.2, W * 0.68, H * 0.5); c.stroke(); c.beginPath(); c.moveTo(W * 0.7, H * 0.6); c.quadraticCurveTo(W * 0.5, H * 0.36, W * 0.32, H * 0.64); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#fbfdff'; for (const [x, y] of [[0.5, 0.33], [0.46, 0.49]]) { c.beginPath(); c.arc(W * x, H * y, 7, 0, 7); c.fill(); }
+  } else if (art === 'branch') {
+    c.fillStyle = '#e8eef6'; c.fillRect(0, H * 0.72, W, H * 0.28);
+    c.strokeStyle = '#4a3222'; c.lineWidth = 7; c.beginPath(); c.moveTo(-4, H * 0.18); c.quadraticCurveTo(W * 0.4, H * 0.22, W * 0.78, H * 0.36); c.stroke();
+    c.fillStyle = '#f7f9fc'; for (let i = 0; i < 6; i++) { const t = i / 5, x = W * 0.75 * t, y = H * (0.17 + 0.17 * t * t); c.beginPath(); c.ellipse(x, y - 5, 18, 7, 0.2 * t, 0, 7); c.fill(); }
+    c.fillStyle = 'rgba(255,255,255,0.85)'; for (let i = 0; i < 14; i++) { c.beginPath(); c.arc(W * (0.55 + ((i * 37) % 23) / 100), H * (0.42 + ((i * 17) % 30) / 100), 2 + (i % 3), 0, 7); c.fill(); }
+    fig(W * 0.62, H * 0.92, 1.0, '#4a4d54', '#1e140f');
+  } else if (art === 'night') {
+    // A door in the kitchen wall that isn't there by day.
+    c.fillStyle = '#141820'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#20262f'; c.fillRect(0, H * 0.8, W, H * 0.2);
+    c.fillStyle = '#2c2420'; c.fillRect(W * 0.38, H * 0.2, W * 0.24, H * 0.6);
+    const lg = c.createLinearGradient(W * 0.6, 0, W * 0.62, 0); lg.addColorStop(0, 'rgba(255,214,150,0.9)'); lg.addColorStop(1, 'rgba(255,214,150,0)'); c.fillStyle = lg; c.fillRect(W * 0.6, H * 0.2, W * 0.03, H * 0.6);   // light round the edge
+    c.fillStyle = 'rgba(255,214,150,0.18)'; c.beginPath(); c.moveTo(W * 0.62, H * 0.8); c.lineTo(W * 0.9, H * 0.98); c.lineTo(W * 0.66, H * 0.98); c.fill();
+    c.fillStyle = '#c8a060'; c.beginPath(); c.arc(W * 0.42, H * 0.52, 3, 0, 7); c.fill();
+  } else if (art === 'foundme') {
+    // An ordinary morning, and a squeeze.
+    c.fillStyle = 'rgba(255,240,210,0.5)'; c.fillRect(W * 0.62, 0, W * 0.3, H * 0.5);
+    c.fillStyle = '#c8a07a'; c.fillRect(0, H * 0.78, W, H * 0.22);
+    c.save(); c.translate(W * 0.44, H * 0.88); c.rotate(0.12); fig(0, 0, 1.15, '#2a2c32', '#1e140f'); c.restore();
+    c.save(); c.translate(W * 0.565, H * 0.9); c.rotate(-0.16); fig(0, 0, 0.98, '#e4d7c2', '#5e3a26'); c.restore();
+  } else if (art === 'kept') {
+    // Left blank, on purpose.
+    c.fillStyle = '#f6efe0'; c.fillRect(0, 0, W, H);
   } else {
     fig(W * 0.42, H * 0.86, 1.15, '#4a4d54', '#1e140f'); fig(W * 0.6, H * 0.88, 0.98, '#e4d7c2', '#5e3a26');
   }
