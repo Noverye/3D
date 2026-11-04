@@ -437,6 +437,7 @@ async function attachBody(root, name, spec, bin) {
       // Skin that pokes through the leggings when a knee bends: the legs under them pulled in a few millimetres.
       if (spec.keepMaterials) u.tucked = tuckLegs(model);
       // ...and the neck that pushed out through a jumper's collar when the head turned.
+      if (spec.keepMaterials) u.necklineSmoothed = smoothNeckline(model);
       if (spec.keepMaterials) u.collarTucked = tuckCollar(model);
       if (spec.keepMaterials) u.darksLifted = liftDarks(model);
       if (spec.keepMaterials) u.skinLight = skinLight(model);
@@ -658,6 +659,37 @@ function liftDarks(model) {
     m.userData.lifted = true; m.needsUpdate = true; n++;
   });
   return n;
+}
+/* The hoodie's neckline: its edge was cut in square teeth (a low-poly band whose edge vertices sit at alternating
+ * heights), so it read as a jagged black crenellation under the chin. Find the open edge round the neck and even out
+ * the heights along it, a few passes, so it becomes one smooth line; the collar keeps its shape and size. */
+function smoothNeckline(model) {
+  let topMax = -1e9; const tops = [];
+  model.traverse((o) => { if (o.isMesh && /^top\./.test((o.material && o.material.name) || '')) { tops.push(o); o.geometry.computeBoundingBox(); topMax = Math.max(topMax, o.geometry.boundingBox.max.y); } });
+  let moved = 0;
+  for (const o of tops) {
+    const g = o.geometry, P = g.attributes.position; if (!g.index) continue;
+    // weld: vertices that share a position (UV seams) move together
+    const idOf = new Int32Array(P.count), keyTo = new Map(); let nid = 0;
+    for (let i = 0; i < P.count; i++) { const k = Math.round(P.getX(i) * 1e4) + ',' + Math.round(P.getY(i) * 1e4) + ',' + Math.round(P.getZ(i) * 1e4); let id = keyTo.get(k); if (id == null) { id = nid++; keyTo.set(k, id); } idOf[i] = id; }
+    const members = Array.from({ length: nid }, () => []); for (let i = 0; i < P.count; i++) members[idOf[i]].push(i);
+    // open edges: used by one triangle only
+    const ix = g.index.array, ec = new Map();
+    for (let t = 0; t < ix.length; t += 3) for (let e = 0; e < 3; e++) { const a = idOf[ix[t + e]], b = idOf[ix[t + (e + 1) % 3]]; if (a === b) continue; const k = a < b ? a + '_' + b : b + '_' + a; ec.set(k, (ec.get(k) || 0) + 1); }
+    const nb = new Map();
+    for (const [k, c] of ec) { if (c !== 1) continue; const [a, b] = k.split('_').map(Number); (nb.get(a) || nb.set(a, []).get(a)).push(b); (nb.get(b) || nb.set(b, []).get(b)).push(a); }
+    // the open edge near the top of the jumper, round the neck
+    const y = new Float32Array(nid), sel = new Uint8Array(nid);
+    for (const [id, L] of nb) { const i = members[id][0]; y[id] = P.getY(i); if (L.length === 2 && P.getY(i) > topMax - 0.09 && Math.hypot(P.getX(i), P.getZ(i) - 0.05) < 0.16) sel[id] = 1; }
+    for (let pass = 0; pass < 16; pass++) {
+      const ny = y.slice();
+      for (const [id, L] of nb) if (sel[id] && sel[L[0]] && sel[L[1]]) ny[id] = 0.5 * y[id] + 0.25 * (y[L[0]] + y[L[1]]);
+      y.set(ny);
+    }
+    for (const [id] of nb) if (sel[id]) { const y0 = P.getY(members[id][0]); if (Math.abs(y[id] - y0) > 1e-5) { for (const i of members[id]) P.setY(i, y[id]); moved++; } }
+    P.needsUpdate = true;
+  }
+  return moved;
 }
 /* Skin through the collar: when the head turns or bends, the neck just under a jumper's collar pushed out through it
  * (his sits within a few millimetres of the rib all the way round). Tuck the body in under the collar, eased from
