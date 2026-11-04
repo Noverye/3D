@@ -1442,7 +1442,17 @@ async function dance() {
   let a0 = a + Math.PI / 2, best = -1;
   for (let i = 0; i < 16; i++) { const ang = i / 16 * Math.PI * 2, p = m0.clone().add(new THREE.Vector3(Math.sin(ang) * 2.2, 0.15, Math.cos(ang) * 2.2)), d = clampToWalls(m0, p).distanceTo(m0) - Math.abs(Math.sin(ang - a)) * -0.3; if (d > best) { best = d; a0 = ang; } }
   const R = Math.min(1.9, Math.max(1.1, best - 0.15));
-  setShot(() => { const ang = a0 + Math.sin((G.simT - t0) * 0.18) * 0.45; let pos = m0.clone().add(new THREE.Vector3(Math.sin(ang) * R, 0.15, Math.cos(ang) * R)); pos = clampToWalls(m0, pos); return { pos, look: m0, fov: 42, focus: pos.distanceTo(m0), aperture: 0.012 }; });
+  // As it drifts, anything solid (a door frame, the fridge) between the camera and the pair pulls it in, smoothly.
+  let rNow = R, lastT = G.simT;
+  setShot(() => {
+    const ang = a0 + Math.sin((G.simT - t0) * 0.18) * 0.45, dir = new THREE.Vector3(Math.sin(ang), 0.15 / R, Math.cos(ang)).normalize();
+    ray.set(m0, dir); ray.far = R; const hit = ray.intersectObjects(G.CAMBLOCK, false)[0];
+    const want = hit ? Math.max(0.6, hit.distance - 0.25) : R, dt = Math.min(0.1, Math.max(0, G.simT - lastT)); lastT = G.simT;
+    rNow += (want - rNow) * (want < rNow ? 1 - Math.exp(-dt * 10) : 1 - Math.exp(-dt * 2));
+    let pos = m0.clone().addScaledVector(dir, rNow); pos = clampToWalls(m0, pos);
+    const near = pos.distanceTo(m0);
+    return { pos, look: m0.clone().add(new THREE.Vector3(0, 0.1 * (1 - near / R), 0)), fov: Math.min(62, 42 * Math.sqrt(R / Math.max(0.6, near))), focus: near, aperture: 0.012 };
+  });
   bark(['Mm. I was hoping you’d ask.', 'Don’t step on my feet. …Too late.', 'We are very bad at this. Don’t stop.'], 3);
   const moving = () => ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].some((k) => keys.has(k)) || stick.on;
   await wait(1.2);
