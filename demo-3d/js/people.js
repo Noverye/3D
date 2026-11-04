@@ -1410,10 +1410,10 @@ const ARM_POSES = (G.ARM_POSES = {
   pockets: [-0.18, 0.22, -1.05, -0.55], // hands tucked into the hoodie pocket
   throw: [-2.5, -0.15, -0.5, 0.2],      // arm back over the shoulder (snowballs)
   carry: [-0.42, 0.16, -1.3, -0.55],    // an armful of logs against the chest (forearms under them; further up, the hands went over her head)
-  read: [-0.62, 0.24, -1.2, -0.62],      // a book held up in both hands
+  read: [-0.35, 0.22, -1.5, -0.55],      // a book held up in both hands, in front of the chest (the real arms are longer: at -0.62 it was held out at arm's length)
   water: [-1.05, 0.05, -0.55, 0.1],     // one arm out, tipping a watering can (arm 0 only)
   wave: [-2.7, -0.3, -0.7, 0.1],        // one hand up (arm 1 only): hello, and a pose for photographs
-  cup: [-0.55, 0.28, -1.3, -0.7],      // a mug cradled in both hands
+  cup: [-0.3, 0.26, -1.6, -0.6],       // a mug cradled in both hands, close in (at -0.55 the real, longer arms held it out)
   coatPockets: [-0.16, 0.06, -0.5, -0.35], // hands in the coat's side pockets
   grab: [-1.2, 0.12, -0.32, 0.15],      // one arm out, hand closed round someone's wrist (arm 0 only)
   held: [-0.8, 0.04, -0.14, 0.1],       // one arm pulled out low and straight by the wrist (arm 1 only)

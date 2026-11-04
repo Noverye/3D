@@ -841,10 +841,17 @@ const SHOTS = {
     let f = new THREE.Vector3(-across.z, 0, across.x);
     const fwd = new THREE.Vector3(Math.sin(PLAYER.yaw) + Math.sin(PARTNER.yaw), 0, Math.cos(PLAYER.yaw) + Math.cos(PARTNER.yaw));
     if (fwd.lengthSq() > 0.01 && f.dot(fwd) < 0) f.negate();
-    for (const sgn of [1, -1]) {
-      const ff = f.clone().multiplyScalar(sgn);
-      const pos = m.clone().addScaledVector(ff, 1.5); pos.y = m.y - (low ? 0.35 : 0.05);
-      if (!blocked(m, pos)) return { pos, look: m.clone().add(new THREE.Vector3(0, -0.12, 0)), fov: 36, focus: pos.distanceTo(m), aperture: 0.012 };
+    // Far enough back that both fit with a little room either side (a fixed 1.5 m cut them off at the edges
+    // whenever they stood more than a metre apart); a wider lens from closer when a wall is in the way.
+    const sep = Math.hypot(b.x - a.x, b.z - a.z), asp = Math.max(0.6, G.camera.aspect || 1.6);
+    for (const fov of [36, 50]) {
+      const need = (sep / 2 + 0.4) / (Math.tan(fov * Math.PI / 360) * asp);
+      const dist = clamp(need, fov === 36 ? 1.5 : 1.0, 4.5);
+      for (const sgn of [1, -1]) {
+        const ff = f.clone().multiplyScalar(sgn);
+        const pos = m.clone().addScaledVector(ff, dist); pos.y = m.y - (low ? 0.35 : 0.05) * Math.min(1, 1.5 / dist + 0.3);
+        if (!blocked(m, pos)) return { pos, look: m.clone().add(new THREE.Vector3(0, -0.12, 0)), fov, focus: pos.distanceTo(m), aperture: 0.012 };
+      }
     }
     return SHOTS.follow();
   },
@@ -1849,6 +1856,7 @@ function stats() {
 /* ---------- loop ---------- */
 let last = performance.now();
 G.TICKERS = new Set();   // per-frame callbacks on the game clock (UI widgets)
+G.LATE = new Set();      // per-frame callbacks after animation (props that follow the hands)
 G.simT = 0;   // game clock: sum of (capped) frame steps, so everything pauses together with the tab
 function simulate(dt) {
   G.simT += dt;
@@ -1857,6 +1865,7 @@ function simulate(dt) {
   G.TICKERS.forEach((f) => f(dt));
   if (STATE.started) step(dt, t);
   else { for (const c of [PLAYER, PARTNER]) G.animate(c, dt, t); CAM.shot = titleShot; }
+  G.LATE.forEach((f) => f(dt));   // after the bodies are posed: things held in their hands
   updateCamera(dt, t);
   const focus = STATE.started ? new THREE.Vector3(PLAYER.x, PLAYER.y + 1, PLAYER.z) : new THREE.Vector3(6.5, 1, 8);
   updateLighting(t, dt, focus);

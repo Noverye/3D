@@ -362,7 +362,7 @@ function mugFor(m, col) {
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.038, 0.095, 16), G.shared({ color: col, roughness: 0.3, env: 0.8 })); g.add(body);
   const top = new THREE.Mesh(new THREE.CylinderGeometry(0.037, 0.037, 0.004, 14), G.shared({ color: '#5a321e', roughness: 0.25 })); top.position.y = 0.043; g.add(top);
   const h = new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.007, 6, 12, Math.PI), body.material); h.position.set(0.045, 0, 0); h.rotation.z = -Math.PI / 2; g.add(h);
-  g.traverse((o) => { o.userData.warm = true; o.castShadow = true; });
+  g.traverse((o) => { o.userData.warm = true; o.userData.gear = true; o.castShadow = true; });   // gear: kept when the built-in body is hidden for the real one
   return g;
 }
 const MUGS = { player: mugFor(G.KIDS ? G.KIDS.adults.player : PLAYER.m, '#8a3a2e'), partner: mugFor(G.KIDS ? G.KIDS.adults.partner : PARTNER.m, '#efe7da') };
@@ -373,6 +373,7 @@ function setMug(c, on) {
   const id = c === PLAYER ? 'cocoaY' : 'cocoaP';
   if (on) { const w = m.getWorldPosition(new THREE.Vector3()); G.steam(id, w.x, w.y + 0.06, w.z, { rate: 1.2, dur: 999, size: 0.45 }); } else G.steam(id, 0, 0, 0, { off: true });
 }
+G.setMug = (c, on) => setMug(c, on);
 function cocoaTick(dt) {
   for (const [c, m, id] of [[PLAYER, MUGS.player, 'cocoaY'], [PARTNER, MUGS.partner, 'cocoaP']]) {
     if (!m.visible) continue;
@@ -421,6 +422,51 @@ const myBook = (() => {
   g.children.forEach((c, i) => { if (i % 2 === 0) c.material = G.std({ color: '#7a3a2a', roughness: 0.8 }); });
   return g;
 })();
+// A book held open between the real model's hands, facing the reader's eyes. (On the chest, where the built-in
+// body would have held it, it floated small by the real one's elbow.)
+const HANDS = new WeakMap();
+function handsOf(m) {
+  if (HANDS.has(m)) return HANDS.get(m);
+  const model = m.userData.retarget && m.userData.retarget.model; if (!model) return null;
+  const by = {}; model.traverse((o) => { if (o.isBone) by[o.name.replace(/[^A-Za-z0-9]/g, '')] = o; });
+  const r = by.mixamorigLeftHand && by.mixamorigRightHand && by.mixamorigHead ? { L: by.mixamorigLeftHandMiddle1 || by.mixamorigLeftHand, R: by.mixamorigRightHandMiddle1 || by.mixamorigRightHand, head: by.mixamorigHead } : null;
+  HANDS.set(m, r); return r;
+}
+const _bk = { l: new THREE.Vector3(), r: new THREE.Vector3(), h: new THREE.Vector3(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), m: new THREE.Matrix4(), q: new THREE.Quaternion(), pq: new THREE.Quaternion() };
+function bookInHands(m, g) {
+  if (!g.visible || !g.parent) return;
+  const H = handsOf(m); if (!H) return;
+  if (!g.userData.chestPose) g.userData.chestPose = [g.position.clone(), g.quaternion.clone()];
+  const B = _bk; H.L.getWorldPosition(B.l); H.R.getWorldPosition(B.r); H.head.getWorldPosition(B.h);
+  const mid = B.l.clone().add(B.r).multiplyScalar(0.5);
+  B.x.subVectors(B.l, B.r); const span = B.x.length(); if (span < 1e-3) return; B.x.divideScalar(span);
+  B.y.subVectors(B.h, mid).normalize(); B.y.addScaledVector(B.x, -B.y.dot(B.x)).normalize();   // the open pages face the eyes
+  B.z.crossVectors(B.x, B.y);
+  B.m.makeBasis(B.x, B.y, B.z); B.q.setFromRotationMatrix(B.m);
+  g.parent.updateMatrixWorld(true); g.parent.getWorldQuaternion(B.pq);
+  g.quaternion.copy(B.pq.invert().multiply(B.q));
+  g.position.copy(g.parent.worldToLocal(mid.addScaledVector(B.y, 0.015)));
+  const ps = new THREE.Vector3(); g.parent.getWorldScale(ps);
+  g.scale.setScalar(clamp(span / 0.19, 1.1, 1.35) / (ps.x || 1));   // spread across both hands
+}
+// A mug, upright, cradled between the real hands.
+function cupInHands(m, g) {
+  if (!g.visible || !g.parent) return;
+  const H = handsOf(m); if (!H) return;
+  const B = _bk; H.L.getWorldPosition(B.l); H.R.getWorldPosition(B.r);
+  const mid = B.l.clone().add(B.r).multiplyScalar(0.5);
+  B.x.subVectors(B.l, B.r); B.x.y = 0; if (B.x.lengthSq() < 1e-6) return; B.x.normalize();
+  B.y.set(0, 1, 0); B.z.crossVectors(B.x, B.y);
+  B.m.makeBasis(B.x, B.y, B.z); B.q.setFromRotationMatrix(B.m);
+  g.parent.updateMatrixWorld(true); g.parent.getWorldQuaternion(B.pq);
+  g.quaternion.copy(B.pq.invert().multiply(B.q));
+  g.position.copy(g.parent.worldToLocal(mid.add(new THREE.Vector3(0, 0.01, 0))));
+  const ps = new THREE.Vector3(); g.parent.getWorldScale(ps); g.scale.setScalar(0.95 / (ps.x || 1));   // a real mug's size, whatever the rig's scale
+}
+G.LATE.add(() => {
+  const pm = G.KIDS ? G.KIDS.adults.player : PLAYER.m, qm = G.KIDS ? G.KIDS.adults.partner : PARTNER.m;
+  bookInHands(pm, myBook); bookInHands(qm, G.PARTNER_BOOK); cupInHands(pm, MUGS.player); cupInHands(qm, MUGS.partner);
+});
 const BOOKS = [
   { t: 'A Field Guide to Winter Birds', cap: 'Reading about bullfinches. (It was about Gerald, really.)', run: async () => {
     await Y('“The bullfinch is a bird of fixed habits and few words, and will return to a favoured sill for years.”', K());

@@ -726,7 +726,7 @@ const book = (() => {
   const u = ADULT.partner.userData, k = u.k, g = new THREE.Group(); g.position.set(0, -0.12 * k, 0.22 * k); g.rotation.x = -0.75; g.visible = false; g.userData.warm = true; u.chest.add(g);
   const cover = G.std({ color: '#3a5a6a', roughness: 0.8 });
   for (const s of [-1, 1]) { const half = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.004, 0.13), cover); half.position.set(s * 0.045, 0, 0); half.rotation.z = -s * 0.25; g.add(half); const pg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.012, 0.12), G.shared({ color: '#efe6d2', roughness: 0.9 })); pg.position.set(s * 0.043, 0.007, 0); pg.rotation.z = -s * 0.25; g.add(pg); }
-  g.traverse((o) => { o.userData.warm = true; o.castShadow = true; });
+  g.traverse((o) => { o.userData.warm = true; o.userData.gear = true; o.castShadow = true; });   // gear: kept when the built-in body is hidden for the real one
   return g;
 })();
 G.PARTNER_BOOK = book;
