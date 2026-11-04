@@ -1407,10 +1407,18 @@ async function hug(kind = 'hug', line) {
   if (kiss) { STATE.hugIn.p = [mx - Math.sin(a) * 0.2, mz - Math.cos(a) * 0.2]; STATE.hugIn.q = [mx + Math.sin(a) * 0.2, mz + Math.cos(a) * 0.2]; PLAYER.leanTarget = 0.14; PLAYER.tiltTarget = 0.18; PLAYER.lidsClosed = true; PARTNER.headDown = -0.12; }
   // Side-on to the hug, favouring her face; try both sides and a closer fallback so walls never block it.
   const side = new THREE.Vector3(Math.cos(a), 0, -Math.sin(a)), fwd = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
-  const camAt = (o) => { const m = G.headPos(PARTNER).add(new THREE.Vector3(0, -0.08, 0)); const pos = m.clone().addScaledVector(side, o[0] * o[2]).addScaledVector(fwd, o[1]); pos.y = m.y - 0.1; return { pos, look: m, fov: 34, focus: pos.distanceTo(m), aperture: 0.016 }; };
-  // Mostly side-on, a little to your side of the hug, so her face (turned against you) is the one in frame.
-  const pick = [[1, -0.25, 1.25], [-1, -0.25, 1.25], [1, -0.1, 0.9], [-1, -0.1, 0.9]].find((o) => { const c = camAt(o); return !blocked(c.look, c.pos); });
-  if (pick) setShot(() => camAt(pick));
+  // Hug: her cheek rests on his chest, turned to `side`, so look from that side, raised and a little toward him,
+  // which sees her face over his arm rather than through it. Kiss: side-on, aimed between both faces, a step back.
+  const camAt = (o) => {
+    const h = G.headPos(PARTNER).add(new THREE.Vector3(0, -0.08, 0));
+    const m = h.clone().lerp(G.headPos(PLAYER), kiss ? 0.5 : 0.3).add(new THREE.Vector3(0, kiss ? -0.04 : 0, 0));
+    const pos = m.clone().addScaledVector(side, o[0]).addScaledVector(fwd, o[1]); pos.y = m.y + o[2];
+    return { pos, look: m, fov: 34, focus: pos.distanceTo(m), aperture: 0.016 };
+  };
+  const pick = (kiss ? [[1.35, -0.15, -0.05], [-1.35, -0.15, -0.05], [1.0, -0.1, -0.05], [-1.0, -0.1, -0.05]]
+    : [[0.95, -0.45, 0.3], [0.7, -0.6, 0.35], [0.6, -0.35, 0.25], [-1.2, -0.3, -0.1], [-0.9, -0.1, -0.1]])
+    .find((o) => { const c = camAt(o); return !blocked(c.look, c.pos); });
+  G._hugPick = pick; if (pick) setShot(() => camAt(pick));
   bark(line || ['Mm. Hello, {toHim}.', 'You’re so warm. It hardly seems fair.', 'A very good hug. Ten out of ten.', 'All right. One more second. Two.']);
   await wait(kiss ? 1.7 : 2.6);
   STATE.hugging = false; STATE.hugIn = null; PARTNER.lidsClosed = false; PARTNER.tiltTarget = 0; STATE.busy = false;
