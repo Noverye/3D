@@ -434,6 +434,8 @@ async function attachBody(root, name, spec, bin) {
       if (spec.keepMaterials) u.fingersPlumped = plumpFingers(model, u.H || 1.7);
       // Skin that pokes through the leggings when a knee bends: the legs under them pulled in a few millimetres.
       if (spec.keepMaterials) u.tucked = tuckLegs(model);
+      // ...and the neck that pushed out through a jumper's collar when the head turned.
+      if (spec.keepMaterials) u.collarTucked = tuckCollar(model);
       // Coat tails: spring bones the coat's skirt hangs from (tools/coats.py, coat_L / coat_R).
       u.springs = [];
       model.traverse((o) => { if (o.isBone && /^coat_?[LR]$/.test(o.name.replace(/[^A-Za-z_]/g, ''))) u.springs.push({ bone: o, q0: o.quaternion.clone(), side: /L$/.test(o.name) ? 1 : -1, a: 0, va: 0, b: 0, vb: 0 }); });
@@ -531,6 +533,36 @@ function tuckLegs(model) {
     if (y > top || Math.abs(x) > xMax) continue;
     const d = 0.007 * Math.min(1, (top - y) / 0.04);   // eased in just below the waistband
     P.setXYZ(i, x - N.getX(i) * d, y - N.getY(i) * d, P.getZ(i) - N.getZ(i) * d); n++;
+  }
+  P.needsUpdate = true;
+  return n;
+}
+/* Skin through the collar: when the head turns or bends, the neck just under a jumper's collar pushed out through it
+ * (his sits within a few millimetres of the rib all the way round). Tuck the body in under the collar, eased from
+ * nothing at the collar's edge to 9 mm a little below it; nothing above the collar moves. */
+function tuckCollar(model) {
+  let body = null; const tops = [];
+  model.traverse((o) => { if (!o.isMesh) return; const mn = o.material.name || ''; if (/body/.test(mn)) body = o; else if (/^top\./.test(mn)) tops.push(o); });
+  if (!body || !tops.length) return 0;
+  let topMax = -1e9; for (const t of tops) { t.geometry.computeBoundingBox(); topMax = Math.max(topMax, t.geometry.boundingBox.max.y); }
+  const g = body.geometry, P = g.attributes.position, N = g.attributes.normal; if (!N) return 0;
+  // the neck's centre, from the skin just under the collar's highest point
+  let cx = 0, cz = 0, cn = 0;
+  for (let i = 0; i < P.count; i++) { const y = P.getY(i); if (y > topMax - 0.06 && y < topMax - 0.01 && Math.abs(P.getX(i)) < 0.09) { cx += P.getX(i); cz += P.getZ(i); cn++; } }
+  if (!cn) return 0; cx /= cn; cz /= cn;
+  // the collar's top edge, all the way round (16 bins)
+  const NB = 16, edge = new Float32Array(NB).fill(-1e9), bin = (x, z) => ((Math.atan2(x - cx, z - cz) + Math.PI) / (2 * Math.PI)) * NB;
+  for (const t of tops) { const TP = t.geometry.attributes.position; for (let i = 0; i < TP.count; i++) { const x = TP.getX(i), z = TP.getZ(i); if (Math.hypot(x - cx, z - cz) > 0.13) continue; const b = Math.floor(bin(x, z)) % NB; edge[b] = Math.max(edge[b], TP.getY(i)); } }
+  for (let b = 0; b < NB; b++) if (edge[b] < -1e8) edge[b] = topMax;
+  let n = 0;
+  for (let i = 0; i < P.count; i++) {
+    const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+    if (Math.hypot(x - cx, z - cz) > 0.14 || y < topMax - 0.16 || y > topMax + 0.01) continue;
+    const f = bin(x, z) - 0.5, b0 = ((Math.floor(f) % NB) + NB) % NB, b1 = (b0 + 1) % NB, w = f - Math.floor(f);
+    const top = edge[b0] * (1 - w) + edge[b1] * w;
+    const k = Math.min(1, Math.max(0, (top + 0.008 - y) / 0.02)); if (k <= 0) continue;
+    const d = 0.015 * k * k * (3 - 2 * k);
+    P.setXYZ(i, x - N.getX(i) * d, y - N.getY(i) * d, z - N.getZ(i) * d); n++;
   }
   P.needsUpdate = true;
   return n;
