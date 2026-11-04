@@ -312,11 +312,26 @@ function pineGeometry(seed, lod = 0) {
         .multiply(new THREE.Matrix4().makeTranslation(0, L / 2, 0))
         .multiply(new THREE.Matrix4().makeScale(0.28, 1, 1));
       const tone = base.clone().offsetHSL((r() - 0.5) * 0.02, 0, (r() - 0.5) * 0.03);
-      const snowB = snowy && r() < 0.8;
-      parts.push({ geo: br, mat: M, color: (v, n) => { const out = Math.hypot(v.x, v.z) / Math.max(1e-3, rad); return snowB && n.y > 0.45 && out > 0.25 ? snow : tone.clone().multiplyScalar(0.7 + Math.min(1, out) * 0.45); } });
+      const snowB = snowy && r() < 0.72, s0 = 0.3 + r() * 0.25;
+      // snow in clumps on the outer, upward faces of some branches, with green between (whole slabs of it, on every
+      // branch, made the trees look folded from white card)
+      parts.push({ geo: br, mat: M, color: (v, n) => { const out = Math.hypot(v.x, v.z) / Math.max(1e-3, rad); return snowB && n.y > 0.52 && out > s0 ? snow : tone.clone().multiplyScalar(0.7 + Math.min(1, out) * 0.45); } });
     }
   }
-  return G.merge(parts);
+  const g = G.merge(parts);
+  // Light the tree as one soft, rounded mass: every flat branch shaded on its own facet made it look folded from
+  // paper. The normals are bent most of the way toward "out from the trunk, and a little up", so the crown shades
+  // smoothly from its lit side to its shadowed side while the branches keep their ragged outline.
+  const P = g.attributes.position, N = g.attributes.normal, v = new THREE.Vector3(), n = new THREE.Vector3();
+  for (let i = 0; i < P.count; i++) {
+    const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+    if (y < 0.06 && Math.hypot(x, z) < 0.04) continue;   // the trunk keeps its own
+    v.set(x, (y - 0.45) * 0.5 + 0.12, z).normalize();
+    n.set(N.getX(i), N.getY(i), N.getZ(i)).multiplyScalar(0.3).addScaledVector(v, 0.7).normalize();
+    N.setXYZ(i, n.x, n.y, n.z);
+  }
+  N.needsUpdate = true;
+  return g;
 }
 G.buildForest = () => {
   const r = G.seeded(31);
