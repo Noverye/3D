@@ -439,6 +439,8 @@ async function attachBody(root, name, spec, bin) {
       // ...and the neck that pushed out through a jumper's collar when the head turned.
       if (spec.keepMaterials) u.collarTucked = tuckCollar(model);
       if (spec.keepMaterials) u.darksLifted = liftDarks(model);
+      if (spec.keepMaterials) u.skinLight = skinLight(model);
+      if (spec.keepMaterials) u.blush = blush(model);
       // Coat tails: spring bones the coat's skirt hangs from (tools/coats.py, coat_L / coat_R).
       u.springs = [];
       model.traverse((o) => { if (o.isBone && /^coat_?[LR]$/.test(o.name.replace(/[^A-Za-z_]/g, ''))) u.springs.push({ bone: o, q0: o.quaternion.clone(), side: /L$/.test(o.name) ? 1 : -1, a: 0, va: 0, b: 0, vb: 0 }); });
@@ -581,6 +583,66 @@ function softHair(model) {
     C.needsUpdate = true;
   }
   return out;
+}
+/* Skin that light passes into: plain surface shading cut every shadow on the face off hard, like wax or plastic. Real
+ * skin carries a little light past the shadow line, reddened by the blood under it. So on the skin only, the light is
+ * wrapped a short way round past the terminator, tinted warm, which softens the shading under the nose and jaw and
+ * round the cheeks and hands. */
+const SKIN_SSS = `
+	reflectedLight.directDiffuse += ( 1.0 - clearcoatDHR ) * irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );
+	{
+		float nlW = dot( geometry.normal, directLight.direction );
+		float past = max( 0.0, clamp( ( nlW + 0.5 ) / 1.5, 0.0, 1.0 ) - dotNL );
+		vec3 sss = past * vec3( 0.95, 0.38, 0.26 ) * 0.75 * directLight.color;
+		#ifndef PHYSICALLY_CORRECT_LIGHTS
+			sss *= PI;
+		#endif
+		reflectedLight.directDiffuse += sss * BRDF_Diffuse_Lambert( material.diffuseColor );
+	}`;
+// Colour in the face: cheeks, the tip of the nose and the ears a little warmer and pinker than the rest (one even
+// tone all over is much of what made the faces look like wax). Placed from the eyes: their centre and spacing.
+function blush(model) {
+  let body = null, eyes = null;
+  model.traverse((o) => { if (!o.isMesh) return; const mn = (o.material && o.material.name) || ''; if (/body/.test(mn)) body = o; if (/high-?poly/i.test(o.name)) eyes = o; });
+  if (!body || !eyes) return 0;
+  const E = eyes.geometry.attributes.position; let cx = 0, cy = 0, cz = 0, xl = 1e9, xr = -1e9;
+  for (let i = 0; i < E.count; i++) { cx += E.getX(i); cy += E.getY(i); cz += E.getZ(i); xl = Math.min(xl, E.getX(i)); xr = Math.max(xr, E.getX(i)); }
+  cx /= E.count; cy /= E.count; cz /= E.count; const d = (xr - xl) * 0.62;   // about the distance between the pupils
+  const g = body.geometry, P = g.attributes.position, n = P.count;
+  let C = g.attributes.color; if (!C) { C = new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3); g.setAttribute('color', C); }
+  body.material.vertexColors = true; body.material.needsUpdate = true;
+  // [x, y, z (forward), radius, strength] in eye spacings from the eyes' centre
+  const spots = [[0.66, -0.62, -0.05, 0.45, 0.8], [-0.66, -0.62, -0.05, 0.45, 0.8], [0, -0.68, 0.42, 0.24, 0.6], [1.32, -0.3, -0.95, 0.34, 0.7], [-1.32, -0.3, -0.95, 0.34, 0.7]];
+  const tint = [1.0, 0.8, 0.76];
+  let k = 0;
+  for (let i = 0; i < n; i++) {
+    const x = (P.getX(i) - cx) / d, y = (P.getY(i) - cy) / d, z = (P.getZ(i) - cz) / d;
+    if (y < -1.6 || y > 0.6 || Math.abs(x) > 1.9) continue;
+    let w = 0; for (const [sx, sy, sz, r, a] of spots) { const q = ((x - sx) ** 2 + (y - sy) ** 2 + (z - sz) ** 2) / (r * r); if (q < 4) w = Math.max(w, a * Math.exp(-q)); }
+    if (w < 0.01) continue;
+    C.setXYZ(i, C.getX(i) * (1 - w + w * tint[0]), C.getY(i) * (1 - w + w * tint[1]), C.getZ(i) * (1 - w + w * tint[2])); k++;
+  }
+  C.needsUpdate = true;
+  return k;
+}
+function skinLight(model) {
+  let n = 0;
+  model.traverse((o) => {
+    if (!o.isMesh || !o.material || o.material.userData.skinLight) return;
+    const m = o.material; if (!/body/.test(m.name || '')) return;
+    const prev = m.onBeforeCompile;
+    m.onBeforeCompile = (sh, r) => {
+      if (prev) prev(sh, r);
+      const chunk = THREE.ShaderChunk.lights_physical_pars_fragment;
+      const line = 'reflectedLight.directDiffuse += ( 1.0 - clearcoatDHR ) * irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );';
+      if (chunk.indexOf(line) < 0) return;   // a three.js without this line: leave the skin as it was
+      sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk.replace(line, SKIN_SSS));
+    };
+    const key = m.customProgramCacheKey ? m.customProgramCacheKey.bind(m) : () => '';
+    m.customProgramCacheKey = () => key() + '|skinSSS';
+    m.userData.skinLight = true; m.needsUpdate = true; n++;
+  });
+  return n;
 }
 /* Near-black clothes: his hoodie's texture is 12/255 and both pairs of leggings are almost as dark, so in any light
  * they read as flat black cut-outs with no folds. Lifted to a soft charcoal (still a black hoodie), so the light can
