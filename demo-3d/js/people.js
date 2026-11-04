@@ -1407,7 +1407,7 @@ const ARM_POSES = (G.ARM_POSES = {
   warm: [-1.0, 0.18, -0.45, -0.25],  // hands held out to the fire
   pockets: [-0.18, 0.22, -1.05, -0.55], // hands tucked into the hoodie pocket
   throw: [-2.5, -0.15, -0.5, 0.2],      // arm back over the shoulder (snowballs)
-  carry: [-0.85, 0.3, -1.25, -0.45],    // an armful of logs against the chest
+  carry: [-0.42, 0.16, -1.3, -0.55],    // an armful of logs against the chest (forearms under them; further up, the hands went over her head)
   read: [-0.62, 0.24, -1.2, -0.62],      // a book held up in both hands
   water: [-1.05, 0.05, -0.55, 0.1],     // one arm out, tipping a watering can (arm 0 only)
   wave: [-2.7, -0.3, -0.7, 0.1],        // one hand up (arm 1 only): hello, and a pose for photographs

@@ -612,8 +612,8 @@ const WOODPILE = (() => {
   return g;
 })();
 function armful(m, n) {
-  const u = m.userData, k = u.k, g = new THREE.Group(); g.position.set(0, -0.06 * k, 0.2 * k); g.visible = false; g.userData.warm = true; u.chest.add(g);
-  for (let i = 0; i < n; i++) { const lg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.42, 9), G.MAT.bark); lg.rotation.z = Math.PI / 2 + (i - 1) * 0.08; lg.position.set((i - 1) * 0.02, (i % 2) * 0.07 - 0.02, (i % 2) * -0.035); lg.castShadow = true; lg.userData.warm = true; g.add(lg); }
+  const u = m.userData, k = u.k, g = new THREE.Group(); g.position.set(0, -0.2 * k, 0.19 * k); g.visible = false; g.userData.warm = true; u.chest.add(g);   // resting on the forearms
+  for (let i = 0; i < n; i++) { const lg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.42, 9), G.MAT.bark); lg.rotation.z = Math.PI / 2 + (i - 1) * 0.08; lg.position.set((i - 1) * 0.02, (i % 2) * 0.07 - 0.02, (i % 2) * -0.035); lg.castShadow = true; lg.userData.warm = true; lg.userData.gear = true; g.add(lg); }   // gear: not hidden with the built-in body when the real one loads
   return g;
 }
 const ARMS = { player: armful(ADULT.player, 3), partner: armful(ADULT.partner, 2) };
