@@ -1016,7 +1016,9 @@ function hugIK(c, u, wgt) {
     const S = R ? A.sh.parent.localToWorld(A.sh.position.clone().add(R.off)) : A.sh.getWorldPosition(new THREE.Vector3());
     const side = S.clone().sub(myC); side.y = 0; side.normalize();
     // On their back: over the shoulder blades for the taller one, the small of the back for the other.
-    const T = oc.clone().addScaledVector(back, (tall ? 0.08 : 0.07) * ou.k).addScaledVector(side, (tall ? 0.11 : 0.15) * ou.k);
+    // Aimed short of the back: the real arms are longer than the rig's that's aimed (and the shoulders sit forward), so
+    // aimed at the back itself the real hands floated 5-10 cm out behind it.
+    const T = oc.clone().addScaledVector(back, (tall ? -0.06 : -0.06) * ou.k).addScaledVector(side, (tall ? 0.11 : 0.15) * ou.k);
     T.y += (tall ? 0.04 : -0.16) * ou.k;
     solveArm(c, u, A, i, T, wgt, 0.6);
   });
