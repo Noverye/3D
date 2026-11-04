@@ -110,7 +110,33 @@ G.buildTextures = () => {
     const t = (0.82 + ((col * 13) % 5) / 25 + grain - knot) * gap;
     return [176 * t, 118 * t, 72 * t];
   });
+  // The walls: the same boards in a paler, golden pine (the shared orange-brown made every room dark and muddy),
+  // with a little more difference from one board to the next.
+  TX.wallBoards = canvasTex(512, (u, v) => {
+    const col = Math.floor(u * 6), off = ((col * 37) % 10) / 10;
+    const gap = (u * 6) % 1 < 0.018 ? 0.5 : 1;
+    const knot = Math.max(0, 1 - Math.hypot(((u * 6) % 1 - 0.5) * 3, ((v + off) % 0.5 - 0.25) * 12)) * 0.22;
+    const grain = fbm(u * 30 + col, v * 3, 3) * 0.16 + fbm(u * 120, v * 8, 2) * 0.05;
+    const t = (0.8 + ((col * 13) % 7) / 26 + grain - knot) * gap;
+    return [212 * t, 164 * t, 112 * t];
+  });
   TX.boardsB = canvasTex(256, (u) => { const g = (u * 6) % 1 < 0.02 ? 40 : 170 + G.fbm(u * 80, 0, 2) * 30; return [g, g, g]; }, { srgb: false });
+  // Snow: wind-ripples for the light to model (it was one flat white), tileable (whole-number waves only), and a few
+  // crystals in every patch that catch the sun as you move.
+  TX.snowB = (() => {
+    // periodic value noise (the lattice wraps), so the tiles meet without a seam and without regular waves
+    const hsh = (x, y, p) => { x = ((x % p) + p) % p; y = ((y % p) + p) % p; const h = Math.sin(x * 127.1 + y * 311.7 + p * 17.3) * 43758.5453; return h - Math.floor(h); };
+    const vn = (u, v, p) => { const x = u * p, y = v * p, xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+      const a = hsh(xi, yi, p), b = hsh(xi + 1, yi, p), c = hsh(xi, yi + 1, p), d = hsh(xi + 1, yi + 1, p); return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy; };
+    return canvasTex(256, (u, v) => {
+      const h = 0.45 * vn(u, v, 4) + 0.28 * vn(u, v, 8) + 0.16 * vn(u, v, 16) + 0.11 * vn(u, v, 32);
+      const g = Math.max(0, Math.min(255, h * 255)); return [g, g, g];
+    }, { srgb: false });
+  })();
+  TX.snowR = canvasTex(256, (u, v, x, y) => {
+    const r = Math.abs(Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1;
+    const g = r < 0.006 ? 20 : 200 + (r * 1000 % 1) * 30; return [g, g, g];
+  }, { srgb: false });
   // Exterior: stacked round logs with chinking.
   TX.logs = canvasTex(512, (u, v) => {
     const row = Math.floor(v * 7), f = (v * 7) % 1;
@@ -126,7 +152,7 @@ G.buildTextures = () => {
     const row = Math.floor(v * 6), off = (row * 0.37) % 1, seg = Math.floor((u + off) * 2);
     const edge = (v * 6) % 1 < 0.025 || ((u + off) * 2) % 1 < 0.006 ? 0.5 : 1;
     const t = (0.74 + ((row * 17 + seg * 31) % 7) / 28 + fbm(u * 3, v * 50 + row * 3, 3) * 0.3) * edge;
-    return [150 * t, 98 * t, 62 * t];
+    return [172 * t, 120 * t, 78 * t];   // warm oak (it was nearly mahogany)
   });
   TX.floorB = canvasTex(256, (u, v) => { const row = Math.floor(v * 6), off = (row * 0.37) % 1; const e = (v * 6) % 1 < 0.025 || ((u + off) * 2) % 1 < 0.006; const g = e ? 40 : 160 + G.fbm(u * 40, v * 300, 2) * 30; return [g, g, g]; }, { srgb: false });
   // Roof shingles.
@@ -256,7 +282,7 @@ const MAT = (G.MAT = {});
 G.buildMaterials = () => {
   const std = G.std;
   Object.assign(MAT, {
-    boards: std({ map: TX.boards, bumpMap: TX.boardsB, bumpScale: 0.003, color: '#f2dcc4', roughness: 0.75, env: 0.22 }),   // a warm honey tint
+    boards: std({ map: TX.wallBoards, bumpMap: TX.boardsB, bumpScale: 0.003, color: '#fbeee0', roughness: 0.72, env: 0.24 }),   // golden pine
     logs: std({ map: TX.logs, bumpMap: TX.logsB, bumpScale: 0.03, roughness: 0.85, env: 0.4 }),
     floor: std({ map: TX.floor, bumpMap: TX.floorB, bumpScale: 0.003, color: '#f0d9c0', roughness: 0.55, env: 0.4 }),
     shingle: std({ map: TX.shingle, roughness: 0.9 }),
@@ -265,7 +291,8 @@ G.buildMaterials = () => {
     trim: std({ color: '#5e4330', roughness: 0.7 }),
     darkWood: std({ map: TX.boards, color: '#6a4a36', roughness: 0.55, env: 0.35 }),
     wood: std({ map: TX.boards, color: '#b88a62', roughness: 0.55, env: 0.35 }),
-    snow: std({ color: '#f3f6fb', roughness: 0.75, env: 0.7 }),
+    snow: std({ color: '#e6ecf3', roughness: 0.75, env: 0.7 }),   // just short of paper-white, so it can be shaded rather than clip
+    snowGround: std({ color: '#dfe6ef', roughness: 1, roughnessMap: G.rep(TX.snowR, 26, 26), bumpMap: G.rep(TX.snowB, 7, 7), bumpScale: 0.09, env: 0.6 }),
     ice: std({ color: '#8fa6b8', roughness: 0.12, metalness: 0.0, env: 1.3 }),
     bark: std({ map: TX.bark, roughness: 1 }),
     metal: std({ color: '#b89b6a', roughness: 0.3, metalness: 1, env: 1 }),

@@ -84,7 +84,7 @@ G.buildTerrain = () => {
   for (let i = 0; i < p.count; i++) p.setY(i, terrainH(p.getX(i), p.getZ(i)));
   geo.computeVertexNormals();
   const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 18, uv.getY(i) * 18);
-  const ground = G.add(new THREE.Mesh(geo, MAT.snow), world, false, true);
+  const ground = G.add(new THREE.Mesh(geo, MAT.snowGround || MAT.snow), world, false, true);
   ground.name = 'ground';
   // Trodden path: slightly darker, rougher ribbon.
   const P = [], I = [], UV = [];

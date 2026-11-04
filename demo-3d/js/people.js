@@ -422,6 +422,8 @@ async function attachBody(root, name, spec, bin) {
       // Expressions: a smile, a sad look and raised brows, built as morph targets on the face and brows.
       if (spec.keepMaterials) u.expr = makeExpressions(model);
       if (spec.keepMaterials) softenFace(model);
+      // Hair drawn with soft edges, not cut at a threshold.
+      if (spec.keepMaterials) u.softHair = softHair(model);
       // Eyes that turn: the eyes mesh split into two eyeballs on pivots at their centres, riding the head bone.
       if (spec.keepMaterials) u.realEyes = makeRealEyes(model);
       // The coat's seams (the skirt is split front and back, each half on its own leg): vertices that share a
@@ -436,6 +438,7 @@ async function attachBody(root, name, spec, bin) {
       if (spec.keepMaterials) u.tucked = tuckLegs(model);
       // ...and the neck that pushed out through a jumper's collar when the head turned.
       if (spec.keepMaterials) u.collarTucked = tuckCollar(model);
+      if (spec.keepMaterials) u.darksLifted = liftDarks(model);
       // Coat tails: spring bones the coat's skirt hangs from (tools/coats.py, coat_L / coat_R).
       u.springs = [];
       model.traverse((o) => { if (o.isBone && /^coat_?[LR]$/.test(o.name.replace(/[^A-Za-z_]/g, ''))) u.springs.push({ bone: o, q0: o.quaternion.clone(), side: /L$/.test(o.name) ? 1 : -1, a: 0, va: 0, b: 0, vb: 0 }); });
@@ -535,6 +538,63 @@ function tuckLegs(model) {
     P.setXYZ(i, x - N.getX(i) * d, y - N.getY(i) * d, P.getZ(i) - N.getZ(i) * d); n++;
   }
   P.needsUpdate = true;
+  return n;
+}
+/* Hair: the exported hair is cut at an alpha threshold, so every hairline was a hard, ragged edge, like a wig cap
+ * with scissored edges. The textures do have soft alpha at the strand tips, so draw it in two passes: the solid part
+ * as before (writing depth, so the hair still sorts against itself), then a blended pass for the soft edges the
+ * threshold threw away, drawn after and without writing depth. */
+function softHair(model) {
+  const out = [];
+  model.traverse((o) => {
+    if (!o.isSkinnedMesh || o.userData.softHair) return;
+    const mn = (o.material && o.material.name) || '';
+    if (!/short|fringe|ponytail|hair/i.test(mn) || !o.material.map) return;
+    const m = o.material; m.alphaTest = 0.5; m.transparent = false; m.depthWrite = true; m.needsUpdate = true;
+    const edge = o.clone(); edge.bind(o.skeleton, o.bindMatrix);
+    const em = m.clone(); em.alphaTest = 0.04; em.transparent = true; em.depthWrite = false; em.needsUpdate = true;
+    edge.material = em; edge.renderOrder = 3; edge.userData.softHair = true; edge.castShadow = false;
+    if (o.morphTargetInfluences) edge.morphTargetInfluences = o.morphTargetInfluences;
+    o.parent.add(edge); o.userData.softHair = true; out.push(edge);
+  });
+  // ...and the skin along the hairline shaded toward the hair (on a real head it darkens gradually into it), so the
+  // hair grows out of the skin instead of sitting on it like a cap.
+  let body = null; const hair = [];
+  model.traverse((o) => { if (!o.isMesh || o.userData.softHair && out.includes(o)) return; const mn = (o.material && o.material.name) || ''; if (/body/.test(mn)) body = o; else if (o.isSkinnedMesh && /short|fringe|ponytail|hair/i.test(mn)) hair.push(o); });
+  if (body && hair.length) {
+    const g = body.geometry, P = g.attributes.position, n = P.count;
+    let C = g.attributes.color; if (!C) { C = new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3); g.setAttribute('color', C); }
+    body.material.vertexColors = true; body.material.needsUpdate = true;
+    const H = []; let hy = 1e9; for (const h of hair) { const HP = h.geometry.attributes.position; for (let i = 0; i < HP.count; i++) { H.push(HP.getX(i), HP.getY(i), HP.getZ(i)); hy = Math.min(hy, HP.getY(i)); } }
+    // a coarse grid over the hair's vertices, so each skin vertex only looks at its neighbours
+    const cs = 0.02, grid = new Map(), key = (x, y, z) => Math.floor(x / cs) + ',' + Math.floor(y / cs) + ',' + Math.floor(z / cs);
+    for (let i = 0; i < H.length; i += 3) { const k = key(H[i], H[i + 1], H[i + 2]); (grid.get(k) || grid.set(k, []).get(k)).push(i); }
+    const tint = [0.6, 0.5, 0.44], R = 0.02;
+    for (let i = 0; i < n; i++) {
+      const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (y < hy - 0.01) continue;
+      let d2 = 1e9; const gx = Math.floor(x / cs), gy = Math.floor(y / cs), gz = Math.floor(z / cs);
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) { const L = grid.get((gx + a) + ',' + (gy + b) + ',' + (gz + c)); if (L) for (const j of L) { const dx = H[j] - x, dy = H[j + 1] - y, dz = H[j + 2] - z, q = dx * dx + dy * dy + dz * dz; if (q < d2) d2 = q; } }
+      const d = Math.sqrt(d2); if (d > R) continue;
+      const w = 0.6 * (1 - d / R) * (1 - d / R);
+      C.setXYZ(i, C.getX(i) * (1 - w + w * tint[0]), C.getY(i) * (1 - w + w * tint[1]), C.getZ(i) * (1 - w + w * tint[2]));
+    }
+    C.needsUpdate = true;
+  }
+  return out;
+}
+/* Near-black clothes: his hoodie's texture is 12/255 and both pairs of leggings are almost as dark, so in any light
+ * they read as flat black cut-outs with no folds. Lifted to a soft charcoal (still a black hoodie), so the light can
+ * show their shape. */
+function liftDarks(model) {
+  let n = 0;
+  model.traverse((o) => {
+    if (!o.isMesh || !o.material || o.material.userData.lifted) return;
+    const m = o.material, mn = m.name || '';
+    if (/^top\.player/.test(mn)) { m.color.multiplyScalar(5.5); m.roughness = 0.92; }
+    else if (/^legs\./.test(mn)) m.color.multiplyScalar(1.8);
+    else return;
+    m.userData.lifted = true; m.needsUpdate = true; n++;
+  });
   return n;
 }
 /* Skin through the collar: when the head turns or bends, the neck just under a jumper's collar pushed out through it
