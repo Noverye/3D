@@ -886,7 +886,9 @@ function updateCamera(dt, t) {
     const dP = Math.hypot(PARTNER.x - PLAYER.x, PARTNER.z - PLAYER.z);
     // Only when she's actually turned toward you; otherwise this framed the back of her head.
     const faces = (Math.sin(PARTNER.yaw) * (PLAYER.x - PARTNER.x) + Math.cos(PARTNER.yaw) * (PLAYER.z - PARTNER.z)) / Math.max(dP, 1e-3);
-    if (SETTINGS.view !== 'first' && c.idle > 2.2 && t - c.lastDrag > 4 && dP < 3.2 && dP > 0.6 && !(PARTNER.sit > 0.5) && !PARTNER.hidden && !PARTNER.lie && !PLAYER.freeSit && faces > 0.5 && PARTNER.pose !== 'warm') {
+    // ...and you toward her: with your back to her, "over your shoulder" put the camera in your face and you in front of hers.
+    const youFace = (Math.sin(PLAYER.yaw) * (PARTNER.x - PLAYER.x) + Math.cos(PLAYER.yaw) * (PARTNER.z - PLAYER.z)) / Math.max(dP, 1e-3);
+    if (SETTINGS.view !== 'first' && c.idle > 2.2 && t - c.lastDrag > 4 && dP < 3.2 && dP > 0.6 && !(PARTNER.sit > 0.5) && !PARTNER.hidden && !PARTNER.lie && !PLAYER.freeSit && faces > 0.5 && youFace > 0.2 && PARTNER.pose !== 'warm') {
       const o = SHOTS.ots(PARTNER, PLAYER, 1), k = G.smooth(2.2, 4.5, c.idle);
       s = { pos: s.pos.clone().lerp(o.pos, k), look: s.look.clone().lerp(o.look, k), fov: lerp(s.fov, o.fov + 8, k), focus: lerp(s.focus, o.focus, k), aperture: lerp(s.aperture, o.aperture * 0.8, k) };
     }
