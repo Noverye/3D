@@ -378,7 +378,8 @@ G.buildForest = () => {
   const variants = [pineGeometry(3), pineGeometry(17), pineGeometry(42)];
   const farVariants = [pineGeometry(3, 1), pineGeometry(17, 1), pineGeometry(42, 1)];
   const lists = [[], [], []], farLists = [[], [], []];
-  const near = (m) => { const e = m.elements; return Math.hypot(e[12] - CLEAR.x, e[14] - CLEAR.z) < NEAR_R; };
+  // ...and the trees round the lake too: you stand on its shore on the walk, a few metres from them
+  const near = (m) => { const e = m.elements; return Math.hypot(e[12] - CLEAR.x, e[14] - CLEAR.z) < NEAR_R || Math.hypot(e[12] - LAKE.x, e[14] - LAKE.z) < LAKE.r + 16; };
   const want = Math.round(520 * G.Q.trees);
   let tries = 0;
   const total = () => lists.concat(farLists).reduce((n, l) => n + l.length, 0);
@@ -411,10 +412,23 @@ G.buildForest = () => {
   // Snow-covered shrubs and drifts.
   // Indexed sphere so vertex normals are shared and the drifts read as soft, rounded snow
   // (an icosahedron is non-indexed, which gave every face its own normal: faceted "rocks").
-  const shrubG = new THREE.SphereGeometry(1, 14, 9);
+  // A drift is a soft dome whose edge runs down into the ground with no crease. (They were squashed spheres, with a
+  // ridge round the middle where the flattened underside met the top: from the lake shore they looked like stones.)
+  const shrubG = new THREE.SphereGeometry(1, 36, 12, 0, Math.PI * 2, 0, Math.PI / 2);
   const sp = shrubG.attributes.position;
-  for (let i = 0; i < sp.count; i++) { const x = sp.getX(i), y = sp.getY(i), z = sp.getZ(i); const k = 1 + G.simplex.noise(x * 1.6, z * 1.6 + y) * 0.14; sp.setXYZ(i, x * k, y < 0 ? y * 0.3 : y * k, z * k); }
+  for (let i = 0; i < sp.count; i++) {
+    const x = sp.getX(i), z = sp.getZ(i), r0 = Math.hypot(x, z), a = Math.atan2(z, x);
+    const lump = 1 + G.simplex.noise(Math.cos(a) * 1.3, Math.sin(a) * 1.3) * 0.16;   // an uneven outline
+    const r = r0 * 1.18;                                                               // the last bit is a skirt
+    const h = (r < 1 ? Math.pow(1 - r * r, 1.4) : -(r - 1) * 0.9) * (1 + G.simplex.noise(x * 1.4 + 7, z * 1.4) * 0.18);
+    sp.setXYZ(i, (r0 ? x / r0 : 0) * r * lump * 0.85, h, (r0 ? z / r0 : 0) * r * lump * 0.85);
+  }
   shrubG.computeVertexNormals();
+  { // the sphere's seam and its pole are split vertices: share their normals, or a line shows down each drift
+    const N = shrubG.attributes.normal, by = new Map();
+    for (let i = 0; i < sp.count; i++) { const k = sp.getX(i).toFixed(4) + ',' + sp.getY(i).toFixed(4) + ',' + sp.getZ(i).toFixed(4); (by.get(k) || by.set(k, []).get(k)).push(i); }
+    by.forEach((L) => { if (L.length < 2) return; let x = 0, y = 0, z = 0; for (const i of L) { x += N.getX(i); y += N.getY(i); z += N.getZ(i); } const l = Math.hypot(x, y, z) || 1; for (const i of L) N.setXYZ(i, x / l, y / l, z / l); });
+  }
   const drifts = [];
   for (let i = 0; i < 160; i++) {
     const a = r() * Math.PI * 2, d = 8 + r() * 26;
@@ -422,7 +436,7 @@ G.buildForest = () => {
     if (rectDist(x, z, -1, -1, 18, 8.2) < 0.6) continue;
     if (z > 7 && z < PATH_END + 2 && Math.abs(x - pathX(z)) < 2.6) continue;
     const s = 0.35 + r() * 0.9;
-    drifts.push(G.mtx(x, terrainH(x, z) + s * 0.05, z, s * (1 + r()), s * 0.55, s * (1 + r()), r() * 6));
+    drifts.push(G.mtx(x, terrainH(x, z) - 0.02, z, s * (1 + r()), s * 0.5, s * (1 + r()), r() * 6));
   }
   const dm = new THREE.InstancedMesh(shrubG, MAT.snow, drifts.length);
   drifts.forEach((m, k) => dm.setMatrixAt(k, m));

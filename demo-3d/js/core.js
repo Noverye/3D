@@ -288,6 +288,54 @@ G.buildTextures = () => {
     return [g, g, g, a];
   }, { w: 64, h: 64 });
   TX.skirt.wrapT = THREE.ClampToEdgeWrapping;
+  // The frozen lake, once across (the disc's own UVs): dark clear ice, cloudier in places, with wind-swept streaks of
+  // snow lying on it, thicker toward the shore, a few long white cracks and trapped bubbles. Its alpha channel
+  // carries the snow cover (for the roughness map and the bump). It was one pale, glossy blue-white sheet that read
+  // as more snow.
+  {
+    // the soft noise painted at half size and scaled up (a quarter of the work at boot); cracks and bubbles at full size
+    const S = Math.round(1024 * G.TEX_SCALE), cv = document.createElement('canvas'); cv.width = cv.height = S;
+    const c = cv.getContext('2d');
+    const F = S >> 1, half = document.createElement('canvas'); half.width = half.height = F;
+    const hc = half.getContext('2d'), img = hc.createImageData(F, F), snowH = new Float32Array(F * F), d = img.data;
+    const iceA = [34, 58, 70], iceB = [88, 122, 136], sn = [228, 234, 242];
+    for (let y = 0; y < F; y++) for (let x = 0; x < F; x++) {
+      const u = x / F, v = y / F, r = Math.hypot(u - 0.5, v - 0.5) * 2;
+      const cloud = 0.5 + 0.5 * G.fbm(u * 5 + 3, v * 5, 4);
+      const streak = G.fbm(u * 2.5 + 11, v * 11, 4) * 0.8 + G.fbm(u * 9, v * 30, 2) * 0.25;
+      let k = G.smooth(0.08, 0.34, streak + G.smooth(0.62, 1.0, r) * 0.75 - 0.05);
+      k = Math.max(k, G.smooth(0.93, 1.0, r));
+      snowH[y * F + x] = k;
+      const ice = iceA.map((a, j) => a + (iceB[j] - a) * cloud);
+      const i = (y * F + x) * 4;
+      for (let j = 0; j < 3; j++) d[i + j] = ice[j] + (sn[j] - ice[j]) * k;
+      d[i + 3] = 255;
+    }
+    hc.putImageData(img, 0, 0);
+    c.imageSmoothingEnabled = true; c.drawImage(half, 0, 0, S, S);
+    const snow = { at: (i) => snowH[Math.min(F - 1, Math.floor((i / S) / 2)) * F + Math.min(F - 1, Math.floor((i % S) / 2))] };
+    // cracks: long wandering lines with short branches, pale where they run through clear ice
+    const rr = G.seeded(77);
+    c.lineCap = 'round';
+    for (let n = 0; n < 9; n++) {
+      let a = rr() * Math.PI * 2, px = S * (0.5 + Math.cos(a) * rr() * 0.3), py = S * (0.5 + Math.sin(a) * rr() * 0.3);
+      let dir = rr() * Math.PI * 2; const len = 30 + rr() * 50;
+      c.strokeStyle = 'rgba(214,232,240,0.55)'; c.lineWidth = Math.max(1, S / 700);
+      c.beginPath(); c.moveTo(px, py);
+      for (let k = 0; k < len; k++) {
+        dir += (rr() - 0.5) * 0.7; px += Math.cos(dir) * S / 160; py += Math.sin(dir) * S / 160; c.lineTo(px, py);
+        if (rr() < 0.08) { c.stroke(); c.beginPath(); c.moveTo(px, py); const bd = dir + (rr() < 0.5 ? 1 : -1) * (0.6 + rr()); let bx = px, by = py; c.save(); c.globalAlpha = 0.6; for (let q = 0; q < 6; q++) { bx += Math.cos(bd) * S / 200; by += Math.sin(bd) * S / 200; c.lineTo(bx, by); } c.stroke(); c.restore(); c.beginPath(); c.moveTo(px, py); }
+      }
+      c.stroke();
+    }
+    // bubbles frozen in the clear ice
+    for (let n = 0; n < 900; n++) { const bx = rr() * S, by = rr() * S; if (snow.at(Math.floor(by) * S + Math.floor(bx)) > 0.3) continue; c.fillStyle = 'rgba(220,236,244,' + (0.25 + rr() * 0.35) + ')'; c.beginPath(); c.arc(bx, by, S / 1400 + rr() * S / 1200, 0, Math.PI * 2); c.fill(); }
+    TX.ice = new THREE.CanvasTexture(cv); TX.ice.encoding = THREE.sRGBEncoding; TX.ice.anisotropy = G.renderer.capabilities.getMaxAnisotropy();
+    // roughness (green channel, as three reads it) and bump from the snow cover
+    const cr = document.createElement('canvas'); cr.width = cr.height = F; const c2 = cr.getContext('2d'), im2 = c2.createImageData(F, F), d2 = im2.data;
+    for (let i = 0; i < F * F; i++) { const g = 30 + snowH[i] * 225; d2[i * 4] = d2[i * 4 + 1] = d2[i * 4 + 2] = g; d2[i * 4 + 3] = 255; }
+    c2.putImageData(im2, 0, 0); TX.iceR = new THREE.CanvasTexture(cr);
+  }
   TX.bark = canvasTex(128, (u, v) => { const t = 0.6 + G.fbm(u * 6, v * 30, 3) * 0.4; return [90 * t, 64 * t, 48 * t]; });
   TX.snowN = canvasTex(256, (u, v) => { const n = G.fbm(u * 4, v * 4, 3) * 0.6 + G.fbm(u * 24, v * 24, 2) * 0.4; const g = 128 + n * 70; return [g, g, g]; }, { srgb: false });
   // Hair strands (alpha-tested cards).
@@ -361,7 +409,7 @@ G.buildMaterials = () => {
     wood: std({ map: TX.boards, color: '#b88a62', roughness: 0.55, env: 0.35 }),
     snow: std({ color: '#e6ecf3', roughness: 0.75, env: 0.7 }),   // just short of paper-white, so it can be shaded rather than clip
     snowGround: std({ color: '#dfe6ef', roughness: 1, roughnessMap: G.rep(TX.snowR, 26, 26), bumpMap: G.rep(TX.snowB, 7, 7), bumpScale: 0.09, env: 0.6 }),
-    ice: std({ color: '#8fa6b8', roughness: 0.12, metalness: 0.0, env: 1.3 }),
+    ice: std({ map: TX.ice, roughnessMap: TX.iceR, bumpMap: TX.iceR, bumpScale: 0.02, roughness: 1, metalness: 0.0, env: 0.85 }),   // clear ice reflects the sky; the snow on it doesn't
     bark: std({ map: TX.bark, roughness: 1 }),
     metal: std({ color: '#b89b6a', roughness: 0.3, metalness: 1, env: 1 }),
     darkMetal: std({ color: '#2b2724', roughness: 0.45, metalness: 0.85, env: 0.9 }),
