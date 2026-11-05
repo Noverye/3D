@@ -345,7 +345,7 @@ G.buildMaterials = () => {
     knitCream: std({ map: TX.knitCream, bumpMap: TX.knitB, bumpScale: 0.006, roughness: 1 }),
     linen: std({ map: TX.linen, bumpMap: TX.fabricB, bumpScale: 0.001, roughness: 1 }),
     rug: std({ map: TX.rug, bumpMap: TX.fabricB, bumpScale: 0.004, roughness: 1 }),
-    sofa: std({ map: TX.jersey, color: '#4d4038', bumpMap: TX.fabricB, bumpScale: 0.002, roughness: 1 }),
+    sofa: std({ map: TX.jersey, color: '#7d6d5c', bumpMap: TX.fabricB, bumpScale: 0.002, roughness: 1, env: 0.35 }),   // a warm taupe: the old near-black brown swallowed the light
     glassOut: std({ color: '#ffb46a', emissive: '#ff9a40', emissiveIntensity: 0.55, roughness: 0.05, transparent: true, opacity: 0.32, env: 1.2, depthWrite: false }),
     glassIn: std({ color: '#203050', roughness: 0.02, transparent: true, opacity: 0.18, env: 1.4, depthWrite: false }),
     bulb: new THREE.MeshBasicMaterial({ color: '#ffcf86' }),

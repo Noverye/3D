@@ -788,6 +788,30 @@ function tuckCollar(model) {
   P.needsUpdate = true;
   return n;
 }
+/* The whites of the eyes were evenly lit paper-white all round, which made every look a stare. A real eye sits in
+ * its socket: the upper lid and lashes shade the top of the eyeball, the corners fall into shadow and pinken, and
+ * the white is never quite white. r: the eyeball's radius. */
+function shadeEye(mat, r) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, rr) => {
+    if (prev) prev(sh, rr);
+    sh.vertexShader = 'varying vec3 vEyeP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvEyeP = position;');
+    sh.fragmentShader = 'varying vec3 vEyeP;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+	{
+		vec3 q = vEyeP / ${r.toFixed(5)};
+		float lid = smoothstep( 0.05, 0.8, q.y );                       // under the upper lid
+		float side = smoothstep( 0.35, 0.95, abs( q.x ) );               // into the corners
+		float lum = dot( diffuseColor.rgb, vec3( 0.3, 0.59, 0.11 ) );
+		float white = smoothstep( 0.45, 0.75, lum );                     // the sclera, not the iris
+		diffuseColor.rgb *= ( 1.0 - lid * 0.42 ) * ( 1.0 - side * 0.25 );
+		diffuseColor.rgb *= mix( vec3( 1.0 ), vec3( 0.9, 0.86, 0.84 ), white );
+		diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 1.0, 0.84, 0.82 ), side * white * 0.6 );
+	}`);
+  };
+  const key = mat.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : () => '';
+  mat.customProgramCacheKey = () => key() + '|eyeShade' + r.toFixed(4);
+  mat.needsUpdate = true;
+}
 function makeRealEyes(model) {
   let eyes = null, head = null;
   model.traverse((o) => { if (o.isMesh && /high-?poly/i.test(o.name)) eyes = o; if (o.isBone && /Head$/.test(o.name)) head = o; });
@@ -810,6 +834,7 @@ function makeRealEyes(model) {
     if (nor.length) geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); else geo.computeVertexNormals();
     if (uv.length) geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     const mat = eyes.material.clone(); mat.skinning = false;
+    shadeEye(mat, Math.max(box.max.x - box.min.x, box.max.y - box.min.y) * 0.5);
     const piv = new THREE.Object3D(); piv.position.copy(c); model.parent.add(piv); piv.updateMatrixWorld(true); head.attach(piv);
     const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; piv.add(mesh);
     out.push({ piv, q0: piv.quaternion.clone(), yaw: 0, pitch: 0 });
@@ -1593,7 +1618,8 @@ function measureFit(model, u) {
     if (/^coat/.test(n)) {
       // The model's own long coat (tools/coats.py): shown when dressed (life.js, setDressed), in the game's wool.
       u.realCoat = (u.realCoat || []).concat(o);
-      if (G.TX && G.TX.jersey) { o.material.map = G.rep(G.TX.jersey, 3, 3); o.material.bumpMap = G.TX.jerseyB || null; o.material.bumpScale = 0.004; o.material.roughness = 1; o.material.side = THREE.DoubleSide; o.material.needsUpdate = true; }
+      // a wool twill, the cloth of a winter coat (it was plain jersey, which read as a sweatshirt from close up)
+      if (G.TX && G.TX.wool) { o.material.map = G.rep(G.TX.wool, 4, 4); o.material.bumpMap = G.rep(G.TX.woolB, 4, 4); o.material.bumpScale = 0.003; o.material.roughness = 1; o.material.side = THREE.DoubleSide; o.material.needsUpdate = true; }
       o.visible = false; o.userData.warm = true; o.userData.gear = true;
       return;
     }
