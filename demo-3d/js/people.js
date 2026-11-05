@@ -670,7 +670,7 @@ const HAIR_SHEEN = `
 			float strand = clamp( hl * 9.0, 0.25, 1.0 );
 			float nl = dot( hN, directLight.direction );
 			float vis = smoothstep( -0.15, 0.35, nl ) * min( hTl * 1.6, 1.0 );
-			vec3 sh = ( s1 * 0.16 * vec3( 1.0, 0.96, 0.9 ) + s2 * 0.4 * normalize( material.diffuseColor + 1e-4 ) * strand ) * strand * vis;
+			vec3 sh = ( s1 * 0.1 * vec3( 1.0, 0.96, 0.9 ) + s2 * 1.6 * material.diffuseColor * strand ) * strand * vis;   // the second band in the hair's own colour, in proportion to it (dark hair stays dark)
 			reflectedLight.directSpecular += sh * directLight.color;
 		}
 	}`;
@@ -723,9 +723,34 @@ function liftDarks(model) {
     if (/^top\.player/.test(mn)) { m.color.multiplyScalar(5.5); m.roughness = 0.92; }
     else if (/^legs\./.test(mn)) m.color.multiplyScalar(1.8);
     else return;
+    clothSheen(m);
     m.userData.lifted = true; m.needsUpdate = true; n++;
   });
   return n;
+}
+/* Dark cloth: a black hoodie or leggings lit like plain paint is a flat silhouette with no folds. Real fabric is a
+ * pile of fibres that catch light at grazing angles, so its form shows as a soft brighter rim toward its edges and
+ * along each fold that turns away from you (a velvet-like sheen), stronger on the lit side. */
+const CLOTH_SHEEN = `
+	reflectedLight.directDiffuse += ( 1.0 - clearcoatDHR ) * irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );
+	{
+		float cv = 1.0 - saturate( dot( geometry.normal, geometry.viewDir ) );
+		float cl = saturate( dot( geometry.normal, directLight.direction ) * 0.5 + 0.5 );
+		reflectedLight.directDiffuse += directLight.color * ( pow( cv, 2.0 ) * 0.3 * cl ) * ( material.diffuseColor * 2.0 + 0.05 );
+	}`;
+function clothSheen(m) {
+  if (m.userData.clothSheen) return;
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    if (prev) prev(sh, r);
+    const chunk = THREE.ShaderChunk.lights_physical_pars_fragment;
+    const line = 'reflectedLight.directDiffuse += ( 1.0 - clearcoatDHR ) * irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );';
+    if (chunk.indexOf(line) < 0) return;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk.replace(line, CLOTH_SHEEN));
+  };
+  const key = m.customProgramCacheKey ? m.customProgramCacheKey.bind(m) : () => '';
+  m.customProgramCacheKey = () => key() + '|clothSheen';
+  m.userData.clothSheen = true;
 }
 /* The hoodie's neckline: its edge was cut in square teeth (a low-poly band whose edge vertices sit at alternating
  * heights), so it read as a jagged black crenellation under the chin. Find the open edge round the neck and even out
@@ -1167,7 +1192,7 @@ function exprUpdate(c, u, dt) {
 }
 /* Eyelids for a model whose head has no blink shapes: a cap over each eyeball (the eyes mesh split left and right),
  * attached to the head bone, in the face's average skin colour; shown while the eyes are shut. */
-const LID_REST = 0.05, LID_COVER = Math.PI * 0.28, LID_SHUT = 1.36, LID_EDGE = 0.3;   // the cap: the top 50 degrees of the eye; swung 78 degrees forward it covers it. The first 30% of the swing is under the brow.
+const LID_REST = 0.1, LID_COVER = Math.PI * 0.28, LID_SHUT = 1.36, LID_EDGE = 0.3;   // the cap: the top 50 degrees of the eye; swung 78 degrees forward it covers it. The first 30% of the swing is under the brow.
 function setRealLids(u, a) {   // a: 0 open, 1 shut (measured from the visible edge of the eye)
   for (const pv of u.realLids) { const cap = pv.userData.cap; cap.rotation.x = (LID_EDGE + a * (1 - LID_EDGE)) * LID_SHUT; cap.visible = a > 0.01; }
 }
@@ -1208,10 +1233,10 @@ function makeRealLids(model) {
       if (samp.length >= 6) {
         samp.sort((a, b) => b[3] - a[3]); const top = samp.slice(0, Math.max(3, Math.floor(samp.length * 0.5)));
         const avg = [0, 1, 2].map((j) => top.reduce((t, x) => t + x[j], 0) / top.length / 255);
-        col = new THREE.Color(avg[0] * 0.96, avg[1] * 0.93, avg[2] * 0.93).convertSRGBToLinear();
+        col = new THREE.Color(avg[0] * 0.88, avg[1] * 0.8, avg[2] * 0.78).convertSRGBToLinear();   // a closed lid sits back in the socket's shade, darker and pinker than the cheek (it lit up like a bare eyeball)
       }
     }
-    const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.62, envMapIntensity: 0.25 });
+    const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.78, envMapIntensity: 0.12 });
     G.MATS && G.MATS.push(mat);
     // The cap hugs the eyeball (just over the cornea), so the face around the opening hides its edge as real
     // lids do; before, it was bigger than the eye and stood out past the lashes.
@@ -1223,7 +1248,7 @@ function makeRealLids(model) {
     // reads as a lid, not a patch of skin with a hard edge.
     const lg = new THREE.SphereBufferGeometry(r * 1.035, 24, 14, 0, Math.PI * 2, 0, LID_COVER), lp = lg.attributes.position, cols = new Float32Array(lp.count * 3);
     for (let i = 0; i < lp.count; i++) {
-      const t = Math.acos(Math.max(-1, Math.min(1, lp.getY(i) / (r * 1.035)))) / LID_COVER, e = Math.max(0, Math.min(1, (t - 0.72) / 0.28)), sh = 0.9 * (1 - 0.55 * e * e * (3 - 2 * e));
+      const t = Math.acos(Math.max(-1, Math.min(1, lp.getY(i) / (r * 1.035)))) / LID_COVER, e = Math.max(0, Math.min(1, (t - 0.68) / 0.32)), sh = 0.9 * (1 - 0.7 * e * e * (3 - 2 * e));   // a darker lash line along its edge
       cols[i * 3] = sh; cols[i * 3 + 1] = sh * 0.97; cols[i * 3 + 2] = sh * 0.95;
     }
     lg.setAttribute('color', new THREE.BufferAttribute(cols, 3)); mat.vertexColors = true;

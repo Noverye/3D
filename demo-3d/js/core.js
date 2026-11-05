@@ -366,6 +366,20 @@ G.buildMaterials = () => {
     candle: std({ color: '#f2e8d6', roughness: 0.6, emissive: '#ffb060', emissiveIntensity: 0.06 }),
   });
   MAT.glassOut.side = THREE.FrontSide; MAT.glassIn.side = THREE.FrontSide;
+  // A lit window seen from outside is not one even sheet of cream: the room's light is strongest low in the middle
+  // (the lamps, the fire) and falls off toward the frame, deepening to amber at the edges.
+  MAT.glassOut.emissive.set('#ff8c34');
+  MAT.glassOut.onBeforeCompile = (sh) => {
+    sh.vertexShader = 'varying vec2 vGU;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvGU = uv;');
+    sh.fragmentShader = 'varying vec2 vGU;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+	{
+		vec2 gd = abs( vGU - 0.5 ) * 2.0; float edge = max( gd.x, gd.y * 1.1 );
+		float k = smoothstep( 0.3, 1.0, edge );
+		totalEmissiveRadiance *= mix( 1.25, 0.4, k ) * ( 0.8 + 0.35 * ( 1.0 - vGU.y ) );
+		totalEmissiveRadiance *= mix( vec3( 1.0, 0.96, 0.9 ), vec3( 1.0, 0.62, 0.32 ), k );
+	}`);
+  };
+  MAT.glassOut.customProgramCacheKey = () => 'glassOut-glow';
 };
 
 /* ---------------- mesh helpers ---------------- */

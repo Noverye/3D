@@ -372,6 +372,7 @@ G.buildForest = () => {
   };
   mat.customProgramCacheKey = () => 'pine-sway' + tag; };
   sway(mat, '-near'); sway(farMat, '-far');
+  G.PINE_MAT = mat; G.pineGeometry = pineGeometry;   // for the odd single spruce placed by hand (the walk's young pine)
   // Trees within NEAR_R of the clearing get full detail and cast shadows; the rest are low-poly and shadowless.
   const NEAR_R = 34;
   const variants = [pineGeometry(3), pineGeometry(17), pineGeometry(42)];

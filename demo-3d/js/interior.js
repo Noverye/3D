@@ -304,7 +304,7 @@ function buildRooms() {
   G.INTER.push({ id: 'cake', pos: [tx, 0.6, tz], r: 1.1, label: () => (G.CAKE.lit ? 'Make a wish' : 'Cake'), act: () => G.Story.cake() });
   // Armchair.
   const chair = new THREE.Group(); chair.position.set(6.25, 0, 1.95); chair.rotation.y = -0.91; W.add(chair);   // turned to face the fire
-  const cm = G.std({ map: TX.wool, bumpMap: TX.woolB, bumpScale: 0.002, color: '#86432f', roughness: 1, env: 0.3 });   // rust wool (it was so dark it read as a hole in the room)
+  const cm = G.std({ map: TX.wool, bumpMap: TX.woolB, bumpScale: 0.002, color: '#6c3322', roughness: 1, env: 0.25 });   // rust wool (it was so dark it read as a hole in the room)
   box(0.86, 0.42, 0.82, cm, 0, 0.21, 0, { parent: chair, r: 0.07, seg: 4 });
   box(0.86, 0.64, 0.2, cm, 0, 0.72, 0.33, { parent: chair, r: 0.08, seg: 4 });
   for (const s of [-1, 1]) box(0.16, 0.56, 0.82, cm, s * 0.43, 0.33, 0, { parent: chair, r: 0.07, seg: 4 });
