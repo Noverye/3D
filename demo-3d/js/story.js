@@ -1188,6 +1188,24 @@ EVE.showPhoto = () => { if (EVE.photo.visible) return; EVE.photo.material.map = 
 // Paper lanterns on a string along the porch beam, unlit until the evening.
 (function buildLanterns() {
   const mat = G.std({ color: '#d99a5c', roughness: 0.85, emissive: '#ff7a24', emissiveIntensity: 0 });   // warm paper, not bulbs
+  // Lit, a paper lantern isn't an even disc of light: it's brightest and palest straight through the middle, deepening
+  // to orange round its rim where you see the paper edge-on, crossed by the darker hoops of its wire frame, with a
+  // dark little cap top and bottom. The hoops show by day too.
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = 'varying vec3 vLP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvLP = position;');
+    sh.fragmentShader = 'varying vec3 vLP;\n' + sh.fragmentShader
+      .replace('#include <map_fragment>', `#include <map_fragment>
+	float lyy = vLP.y / 0.11;
+	float lrib = 0.8 + 0.2 * smoothstep( 0.0, 0.45, abs( sin( lyy * 3.14159 * 4.5 ) ) );
+	float lcap = smoothstep( 0.8, 0.93, abs( lyy ) );
+	diffuseColor.rgb *= lrib * ( 1.0 - lcap * 0.7 );`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+	{
+		float core = pow( saturate( dot( normal, normalize( vViewPosition ) ) ), 0.9 );
+		totalEmissiveRadiance *= mix( vec3( 1.0, 0.42, 0.14 ), vec3( 1.15, 0.84, 0.56 ), core ) * ( 0.35 + 0.85 * core ) * lrib * ( 1.0 - lcap * 0.9 );
+	}`);
+  };
+  mat.customProgramCacheKey = () => 'paper-lantern';
   const wire = G.std({ color: '#2a2420', roughness: 0.9 });
   EVE.lanterns = []; EVE.lanternMat = mat;
   const x0 = 4.2, x1 = 11.0, n = 9, y = 2.18, z = 6.42;
@@ -1218,7 +1236,7 @@ EVE.showPhoto = () => { if (EVE.photo.visible) return; EVE.photo.material.map = 
     s.material.opacity = blink * Math.min(1, t * 1.5); core.material.opacity = s.material.opacity;
   });
 })();
-G.TICKERS.add((dt) => { const want = S.flags.lanternsLit ? 0.85 * (0.94 + Math.sin(G.simT * 3.1) * 0.04) : 0; EVE.lanternMat.emissiveIntensity = G.damp(EVE.lanternMat.emissiveIntensity, want, 3, dt); });
+G.TICKERS.add((dt) => { const want = S.flags.lanternsLit ? 0.85 * (0.94 + Math.sin(G.simT * 3.1) * 0.04) : 0; EVE.lanternMat.emissiveIntensity = G.damp(EVE.lanternMat.emissiveIntensity, want, 3, dt); G.LANTERN_GLOW = EVE.lanternMat.emissiveIntensity / 0.85; });   // the porch lamp warms up with them (game.js)
 
 // The frame: empty all day; after the cake, a photograph nobody put there.
 inter('frame', [7.75, 1.4, 4.15], 0.8, () => (EVE.photo.visible ? 'Photograph' : 'Empty frame'), async () => {

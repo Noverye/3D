@@ -426,7 +426,9 @@ function updateLighting(t, dt, focus) {
   G.CAKE.flames.forEach((f) => { f.visible = G.CAKE.lit; });
   G.MANTLE_LIGHT.intensity = 1.3 * fl;
   G.FLAMES.forEach((f, i) => { f.material.uniforms.uTime.value = t * 1.3 + i * 2.1; if (!F.planes.includes(f)) f.lookAt(G.camera.position); });
-  G.PORCH_LAMP.intensity = lerp(4, 7, n) * (0.95 + Math.sin(t * 9) * 0.03) * dark;
+  // Lit, the nine paper lanterns throw their own warm light along the porch: the lamp by the door reaches further.
+  const lg = G.LANTERN_GLOW || 0;
+  G.PORCH_LAMP.intensity = lerp(4, 7, n) * (0.95 + Math.sin(t * 9) * 0.03) * dark * (1 + lg * 0.6); G.PORCH_LAMP.distance = 7 + lg * 2.5;
   G.BENCH_LAMP.intensity = lerp(1.5, 3, n) * fl * dark;
   // Path lanterns: two real lights on the nearest, glow pools on the rest.
   const near = G.PATH_LIGHTS.slice().sort((a, b) => Math.hypot(a.x - focus.x, a.z - focus.z) - Math.hypot(b.x - focus.x, b.z - focus.z));

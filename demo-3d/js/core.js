@@ -216,6 +216,20 @@ G.buildTextures = () => {
     return [base[0] * t, base[1] * t, base[2] * t];
   });
   TX.knitCream = knit([226, 210, 186], true);
+  // A quilted cotton duvet: four puffed squares to a tile, each fullest in the middle and drawn in at the stitched
+  // seams, with a fine cotton weave over it. (The bed was covered in the cable knit, whose ribs read from above as
+  // rows of eggs.) Seamless: everything here repeats on the tile.
+  const QN = 4;
+  const quiltH = (u, v) => { const fx = (u * QN) % 1, fy = (v * QN) % 1, ex = Math.min(fx, 1 - fx) * 2, ey = Math.min(fy, 1 - fy) * 2;
+    const e = Math.min(ex, ey); return Math.sqrt(Math.max(0, Math.min(1, e / 0.9))) * (0.75 + 0.25 * Math.min(1, Math.max(ex, ey))); };
+  TX.quilt = canvasTex(512, (u, v, x, y) => {
+    const h = quiltH(u, v), fx = (u * QN) % 1, fy = (v * QN) % 1;
+    const seam = Math.min(Math.min(fx, 1 - fx), Math.min(fy, 1 - fy)) < 0.006 ? 0.86 : 1;
+    const weave = 1 + ((x + y) % 2 ? 0.012 : -0.012) + G.pfbm(u * 64, v * 64, [64, 64], 2) * 0.03;
+    const t = (0.84 + h * 0.16) * seam * weave;
+    return [238 * t, 230 * t, 216 * t];
+  });
+  TX.quiltB = canvasTex(256, (u, v) => { const g = 40 + quiltH(u, v) * 200; return [g, g, g]; }, { srgb: false });
   TX.knitDark = knit([70, 66, 64], false);
   TX.knitB = canvasTex(256, (u, v) => { const g = 90 + Math.abs(Math.sin(u * 16 * Math.PI)) * 80 + Math.abs(Math.sin(v * 32 * Math.PI)) * 60; return [g, g, g]; }, { srgb: false });
   // Jersey (hoodie).
@@ -354,6 +368,7 @@ G.buildMaterials = () => {
     ceramic: std({ color: '#f1ede4', roughness: 0.25, env: 0.9 }),
     plaid: std({ map: TX.plaid, bumpMap: TX.fabricB, bumpScale: 0.003, roughness: 1 }),
     knitCream: std({ map: TX.knitCream, bumpMap: TX.knitB, bumpScale: 0.006, roughness: 1 }),
+    quilt: std({ map: TX.quilt, bumpMap: TX.quiltB, bumpScale: 0.02, roughness: 0.95, env: 0.3 }),
     linen: std({ map: TX.linen, bumpMap: TX.fabricB, bumpScale: 0.001, roughness: 1 }),
     rug: std({ map: TX.rug, bumpMap: TX.fabricB, bumpScale: 0.004, roughness: 1 }),
     sofa: std({ map: TX.jersey, color: '#5f6a4e', bumpMap: TX.fabricB, bumpScale: 0.002, roughness: 1, env: 0.35 }),   // moss green, with the rust armchair and the red plaid (the old near-black brown swallowed the light)

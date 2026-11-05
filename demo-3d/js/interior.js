@@ -186,7 +186,8 @@ function buildRooms() {
   const p1 = box(0.66, 0.16, 0.42, MAT.linen, bx - 0.44, 0.6, 0.48, { r: 0.08, seg: 4 }); p1.rotation.x = -0.25;
   const p2 = box(0.66, 0.16, 0.42, MAT.linen, bx + 0.44, 0.6, 0.48, { r: 0.08, seg: 4 }); p2.rotation.x = -0.2;
   const bolster = box(0.5, 0.2, 0.18, MAT.knitCream, bx + 0.25, 0.62, 0.72, { r: 0.08, seg: 4 }); bolster.rotation.set(-0.4, 0.2, 0);
-  const duvet = box(1.76, 0.12, 1.5, MAT.knitCream, bx, 0.56, 1.5, { r: 0.06, seg: 4 });
+  const dm = MAT.quilt.clone(); dm.map = G.rep(TX.quilt, 1.7, 1.45); dm.bumpMap = G.rep(TX.quiltB, 1.7, 1.45); G.MATS.push(dm);
+  const duvet = box(1.76, 0.12, 1.5, dm, bx, 0.56, 1.5, { r: 0.06, seg: 4 });
   const throwB = box(1.84, 0.06, 0.6, MAT.plaid, bx, 0.64, 1.95, { r: 0.03 }); throwB.rotation.z = 0.01;
   // Made bed vs slept-in bed: the tidy duvet swaps for a rumpled one draped over whoever is in it.
   for (const m of [duvet, throwB, bolster]) m.userData.dynamic = true;
@@ -338,7 +339,7 @@ function buildRooms() {
 /* ===== Bed cover: a draped blanket shaped over whoever is lying in the bed ===== */
 function bedCover(bx) {
   const g = new THREE.PlaneGeometry(2.1, 1.76, 44, 36); g.rotateX(-Math.PI / 2);
-  const mat = MAT.knitCream.clone(); mat.side = THREE.DoubleSide; mat.map = G.rep(TX.knitCream, 3.2, 2.6); mat.bumpMap = G.rep(TX.knitB, 3.2, 2.6); G.MATS.push(mat);
+  const mat = MAT.quilt.clone(); mat.side = THREE.DoubleSide; mat.map = G.rep(TX.quilt, 2.0, 1.7); mat.bumpMap = G.rep(TX.quiltB, 2.0, 1.7); G.MATS.push(mat);
   const m = new THREE.Mesh(g, mat); m.position.set(bx, 0, 1.42); m.castShadow = m.receiveShadow = true;
   m.visible = false; m.userData.dynamic = true; G.world.add(m);
   m.userData.base = Float32Array.from(g.attributes.position.array);
