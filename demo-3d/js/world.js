@@ -232,24 +232,27 @@ G.buildSky = () => {
 
 /* ---------------- mountains ---------------- */
 G.buildMountains = () => {
-  const segA = 220, segR = 10, R0 = 120, R1 = 220;
-  const P = [], C = [], I = [];
-  const rock = new THREE.Color('#4b4a58'), forest = new THREE.Color('#1c2a2a'), snow = new THREE.Color('#eef1f7');
+  // A ring of peaks round the valley. Coloured from its final shape: rock where the faces are too steep for snow to
+  // stay, snow on the gentler slopes and ledges, dark forest at the foot, so the range has ridges and gullies you can
+  // read instead of one pale cone. (It was 10 rows deep and coloured before smoothing, so the colours missed the shape.)
+  const segA = 260, segR = 26, R0 = 120, R1 = 220;
+  const P = [], I = [];
   for (let j = 0; j <= segR; j++) {
     for (let i = 0; i <= segA; i++) {
       const a = (i / segA) * Math.PI * 2, t = j / segR, r = lerp(R0, R1, t);
       const x = CLEAR.x + Math.cos(a) * r, z = CLEAR.z + Math.sin(a) * r;
       const ridge = 1 - Math.abs(G.simplex.noise(Math.cos(a) * 2.2 + 9, Math.sin(a) * 2.2));
       const peaks = Math.pow(ridge, 2.2) * 62 + fbm(Math.cos(a) * 6, Math.sin(a) * 6 + t * 2, 4) * 16;
-      let y = Math.sin(Math.PI * Math.min(1, t * 1.25)) * (14 + peaks) - 4;
+      const rise = Math.sin(Math.PI * Math.min(1, t * 1.25));
+      // gullies and ribs running down the slopes
+      const gully = (1 - Math.abs(G.simplex.noise(Math.cos(a) * 16 + 3, Math.sin(a) * 16 + t * 1.5))) * 7 * rise;
+      let y = rise * (14 + peaks) - 4 + gully - 3.5 * rise;
       if (j === 0) y = -6;
-      const snowLine = 22 + fbm(a * 3, t * 4) * 9;
-      const c = y > snowLine ? snow : y > 10 ? rock.clone().lerp(snow, G.smooth(snowLine - 8, snowLine, y) * 0.6) : forest;
-      P.push(x, y, z); C.push(c.r, c.g, c.b);
+      P.push(x, y, z);
     }
   }
   // Smooth heights around each ring so no single vertex spikes into a needle.
-  for (let pass = 0; pass < 4; pass++) for (let j = 1; j <= segR; j++) {
+  for (let pass = 0; pass < 3; pass++) for (let j = 1; j <= segR; j++) {
     const row = j * (segA + 1), ys = [];
     for (let i = 0; i <= segA; i++) ys.push(P[(row + i) * 3 + 1]);
     for (let i = 0; i <= segA; i++) { const a = ys[(i + segA - 1) % segA], b = ys[i], c = ys[(i + 1) % segA]; P[(row + i) * 3 + 1] = (a + 2 * b + c) / 4; }
@@ -259,9 +262,27 @@ G.buildMountains = () => {
     I.push(a, b, a + 1, b, b + 1, a + 1);
   }
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setIndex(I);
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I);
   g.computeVertexNormals();
-  const m = new THREE.Mesh(g, G.std({ vertexColors: true, roughness: 0.95, flatShading: true, env: 0.6 }));
+  const rock = new THREE.Color('#55535f'), rockDark = new THREE.Color('#3b3a45'), forest = new THREE.Color('#1c2a2a'), snow = new THREE.Color('#eef1f7'), haze = new THREE.Color('#c9d3e2');
+  const N = g.attributes.normal, C = new Float32Array(P.length), c = new THREE.Color();
+  for (let k = 0; k < P.length / 3; k++) {
+    const x = P[k * 3], y = P[k * 3 + 1], z = P[k * 3 + 2], ny = Math.abs(N.getY(k)), a = Math.atan2(z - CLEAR.z, x - CLEAR.x);
+    const steep = 1 - ny;   // 0 flat .. 1 vertical
+    const snowLine = 15 + fbm(a * 3, y * 0.05) * 9;
+    const keep = G.smooth(0.2, 0.07, steep + (fbm(a * 9, y * 0.12) - 0.5) * 0.08);   // how well snow stays on a slope this steep (the range is broad, so its faces are gentler than they look)
+    if (y < 8) c.copy(forest).lerp(rock, G.smooth(2, 8, y) * 0.6);
+    else c.copy(rockDark).lerp(rock, G.smooth(0.4, 0.12, steep)).lerp(snow, keep * G.smooth(snowLine - 6, snowLine, y));
+    const far = G.smooth(130, 220, Math.hypot(x - CLEAR.x, z - CLEAR.z));
+    c.lerp(haze, 0.12 + far * 0.18);   // a little air between you and them
+    C[k * 3] = c.r; C[k * 3 + 1] = c.g; C[k * 3 + 2] = c.b;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(C, 3));
+  const mat = G.std({ vertexColors: true, roughness: 0.95, flatShading: true, env: 0.3 });
+  // Less of the scene's fog on them (it washed them out to the colour of the sky); the haze above stands in for it.
+  mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>', THREE.ShaderChunk.fog_fragment.replace('gl_FragColor.rgb = mix(', 'fogFactor *= 0.32;\n\tgl_FragColor.rgb = mix(')); };
+  mat.customProgramCacheKey = () => 'mountain-fog';
+  const m = new THREE.Mesh(g, mat);
   m.receiveShadow = false; m.castShadow = false;
   world.add(m);
 };
