@@ -73,6 +73,17 @@ G.INTER = [];      // interactables
 G.simplex = new THREE.SimplexNoise({ random: G.seeded(491) });
 G.fbm = (x, y, o = 4) => { let a = 0, f = 1, w = 0.5; for (let i = 0; i < o; i++) { a += w * G.simplex.noise(x * f, y * f); f *= 2.03; w *= 0.5; } return a; };
 
+G.hash1 = (n) => { const h = Math.sin(n * 127.1 + 311.7) * 43758.5453; return h - Math.floor(h); };
+// Periodic value noise: the lattice wraps every p cells, so a texture painted with it tiles without a seam.
+G.pnoise = (x, y, px, py) => {
+  const hs = (i, j) => { i = ((i % px) + px) % px; j = ((j % py) + py) % py; const h = Math.sin(i * 127.1 + j * 311.7 + px * 17.3 + py * 3.1) * 43758.5453; return h - Math.floor(h); };
+  const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const a = hs(xi, yi), b = hs(xi + 1, yi), c = hs(xi, yi + 1), d = hs(xi + 1, yi + 1);
+  return (a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy) * 2 - 1;
+};
+// fbm over it: x, y are already in lattice units for the first octave, p = [px, py] that octave's period.
+G.pfbm = (x, y, p, o = 3) => { let a = 0, f = 1, w = 0.5; for (let i = 0; i < o; i++) { a += w * G.pnoise(x * f, y * f, Math.round(p[0] * f), Math.round(p[1] * f)); f *= 2; w *= 0.5; } return a; };
+
 /* ---------------- procedural textures ---------------- */
 // Procedural textures are painted per pixel at boot; on Low (phones) paint them at half size, a quarter of the work.
 G.TEX_SCALE = G.qName === 'Low' ? 0.5 : 1;
@@ -110,16 +121,33 @@ G.buildTextures = () => {
     const t = (0.82 + ((col * 13) % 5) / 25 + grain - knot) * gap;
     return [176 * t, 118 * t, 72 * t];
   });
-  // The walls: the same boards in a paler, golden pine (the shared orange-brown made every room dark and muddy),
-  // with a little more difference from one board to the next.
-  TX.wallBoards = canvasTex(512, (u, v) => {
-    const col = Math.floor(u * 6), off = ((col * 37) % 10) / 10;
-    const gap = (u * 6) % 1 < 0.018 ? 0.5 : 1;
-    const knot = Math.max(0, 1 - Math.hypot(((u * 6) % 1 - 0.5) * 3, ((v + off) % 0.5 - 0.25) * 12)) * 0.22;
-    const grain = fbm(u * 30 + col, v * 3, 3) * 0.16 + fbm(u * 120, v * 8, 2) * 0.05;
-    const t = (0.8 + ((col * 13) % 7) / 26 + grain - knot) * gap;
-    return [212 * t, 164 * t, 112 * t];
-  });
+  // The walls: tongue-and-groove pine. Seamless (periodic noise), ten boards to a tile, each its own cut of the
+  // log: a tone of its own, grain that flows in long wavering stripes and bends round the odd knot, a dark groove
+  // and a lit bevel at each joint. (It was a few wide planks under cloudy blotches, and the tiles didn't meet.)
+  const PB = 10;
+  const pine = (u, v) => {
+    const col = Math.floor(u * PB), lu = (u * PB) % 1, hc = G.hash1(col * 7.13 + 1.7);
+    // knots: at most one per board per tile, somewhere along it
+    let kn = 0, bend = 0;
+    if (hc < 0.45) {
+      const kv = G.hash1(col * 3.1 + 9.2), ku = 0.3 + G.hash1(col * 5.7) * 0.4;
+      let dv = v - kv; dv -= Math.round(dv);
+      const dx = (lu - ku) / PB * 2.75, dy = dv * 2.75, r = Math.hypot(dx * 1.0, dy * 0.55);
+      kn = Math.max(0, 1 - r / 0.018); bend = Math.exp(-r * r / 0.0035) * Math.sign(dx || 1) * 0.5;
+    }
+    const w = G.pfbm(u * PB * 0.5 + hc * 13, v * 2, [Math.max(1, PB / 2), 2], 3);
+    const x = lu * (2.2 + hc * 2.6) + w * 1.6 + bend + hc * 7;
+    const ring = x - Math.floor(x), late = Math.pow(1 - ring, 6) * 0.55 + Math.pow(ring, 14) * 0.25;
+    const fine = G.pfbm(u * PB * 8, v * 48, [PB * 8, 48], 2) * 0.05;
+    const tone = 0.86 + (hc - 0.5) * 0.2 + G.pfbm(u * PB, v * 3, [PB, 3], 2) * 0.08;
+    const warm = 0.94 + G.hash1(col * 1.37 + 4.4) * 0.1;
+    let t = tone * (1 - late * 0.28) + fine;
+    const groove = lu < 0.012 ? 0.42 : lu < 0.03 ? 0.78 : lu > 0.985 ? 1.12 : 1;
+    t *= groove * (1 - kn * 0.55);
+    return [206 * t * warm, 158 * t, 108 * t / warm];
+  };
+  TX.wallBoards = canvasTex(512, pine);
+  TX.wallBoardsB = canvasTex(256, (u) => { const lu = (u * PB) % 1; const g = lu < 0.014 ? 30 : lu < 0.035 ? 30 + (lu - 0.014) / 0.021 * 160 : lu > 0.98 ? 150 : 190; return [g, g, g]; }, { srgb: false });
   TX.boardsB = canvasTex(256, (u) => { const g = (u * 6) % 1 < 0.02 ? 40 : 170 + G.fbm(u * 80, 0, 2) * 30; return [g, g, g]; }, { srgb: false });
   // Snow: wind-ripples for the light to model (it was one flat white), tileable (whole-number waves only), and a few
   // crystals in every patch that catch the sun as you move.
@@ -282,7 +310,7 @@ const MAT = (G.MAT = {});
 G.buildMaterials = () => {
   const std = G.std;
   Object.assign(MAT, {
-    boards: std({ map: TX.wallBoards, bumpMap: TX.boardsB, bumpScale: 0.003, color: '#fbeee0', roughness: 0.72, env: 0.24 }),   // golden pine
+    boards: std({ map: TX.wallBoards, bumpMap: TX.wallBoardsB, bumpScale: 0.004, color: '#fbeee0', roughness: 0.72, env: 0.24 }),   // golden pine
     logs: std({ map: TX.logs, bumpMap: TX.logsB, bumpScale: 0.03, roughness: 0.85, env: 0.4 }),
     floor: std({ map: TX.floor, bumpMap: TX.floorB, bumpScale: 0.003, color: '#f0d9c0', roughness: 0.55, env: 0.4 }),
     shingle: std({ map: TX.shingle, roughness: 0.9 }),

@@ -423,7 +423,7 @@ async function attachBody(root, name, spec, bin) {
       if (spec.keepMaterials) u.expr = makeExpressions(model);
       if (spec.keepMaterials) softenFace(model);
       // Hair drawn with soft edges, not cut at a threshold.
-      if (spec.keepMaterials) u.softHair = softHair(model);
+      if (spec.keepMaterials) { u.softHair = softHair(model); u.hairSheen = hairSheen(model); }
       // Eyes that turn: the eyes mesh split into two eyeballs on pivots at their centres, riding the head bone.
       if (spec.keepMaterials) u.realEyes = makeRealEyes(model);
       // The coat's seams (the skirt is split front and back, each half on its own leg): vertices that share a
@@ -625,6 +625,49 @@ function blush(model) {
   }
   C.needsUpdate = true;
   return k;
+}
+/* Hair: a sheen that runs across the strands. Hair doesn't shine in a spot like plastic; each strand is a thin
+ * cylinder, so the highlight is a band across the head, at right angles to the way the hair falls, with a second,
+ * dimmer and coloured band below it from light that went into the strand and came back out (Kajiya-Kay, after
+ * Marschner). The strands are taken to fall down the surface of the head, and the band is broken up by the hair
+ * texture's own light and dark strands so it doesn't read as a stripe of paint. */
+const HAIR_SHEEN = `
+	reflectedLight.directDiffuse += ( 1.0 - clearcoatDHR ) * irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );
+	{
+		vec3 hN = geometry.normal;
+		vec3 hUp = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
+		vec3 hT = hUp - hN * dot( hUp, hN ); float hTl = length( hT );
+		if ( hTl > 0.02 ) {
+			hT /= hTl;
+			vec3 hH = normalize( directLight.direction + geometry.viewDir );
+			float t1 = dot( normalize( hT + hN * 0.1 ), hH ), t2 = dot( normalize( hT - hN * 0.2 ), hH );
+			float s1 = pow( sqrt( max( 0.0, 1.0 - t1 * t1 ) ), 110.0 ), s2 = pow( sqrt( max( 0.0, 1.0 - t2 * t2 ) ), 26.0 );
+			float hl = dot( material.diffuseColor, vec3( 0.3, 0.55, 0.15 ) );
+			float strand = clamp( hl * 9.0, 0.25, 1.0 );
+			float nl = dot( hN, directLight.direction );
+			float vis = smoothstep( -0.15, 0.35, nl ) * min( hTl * 1.6, 1.0 );
+			vec3 sh = ( s1 * 0.16 * vec3( 1.0, 0.96, 0.9 ) + s2 * 0.4 * normalize( material.diffuseColor + 1e-4 ) * strand ) * strand * vis;
+			reflectedLight.directSpecular += sh * directLight.color;
+		}
+	}`;
+function hairSheen(model) {
+  let n = 0;
+  model.traverse((o) => {
+    if (!o.isMesh || !o.material || o.material.userData.hairSheen) return;
+    const m = o.material; if (!/short|fringe|ponytail|hair/i.test(m.name || '') || !m.map) return;
+    const prev = m.onBeforeCompile;
+    m.onBeforeCompile = (sh, r) => {
+      if (prev) prev(sh, r);
+      const chunk = THREE.ShaderChunk.lights_physical_pars_fragment;
+      const line = 'reflectedLight.directDiffuse += ( 1.0 - clearcoatDHR ) * irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );';
+      if (chunk.indexOf(line) < 0) return;
+      sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk.replace(line, HAIR_SHEEN));
+    };
+    const key = m.customProgramCacheKey ? m.customProgramCacheKey.bind(m) : () => '';
+    m.customProgramCacheKey = () => key() + '|hairSheen';
+    m.userData.hairSheen = true; m.needsUpdate = true; n++;
+  });
+  return n;
 }
 function skinLight(model) {
   let n = 0;

@@ -487,8 +487,17 @@ function wallSeg(axis, c, a, b, y0, y1, inner, mats) {
   const len = b - a, h = y1 - y0;
   if (len < 0.01 || h < 0.01) return;
   const geo = axis === 'x' ? new THREE.BoxGeometry(len, h, WT) : new THREE.BoxGeometry(WT, h, len);
-  const uv = geo.attributes.uv;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * len / 2.75, uv.getY(i) * h / 2.75);
+  const uv = geo.attributes.uv, P = geo.attributes.position, N = geo.attributes.normal;
+  // UVs from world position on the two big faces, so the boards above and below a window line up with the ones
+  // beside it (each piece used to start its own boards at 0).
+  const mid = (a + b) / 2, ym = (y0 + y1) / 2;
+  for (let i = 0; i < uv.count; i++) {
+    const n = axis === 'x' ? N.getZ(i) : N.getX(i);
+    if (Math.abs(n) > 0.5) {
+      const along = (axis === 'x' ? P.getX(i) : P.getZ(i)) + mid;
+      uv.setXY(i, (n > 0 === (axis === 'x') ? along : -along) / 2.75, (P.getY(i) + ym) / 2.75);
+    } else uv.setXY(i, uv.getX(i) * len / 2.75, uv.getY(i) * h / 2.75);
+  }
   const m = G.add(new THREE.Mesh(geo, mats || wallMats(inner)), world);
   if (axis === 'x') m.position.set((a + b) / 2, (y0 + y1) / 2, c); else m.position.set(c, (y0 + y1) / 2, (a + b) / 2);
   G.CAMBLOCK.push(m);
