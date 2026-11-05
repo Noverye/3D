@@ -113,7 +113,7 @@ function buildNook() {
   box(1.5, 0.42, 0.62, MAT.wood, sx, 0.21, sz, { coll: true, r: 0.02 });
   box(1.46, 0.1, 0.58, MAT.knitCream, sx, 0.47, sz, { r: 0.04, seg: 3 });
   const cush = [['#b65a3e', -0.5, -0.15], ['#d9cbb4', -0.15, 0.1], ['#6e7f62', 0.42, -0.2]];
-  for (const [c, dx, ry] of cush) { const m = box(0.38, 0.34, 0.12, G.std({ map: TX.knitCream, color: c, roughness: 1 }), sx + dx, 0.66, sz - 0.18, { r: 0.06, seg: 3 }); m.rotation.set(-0.35, ry, 0.08); }
+  for (const [c, dx, ry] of cush) { const m = G.pillow(0.4, 0.36, 0.15, G.std({ map: TX.knitCream, color: c, roughness: 1 }), sx + dx, 0.66, sz - 0.18, { seed: dx * 9 }); m.rotation.set(-0.35, ry, 0.08); }
   const th = box(0.7, 0.04, 0.5, MAT.plaid, sx + 0.3, 0.54, sz + 0.08, { r: 0.02 }); th.rotation.set(0.05, 0.4, -0.15);
   for (let i = 0; i < 3; i++) box(0.2, 0.04, 0.15, G.shared({ color: ['#2d4659', '#8a3a2e', '#d4c6a8'][i], roughness: 0.8 }), sx - 0.62, 0.54 + i * 0.04, sz + 0.1, { r: 0.005 }).rotation.y = i * 0.2;
   cyl(0.04, 0.035, 0.09, G.std({ color: '#efe7da', roughness: 0.3, env: 0.8 }), sx + 0.66, 0.565, sz + 0.12, { seg: 16 });
@@ -190,8 +190,9 @@ function buildRooms() {
   box(1.8, 0.3, 2.15, MAT.darkWood, bx, 0.15, 1.2, { coll: true, r: 0.03 });
   box(1.9, 1.2, 0.09, MAT.darkWood, bx, 0.6, 0.16, { r: 0.03 });
   box(1.7, 0.22, 2.0, MAT.linen, bx, 0.41, 1.22, { r: 0.09, seg: 4 });
-  const p1 = box(0.66, 0.16, 0.42, MAT.linen, bx - 0.44, 0.6, 0.48, { r: 0.08, seg: 4 }); p1.rotation.x = -0.25;
-  const p2 = box(0.66, 0.16, 0.42, MAT.linen, bx + 0.44, 0.6, 0.48, { r: 0.08, seg: 4 }); p2.rotation.x = -0.2;
+  // pillows: plump in the middle, thinning to the seam (they were rounded blocks)
+  const p1 = G.pillow(0.68, 0.2, 0.44, MAT.linen, bx - 0.44, 0.61, 0.48, { seed: 1 }); p1.rotation.set(-0.25, 0.04, 0.02);
+  const p2 = G.pillow(0.68, 0.2, 0.44, MAT.linen, bx + 0.44, 0.61, 0.48, { seed: 4 }); p2.rotation.set(-0.2, -0.05, -0.02);
   const bolster = box(0.5, 0.2, 0.18, MAT.knitCream, bx + 0.25, 0.62, 0.72, { r: 0.08, seg: 4 }); bolster.rotation.set(-0.4, 0.2, 0);
   const dm = MAT.quilt.clone(); dm.map = G.rep(TX.quilt, 1.7, 1.45); dm.bumpMap = G.rep(TX.quiltB, 1.7, 1.45); G.MATS.push(dm);
   const duvet = box(1.76, 0.12, 1.5, dm, bx, 0.56, 1.5, { r: 0.06, seg: 4 });
@@ -285,8 +286,8 @@ function buildRooms() {
   box(2.2, 0.58, 0.24, MAT.sofa, sx, 0.66, sz + 0.38, { r: 0.09, seg: 4 });
   for (const s of [-1, 1]) box(0.22, 0.64, 0.92, MAT.sofa, sx + s * 1.1, 0.32, sz, { r: 0.09, seg: 4 });
   for (const s of [-1, 1]) box(0.96, 0.15, 0.64, MAT.sofa, sx + s * 0.5, 0.51, sz - 0.08, { r: 0.07, seg: 4 });
-  const pil1 = box(0.42, 0.4, 0.13, MAT.knitCream, sx - 0.72, 0.77, sz + 0.2, { r: 0.06, seg: 3 }); pil1.rotation.set(-0.3, 0.3, 0.12);
-  const pil2 = box(0.4, 0.38, 0.13, MAT.plaid, sx + 0.75, 0.76, sz + 0.2, { r: 0.06, seg: 3 }); pil2.rotation.set(-0.3, -0.25, -0.1);
+  const pil1 = G.pillow(0.44, 0.42, 0.16, MAT.knitCream, sx - 0.72, 0.77, sz + 0.2, { seed: 2 }); pil1.rotation.set(-0.3, 0.3, 0.12);
+  const pil2 = G.pillow(0.42, 0.4, 0.16, MAT.plaid, sx + 0.75, 0.76, sz + 0.2, { seed: 3 }); pil2.rotation.set(-0.3, -0.25, -0.1);
   const drape = box(0.7, 0.04, 1.0, MAT.plaid, sx + 0.95, 0.68, sz + 0.05, { r: 0.02 }); drape.rotation.set(0.2, 0, -0.5);
   G.SOFA = { x: sx, z: sz, seatY: 0.6 };
   G.INTER.push({ id: 'sofa', pos: [sx, 0.5, sz - 0.6], r: 1.1, label: () => (G.STATE.cuddled ? 'Sofa' : 'Curl up together'), act: () => G.Story.cuddle() });

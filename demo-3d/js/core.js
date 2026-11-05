@@ -409,6 +409,34 @@ G.box = (w, h, d, mat, x, y, z, o = {}) => {
   if (o.cam) G.CAMBLOCK.push(m);
   return m;
 };
+/* A pillow or cushion: full in the middle and thinning to a seam all round its edge, with soft rounded-square
+ * corners and a few creases (a rounded box read as a block of foam). w, h, d as for G.box; the smallest is its
+ * thickness. */
+G.pillowGeo = (w, h, d, seed = 1) => {
+  const dims = [w, h, d], thin = dims.indexOf(Math.min(w, h, d));
+  const A = thin === 0 ? [h, d] : thin === 1 ? [w, d] : [w, h], T = dims[thin];
+  const g = new THREE.SphereGeometry(1, 40, 24), P = g.attributes.position, UV = g.attributes.uv, n = 5;
+  for (let i = 0; i < P.count; i++) {
+    const x = P.getX(i), y = P.getY(i), z = P.getZ(i), r = Math.min(1, Math.hypot(x, z)), a = Math.atan2(z, x);
+    const ca = Math.cos(a), sa = Math.sin(a), sq = Math.pow(Math.pow(Math.abs(ca), n) + Math.pow(Math.abs(sa), n), -1 / n);   // radius of the rounded square
+    const s = Math.pow(r, 0.75);
+    const px = ca * sq * s, pz = sa * sq * s;
+    const wr = 1 + 0.06 * Math.sin(px * 7 + seed) * Math.sin(pz * 5 - seed * 2) * s;   // creases, more toward the edges
+    const yy = Math.sign(y) * Math.sqrt(Math.max(0, 1 - Math.pow(s, 3))) * wr;
+    P.setXYZ(i, px * A[0] / 2, yy * T / 2, pz * A[1] / 2);
+    // the cloth's pattern laid flat across the face, about 0.4 m to a tile (the sphere's own UVs swirled it into a
+    // pinwheel at the middle)
+    UV.setXY(i, (px * A[0] / 2) / 0.4 + 0.5, (pz * A[1] / 2) / 0.4 * (y < 0 ? -1 : 1) + 0.5);
+  }
+  if (thin === 0) g.rotateZ(Math.PI / 2); else if (thin === 2) g.rotateX(Math.PI / 2);
+  g.computeVertexNormals();
+  return g;
+};
+G.pillow = (w, h, d, mat, x, y, z, o = {}) => {
+  const m = G.add(new THREE.Mesh(G.pillowGeo(w, h, d, o.seed || x * 3.1 + z), mat), o.parent, o.cast !== false, true);
+  m.position.set(x, y, z);
+  return m;
+};
 G.cyl = (rt, rb, h, mat, x, y, z, o = {}) => {
   const m = G.add(new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, o.seg || 20, 1, !!o.open), mat), o.parent, o.cast !== false);
   m.position.set(x, y, z);

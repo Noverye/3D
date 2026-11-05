@@ -578,6 +578,9 @@ function softHair(model) {
     const mn = (o.material && o.material.name) || '';
     if (!/short|fringe|ponytail|hair/i.test(mn) || !o.material.map) return;
     const m = o.material; m.alphaTest = 0.5; m.transparent = false; m.depthWrite = true; m.needsUpdate = true;
+    // His fringe's strand cards are painted a much lighter, orange brown than the rest of his hair, so the few tips
+    // that show below it read as orange scratches on his forehead: bring them to the same dark brown.
+    if (/^fringe_player/i.test(mn)) m.color.setRGB(0.42, 0.34, 0.31);
     const edge = o.clone(); edge.bind(o.skeleton, o.bindMatrix);
     const em = m.clone(); em.map = softAlpha(m.map); em.alphaTest = 0.03; em.transparent = true; em.depthWrite = false; em.needsUpdate = true;
     edge.material = em; edge.renderOrder = 3; edge.userData.softHair = true; edge.castShadow = false;
@@ -594,15 +597,15 @@ function softHair(model) {
     body.material.vertexColors = true; body.material.needsUpdate = true;
     const H = []; let hy = 1e9; for (const h of hair) { const HP = h.geometry.attributes.position; for (let i = 0; i < HP.count; i++) { H.push(HP.getX(i), HP.getY(i), HP.getZ(i)); hy = Math.min(hy, HP.getY(i)); } }
     // a coarse grid over the hair's vertices, so each skin vertex only looks at its neighbours
-    const cs = 0.02, grid = new Map(), key = (x, y, z) => Math.floor(x / cs) + ',' + Math.floor(y / cs) + ',' + Math.floor(z / cs);
+    const cs = 0.04, grid = new Map(), key = (x, y, z) => Math.floor(x / cs) + ',' + Math.floor(y / cs) + ',' + Math.floor(z / cs);
     for (let i = 0; i < H.length; i += 3) { const k = key(H[i], H[i + 1], H[i + 2]); (grid.get(k) || grid.set(k, []).get(k)).push(i); }
-    const tint = [0.6, 0.5, 0.44], R = 0.026;
+    const tint = [0.55, 0.44, 0.38], R = 0.036;   // a wider, deeper fade: the hair seemed to sit on the forehead like a cap
     for (let i = 0; i < n; i++) {
       const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (y < hy - 0.01) continue;
       let d2 = 1e9; const gx = Math.floor(x / cs), gy = Math.floor(y / cs), gz = Math.floor(z / cs);
       for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) { const L = grid.get((gx + a) + ',' + (gy + b) + ',' + (gz + c)); if (L) for (const j of L) { const dx = H[j] - x, dy = H[j + 1] - y, dz = H[j + 2] - z, q = dx * dx + dy * dy + dz * dz; if (q < d2) d2 = q; } }
       const d = Math.sqrt(d2); if (d > R) continue;
-      const w = 0.6 * (1 - d / R) * (1 - d / R);
+      const w = 0.7 * Math.pow(1 - d / R, 1.6);
       C.setXYZ(i, C.getX(i) * (1 - w + w * tint[0]), C.getY(i) * (1 - w + w * tint[1]), C.getZ(i) * (1 - w + w * tint[2]));
     }
     C.needsUpdate = true;
@@ -674,21 +677,59 @@ const HAIR_SHEEN = `
 			reflectedLight.directSpecular += sh * directLight.color;
 		}
 	}`;
+/* For a solid hair mesh, how far each point is from the mesh's open edge, as a 0..1 fade (1 from about 8 mm in).
+ * Cut-out strand cards are all edge, so a mesh whose edge is more than a fifth of its points gets none. Cached on
+ * the geometry (the soft outer copy shares it). */
+function hairEdge(g) {
+  if (g.userData.hairEdge !== undefined) return g.userData.hairEdge;
+  g.userData.hairEdge = null;
+  const P = g.attributes.position; if (!g.index || !P) return null;
+  g.computeBoundingBox(); const bb = g.boundingBox, H = bb.max.y - bb.min.y; if (!(H > 0)) return null;
+  const q = H * 1e-4, wid = new Int32Array(P.count), keys = new Map();
+  for (let i = 0; i < P.count; i++) { const k = Math.round(P.getX(i) / q) + ',' + Math.round(P.getY(i) / q) + ',' + Math.round(P.getZ(i) / q); if (!keys.has(k)) keys.set(k, keys.size); wid[i] = keys.get(k); }
+  const E = new Map(), ix = g.index.array;
+  for (let t = 0; t < ix.length; t += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const x = wid[ix[t + a]], y = wid[ix[t + b]], k = x < y ? x * 1e6 + y : y * 1e6 + x; E.set(k, (E.get(k) || 0) + 1); }
+  const bset = new Set(); E.forEach((c, k) => { if (c === 1) { bset.add(Math.floor(k / 1e6)); bset.add(k % 1e6); } });
+  if (!bset.size || bset.size > keys.size * 0.2) return null;
+  const bpts = []; const seen = new Set();
+  for (let i = 0; i < P.count; i++) if (bset.has(wid[i]) && !seen.has(wid[i])) { seen.add(wid[i]); bpts.push(P.getX(i), P.getY(i), P.getZ(i)); }
+  const R = H * 0.03, cs = R, grid = new Map(), gk = (x, y, z) => Math.floor(x / cs) + ',' + Math.floor(y / cs) + ',' + Math.floor(z / cs);
+  for (let j = 0; j < bpts.length; j += 3) { const k = gk(bpts[j], bpts[j + 1], bpts[j + 2]); (grid.get(k) || grid.set(k, []).get(k)).push(j); }
+  const out = new Float32Array(P.count);
+  for (let i = 0; i < P.count; i++) {
+    const x = P.getX(i), y = P.getY(i), z = P.getZ(i), gx = Math.floor(x / cs), gy = Math.floor(y / cs), gz = Math.floor(z / cs);
+    let d2 = R * R;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) { const L = grid.get((gx + a) + ',' + (gy + b) + ',' + (gz + c)); if (L) for (const j of L) { const dx = bpts[j] - x, dy = bpts[j + 1] - y, dz = bpts[j + 2] - z, dd = dx * dx + dy * dy + dz * dz; if (dd < d2) d2 = dd; } }
+    out[i] = Math.min(1, Math.sqrt(d2) / R);
+  }
+  g.setAttribute('hairEdge', new THREE.BufferAttribute(out, 1));
+  g.userData.hairEdge = bset.size;
+  return bset.size;
+}
 function hairSheen(model) {
   let n = 0;
   model.traverse((o) => {
     if (!o.isMesh || !o.material || o.material.userData.hairSheen) return;
     const m = o.material; if (!/short|fringe|ponytail|hair/i.test(m.name || '') || !m.map) return;
     const prev = m.onBeforeCompile;
+    // A solid hair mesh (his short cut) fades out over its last centimetre or so before its edge (hairEdge, 0 at the
+    // edge): the blended outer pass gradually, the solid pass cut back to where that fade is nearly opaque, so the
+    // hairline is a soft transition rather than the polygon edge of a cap.
+    const edge = !!hairEdge(o.geometry), soft = !!o.userData.softHair && m.transparent;
     m.onBeforeCompile = (sh, r) => {
       if (prev) prev(sh, r);
+      if (edge) {
+        sh.vertexShader = 'attribute float hairEdge; varying float vHairEdge;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvHairEdge = hairEdge;');
+        sh.fragmentShader = 'varying float vHairEdge;\n' + sh.fragmentShader.replace('#include <alphatest_fragment>',
+          (soft ? '\tdiffuseColor.a *= smoothstep( 0.0, 1.0, vHairEdge );\n' : '\tdiffuseColor.a *= smoothstep( 0.5, 0.7, vHairEdge );\n') + '#include <alphatest_fragment>');
+      }
       const chunk = THREE.ShaderChunk.lights_physical_pars_fragment;
       const line = 'reflectedLight.directDiffuse += ( 1.0 - clearcoatDHR ) * irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );';
       if (chunk.indexOf(line) < 0) return;
       sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk.replace(line, HAIR_SHEEN));
     };
     const key = m.customProgramCacheKey ? m.customProgramCacheKey.bind(m) : () => '';
-    m.customProgramCacheKey = () => key() + '|hairSheen';
+    m.customProgramCacheKey = () => key() + '|hairSheen' + (edge ? (soft ? '|edgeS' : '|edgeO') : '');
     m.userData.hairSheen = true; m.needsUpdate = true; n++;
   });
   return n;
