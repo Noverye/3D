@@ -336,7 +336,7 @@ function pineGeometry(seed, lod = 0) {
       const snowB = snowy && r() < 0.72, s0 = 0.3 + r() * 0.25;
       // snow in clumps on the outer, upward faces of some branches, with green between (whole slabs of it, on every
       // branch, made the trees look folded from white card)
-      parts.push({ geo: br, mat: M, color: (v, n) => { const out = Math.hypot(v.x, v.z) / Math.max(1e-3, rad); return snowB && n.y > 0.52 && out > s0 ? snow : tone.clone().multiplyScalar(0.7 + Math.min(1, out) * 0.45); } });
+      parts.push({ geo: br, mat: M, uv: [4, 1], color: (v, n) => { const out = Math.hypot(v.x, v.z) / Math.max(1e-3, rad); return snowB && n.y > 0.52 && out > s0 ? snow : tone.clone().multiplyScalar(0.7 + Math.min(1, out) * 0.45); } });
     }
   }
   const g = G.merge(parts);
@@ -356,10 +356,11 @@ function pineGeometry(seed, lod = 0) {
 }
 G.buildForest = () => {
   const r = G.seeded(31);
-  const mat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5 });
+  const mat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5, map: G.TX.needles, alphaTest: 0.5 });
+  const farMat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5 });
   // Gentle sway in the wind: the crown moves more than the trunk, each tree on its own phase.
   G.SWAY = { uTime: { value: 0 }, uGust: { value: 0 } };
-  mat.onBeforeCompile = (sh) => {
+  const sway = (mat, tag) => { mat.onBeforeCompile = (sh) => {
     sh.uniforms.uSwayT = G.SWAY.uTime; sh.uniforms.uGust = G.SWAY.uGust;
     sh.vertexShader = 'uniform float uSwayT; uniform float uGust;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
       #ifdef USE_INSTANCING
@@ -369,7 +370,8 @@ G.buildForest = () => {
         transformed.z += cos(uSwayT * 0.83 + ph * 1.7) * bend * 0.6;
       #endif`);
   };
-  mat.customProgramCacheKey = () => 'pine-sway';
+  mat.customProgramCacheKey = () => 'pine-sway' + tag; };
+  sway(mat, '-near'); sway(farMat, '-far');
   // Trees within NEAR_R of the clearing get full detail and cast shadows; the rest are low-poly and shadowless.
   const NEAR_R = 34;
   const variants = [pineGeometry(3), pineGeometry(17), pineGeometry(42)];
@@ -395,16 +397,16 @@ G.buildForest = () => {
   }
   // A few big framing pines close to the cabin, as in the reference shots.
   for (const [x, z, s] of [[-3.6, 9, 15], [19.5, 9, 14], [-4.5, -2, 17], [20, -1, 16], [-0.5, 23, 12], [13.5, 24, 13], [-3, 16, 11]]) lists[0].push(G.mtx(x, terrainH(x, z) - 0.15, z, s, s, s, r() * 6));
-  const place = (geos, ls, shadows) => geos.forEach((g, i) => {
+  const place = (geos, ls, shadows, M) => geos.forEach((g, i) => {
     if (!ls[i].length) return;
-    const im = new THREE.InstancedMesh(g, mat, ls[i].length);
+    const im = new THREE.InstancedMesh(g, M, ls[i].length);
     ls[i].forEach((m, k) => im.setMatrixAt(k, m));
     im.castShadow = shadows; im.receiveShadow = true;
     G.fitInstanceBounds(im);
     world.add(im);
   });
-  place(variants, lists, true);
-  place(farVariants, farLists, false);
+  place(variants, lists, true, mat);
+  place(farVariants, farLists, false, farMat);
   // Snow-covered shrubs and drifts.
   // Indexed sphere so vertex normals are shared and the drifts read as soft, rounded snow
   // (an icosahedron is non-indexed, which gave every face its own normal: faceted "rocks").

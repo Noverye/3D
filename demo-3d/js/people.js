@@ -547,6 +547,30 @@ function tuckLegs(model) {
  * with scissored edges. The textures do have soft alpha at the strand tips, so draw it in two passes: the solid part
  * as before (writing depth, so the hair still sorts against itself), then a blended pass for the soft edges the
  * threshold threw away, drawn after and without writing depth. */
+/* The hair textures' alpha is nearly all fully clear or fully solid, so even blended, every lock ended in a hard cut
+ * line (sharpest across the forehead). For the soft outer pass, a copy whose alpha is feathered outward: the texture
+ * blurred, with the sharp original laid back over it, so the strands inside keep their detail and only their ends
+ * fade out into the skin. Half size; it's only ever seen as a soft edge. */
+function softAlpha(tex) {
+  const cache = softAlpha.cache || (softAlpha.cache = new Map());
+  if (!tex || !tex.image) return tex;
+  if (cache.has(tex.uuid)) return cache.get(tex.uuid);
+  let out = tex;
+  try {
+    const img = tex.image, S = Math.min(1024, img.width || 0);
+    if (S >= 64) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = S;
+      const c = cv.getContext('2d');
+      c.filter = 'blur(' + (S / 300).toFixed(1) + 'px)'; c.drawImage(img, 0, 0, S, S);
+      c.filter = 'blur(' + (S / 700).toFixed(1) + 'px)'; c.drawImage(img, 0, 0, S, S);
+      c.filter = 'none'; c.drawImage(img, 0, 0, S, S);
+      out = new THREE.CanvasTexture(cv);
+      out.flipY = tex.flipY; out.wrapS = tex.wrapS; out.wrapT = tex.wrapT; out.encoding = tex.encoding; out.anisotropy = tex.anisotropy;
+    }
+  } catch (e) { out = tex; }
+  cache.set(tex.uuid, out);
+  return out;
+}
 function softHair(model) {
   const out = [];
   model.traverse((o) => {
@@ -555,7 +579,7 @@ function softHair(model) {
     if (!/short|fringe|ponytail|hair/i.test(mn) || !o.material.map) return;
     const m = o.material; m.alphaTest = 0.5; m.transparent = false; m.depthWrite = true; m.needsUpdate = true;
     const edge = o.clone(); edge.bind(o.skeleton, o.bindMatrix);
-    const em = m.clone(); em.alphaTest = 0.04; em.transparent = true; em.depthWrite = false; em.needsUpdate = true;
+    const em = m.clone(); em.map = softAlpha(m.map); em.alphaTest = 0.03; em.transparent = true; em.depthWrite = false; em.needsUpdate = true;
     edge.material = em; edge.renderOrder = 3; edge.userData.softHair = true; edge.castShadow = false;
     if (o.morphTargetInfluences) edge.morphTargetInfluences = o.morphTargetInfluences;
     o.parent.add(edge); o.userData.softHair = true; out.push(edge);
@@ -572,7 +596,7 @@ function softHair(model) {
     // a coarse grid over the hair's vertices, so each skin vertex only looks at its neighbours
     const cs = 0.02, grid = new Map(), key = (x, y, z) => Math.floor(x / cs) + ',' + Math.floor(y / cs) + ',' + Math.floor(z / cs);
     for (let i = 0; i < H.length; i += 3) { const k = key(H[i], H[i + 1], H[i + 2]); (grid.get(k) || grid.set(k, []).get(k)).push(i); }
-    const tint = [0.6, 0.5, 0.44], R = 0.02;
+    const tint = [0.6, 0.5, 0.44], R = 0.026;
     for (let i = 0; i < n; i++) {
       const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (y < hy - 0.01) continue;
       let d2 = 1e9; const gx = Math.floor(x / cs), gy = Math.floor(y / cs), gz = Math.floor(z / cs);

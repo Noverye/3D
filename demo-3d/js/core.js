@@ -248,6 +248,21 @@ G.buildTextures = () => {
     const k = 0.88 + G.fbm(u * 60, v * 60, 2) * 0.14;
     return [c[0] * k, c[1] * k, c[2] * k];
   });
+  // Spruce branch: each face of a branch slab is one tile across (u) and its length (v). The middle is solid; toward
+  // both side edges and the tip it breaks into needles raked toward the tip, so a branch's outline is a fringe of
+  // needles and not a cut edge of card. The colour is a fine streak of needles in light and dark.
+  TX.needles = canvasTex(0, (u, v, x, y) => {
+    const e = Math.min(u, 1 - u) * 2;   // 0 at the side edges, 1 down the middle
+    const tip = 1 - v;                  // 0 at the far end of the branch
+    const cell = Math.floor(v * 46 + e * 7), h = G.hash1(cell * 1.91 + (u < 0.5 ? 0 : 77)), saw = (v * 46 + e * 7) % 1;
+    const reach = 0.32 + h * 0.28;     // how far in from the edge this tuft's gaps run
+    let a = e > reach * (1 - saw * 0.85) ? 255 : 0;
+    if (tip < 0.12 && e < 0.9 * (1 - (tip / 0.12)) + (saw * 0.3)) a = 0;
+    if (e > 0.75) a = 255;
+    const nd = Math.max(0, 1 - e * 1.2);   // needle streaks toward the edges; the middle (where snow lies) stays even
+    const st = 0.9 + (Math.sin((u * 9 + v * 60) * Math.PI) * 0.07 + (G.hash1(x * 3.7 + y * 11.3) - 0.5) * 0.16) * nd - nd * 0.08;
+    const g = Math.max(0, Math.min(255, 255 * st)); return [g, g, g, a];
+  }, { w: 64, h: 256 });
   TX.bark = canvasTex(128, (u, v) => { const t = 0.6 + G.fbm(u * 6, v * 30, 3) * 0.4; return [90 * t, 64 * t, 48 * t]; });
   TX.snowN = canvasTex(256, (u, v) => { const n = G.fbm(u * 4, v * 4, 3) * 0.6 + G.fbm(u * 24, v * 24, 2) * 0.4; const g = 128 + n * 70; return [g, g, g]; }, { srgb: false });
   // Hair strands (alpha-tested cards).
@@ -366,16 +381,18 @@ G.sph = (r, mat, x, y, z, s = [1, 1, 1], parent, seg = 20) => {
 };
 /* Merge several geometries (each with a transform matrix and a flat colour) into one vertex-coloured geometry. */
 G.merge = (parts) => {
-  const P = [], N = [], C = [];
+  const P = [], N = [], C = [], U = [], anyUV = parts.some((p) => p.uv);
   const v = new THREE.Vector3(), n = new THREE.Vector3(), nm = new THREE.Matrix3();
   for (const p of parts) {
     const g = p.geo.index ? p.geo.toNonIndexed() : p.geo;
-    const pos = g.attributes.position, nor = g.attributes.normal;
+    const pos = g.attributes.position, nor = g.attributes.normal, uv = g.attributes.uv;
     nm.getNormalMatrix(p.mat);
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i).applyMatrix4(p.mat);
       n.fromBufferAttribute(nor, i).applyMatrix3(nm).normalize();
       P.push(v.x, v.y, v.z); N.push(n.x, n.y, n.z);
+      // parts can carry their UVs (p.uv: true, or a [su, sv] scale); the rest sit on one solid texel
+      if (anyUV) { if (p.uv && uv) { const k = p.uv === true ? [1, 1] : p.uv; U.push(uv.getX(i) * k[0], uv.getY(i) * k[1]); } else U.push(0.5, 0.5); }
       const c = typeof p.color === 'function' ? p.color(v, n, i) : p.color;
       C.push(c.r, c.g, c.b);
     }
@@ -384,6 +401,7 @@ G.merge = (parts) => {
   out.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
   out.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
   out.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  if (anyUV) out.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
   return out;
 };
 G.mtx = (x, y, z, sx = 1, sy = 1, sz = 1, ry = 0, rx = 0, rz = 0) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz));
