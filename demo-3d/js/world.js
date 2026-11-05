@@ -313,7 +313,7 @@ function pineGeometry(seed, lod = 0) {
     const ph = r() * 10;
     if (lod) {   // two rings per tier: green skirt, snow-dusted tip
       const tipC = base.clone().lerp(snow, snowy ? 0.55 : 0.15);
-      parts.push({ geo: cone, mat: G.mtx(0, y, 0, 1, 1, 1, r() * 6), color: (v) => (v.y > y + h * 0.2 ? tipC : base) });
+      parts.push({ geo: cone, uv: [radial, 1], mat: G.mtx(0, y, 0, 1, 1, 1, r() * 6), color: (v) => (v.y > y + h * 0.2 ? tipC : base) });
       continue;
     }
     // Near trees: a dark inner cone for body, then a ring of separate drooping branches round it, each its own
@@ -357,7 +357,7 @@ function pineGeometry(seed, lod = 0) {
 G.buildForest = () => {
   const r = G.seeded(31);
   const mat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5, map: G.TX.needles, alphaTest: 0.5 });
-  const farMat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5 });
+  const farMat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5, map: G.TX.skirt, alphaTest: 0.5 });
   // Gentle sway in the wind: the crown moves more than the trunk, each tree on its own phase.
   G.SWAY = { uTime: { value: 0 }, uGust: { value: 0 } };
   const sway = (mat, tag) => { mat.onBeforeCompile = (sh) => {

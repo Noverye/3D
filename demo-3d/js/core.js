@@ -263,6 +263,17 @@ G.buildTextures = () => {
     const st = 0.9 + (Math.sin((u * 9 + v * 60) * Math.PI) * 0.07 + (G.hash1(x * 3.7 + y * 11.3) - 0.5) * 0.16) * nd - nd * 0.08;
     const g = Math.max(0, Math.min(255, 255 * st)); return [g, g, g, a];
   }, { w: 64, h: 256 });
+  // Distant spruces: each tier's lower edge hangs in ragged tufts instead of a clean cone rim (u: one face of the
+  // cone, three tufts to it; v: 0 at the rim, 1 at the tip).
+  TX.skirt = canvasTex(0, (u, v, x) => {
+    const f = (u * 3) % 1, cell = Math.floor(u * 3), h = G.hash1(cell * 2.3 + 0.7);
+    const tooth = 1 - Math.abs(2 * f - 1);
+    const cut = 0.34 * (1 - tooth) * (0.6 + h * 0.8) + (G.hash1(x * 5.1) - 0.5) * 0.05;
+    const a = v > cut ? 255 : 0;
+    const g = 255 * (0.8 + Math.min(1, v * 2.5) * 0.2);
+    return [g, g, g, a];
+  }, { w: 64, h: 64 });
+  TX.skirt.wrapT = THREE.ClampToEdgeWrapping;
   TX.bark = canvasTex(128, (u, v) => { const t = 0.6 + G.fbm(u * 6, v * 30, 3) * 0.4; return [90 * t, 64 * t, 48 * t]; });
   TX.snowN = canvasTex(256, (u, v) => { const n = G.fbm(u * 4, v * 4, 3) * 0.6 + G.fbm(u * 24, v * 24, 2) * 0.4; const g = 128 + n * 70; return [g, g, g]; }, { srgb: false });
   // Hair strands (alpha-tested cards).
