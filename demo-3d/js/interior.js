@@ -148,7 +148,19 @@ function buildHomely() {
   // the west (bedroom) window: on the side wall
   for (const zz of [-1.02, 0.72]) { const c = curtain(0.2, zz, 0.36, 2.1, cM, 1, true, false); c.position.x = 0.2; }
   // a café curtain at the sink window
-  { const g = new THREE.PlaneGeometry(1.2, 0.42, 12, 3); const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, Math.sin(p.getX(i) * 30) * 0.015); g.computeVertexNormals(); const m = new THREE.Mesh(g, G.std({ color: '#efe2c8', roughness: 1, side: THREE.DoubleSide })); m.position.set(13.05, 1.4, z0 + 0.2); W.add(m); }
+  // (red gingham, gathered on a little rod: it was a plain cream sheet, which the light behind it turned into a blank
+  // white panel across the window)
+  { const ging = G.canvasTex(128, (u, v, x, y) => {
+      const a = (u * 8) % 1 < 0.5, b = (v * 8) % 1 < 0.5, n = 1 + ((x * 7 + y * 13) % 5 - 2) * 0.01;
+      const k = a && b ? 0 : a || b ? 1 : 2, c = [[150, 58, 48], [214, 158, 140], [240, 230, 214]][k];
+      return [c[0] * n, c[1] * n, c[2] * n];
+    });
+    ging.repeat.set(5, 1.8);
+    const g = new THREE.PlaneGeometry(1.2, 0.42, 24, 4); const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i); p.setZ(i, Math.sin(x * 34) * 0.016 * (0.6 + (0.21 - y) * 1.6)); }   // gathered at the rod, fuller toward the hem
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, G.std({ map: ging, bumpMap: TX.fabricB, bumpScale: 0.001, roughness: 1, side: THREE.DoubleSide, env: 0.2 })); m.position.set(13.05, 1.4, z0 + 0.2); W.add(m);
+    const r = cyl(0.007, 0.007, 1.3, MAT.metal, 13.05, 1.615, z0 + 0.2, { seg: 6 }); r.rotation.z = Math.PI / 2; }
   // rugs: a long runner by the bed, a sheepskin by the hearth, a mat inside the door
   const rug = (w, d, x, z, mat, ry = 0) => { const m = G.add(new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat), W, false, true); m.rotation.set(-Math.PI / 2, 0, ry); m.position.set(x, 0.007, z); return m; };
   rug(0.7, 2.0, 0.95, -0.8, MAT.rug);
@@ -166,13 +178,8 @@ function buildHomely() {
   for (let i = 0; i < 4; i++) box(0.22, 0.045, 0.16, G.shared({ color: ['#5e4870', '#9a5a36', '#2d4659', '#d4c6a8'][i], roughness: 0.8 }), 0.75, 0.025 + i * 0.045, -2.0, { r: 0.004 }).rotation.y = i * 0.25;
   // a throw over the sofa back and a knitted pouffe
   const pf = cyl(0.3, 0.3, 0.36, G.std({ map: TX.knitCream, color: '#c0a07a', roughness: 1 }), 9.55, 0.18, 2.0, { seg: 20 }); G.COLL.push({ x0: 9.25, z0: 1.7, x1: 9.85, z1: 2.3 });
-  // a pendant lamp over the kitchen table, warm and low
-  const pend = new THREE.Group(); pend.position.set(13.0, 1.75, 2.95); W.add(pend);
-  cyl(0.004, 0.004, 0.95, MAT.darkMetal, 0, 0.48, 0, { parent: pend, seg: 4 });
-  const shade = cyl(0.04, 0.13, 0.13, G.std({ color: "#b8603a", roughness: 0.6, emissive: "#ff9a50", emissiveIntensity: 0.25, side: THREE.DoubleSide }), 0, 0, 0, { parent: pend, open: true, cast: false });
-  const bulb = sph(0.035, MAT.bulb, 0, -0.05, 0, [1, 1, 1], pend);
-  const pl = new THREE.PointLight('#ffb062', 0, 5, 2); pl.position.set(0, -0.1, 0); pend.add(pl);
-  LAMPS.push({ g: pend, light: pl, shade, on: true, power: 4, flick: 1 });
+  // (the kitchen's pendant is built with the kitchen; a second, copper one hung here too, just under it, so the table
+  // had two lamps, one inside the other)
   // fairy lights along the living-room beam, over the sofa
   for (let i = 0; i <= 36; i++) { const t = i / 36, b = new THREE.Mesh(new THREE.SphereGeometry(0.013, 6, 4), MAT.bulb); b.position.set(5.3 + t * 5.4, 2.5 - Math.sin(t * Math.PI * 4) * 0.07, 3.95); W.add(b); }
 }
@@ -499,7 +506,7 @@ function buildKitchen() {
   const shadeMat = G.std({ color: '#2c3a34', roughness: 0.5, metalness: 0.3, emissive: '#ffb060', emissiveIntensity: 0, side: THREE.DoubleSide });
   const shade = cyl(0.05, 0.22, 0.18, shadeMat, 0, -0.78, 0, { parent: pend, open: true, cast: false });
   const pl = new THREE.PointLight('#ffb062', 0, 6, 2); pl.position.set(0, -0.85, 0); pend.add(pl);
-  LAMPS.push({ g: pend, light: pl, shade, on: true, power: 6, flick: 1 }); K.pendant = LAMPS[LAMPS.length - 1];
+  LAMPS.push({ g: pend, light: pl, shade, on: true, power: 7.5, flick: 1 }); K.pendant = LAMPS[LAMPS.length - 1];
   const runner = G.add(new THREE.Mesh(new THREE.PlaneGeometry(2.3, 0.7), MAT.rug), W, false, true); runner.rotation.x = -Math.PI / 2; runner.position.set(12.45, 0.006, 1.2);
   for (let i = 0; i < 3; i++) { const x = 12.5 + i * 0.32; cyl(0.06, 0.05, 0.1, MAT.pot, x, 0.9, 4.47, { seg: 14 }); for (let k = 0; k < 6; k++) { const lf = sph(0.03, MAT.leaf, x + Math.sin(k * 2.1) * 0.03, 0.97 + (k % 3) * 0.025, 4.47 + Math.cos(k * 2.1) * 0.02, [0.5, 1.2, 0.3], W, 8); lf.rotation.z = Math.sin(k) * 0.6; } }
 }
