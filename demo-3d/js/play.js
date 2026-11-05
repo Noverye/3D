@@ -467,6 +467,50 @@ G.LATE.add(() => {
   const pm = G.KIDS ? G.KIDS.adults.player : PLAYER.m, qm = G.KIDS ? G.KIDS.adults.partner : PARTNER.m;
   bookInHands(pm, myBook); bookInHands(qm, G.PARTNER_BOOK); cupInHands(pm, MUGS.player); cupInHands(qm, MUGS.partner);
 });
+/* Contact shadows. Indoors the rooms are lit by lamps and the fire, which cast no shadows of the two of them, so they
+ * seemed to hover a little over the boards; outdoors the sun's shadow falls off to one side. A soft dark pool on the
+ * ground right under each of them (the light the body blocks from the floor nearest it) sets them down on it. */
+const CONTACT = (() => {
+  // a grey-scale falloff used as the alpha map (white in the middle, black at the rim)
+  const tex = G.canvasTex(0, null, { w: 64, h: 64, srgb: false, draw: (c, w, h) => {
+    c.fillStyle = '#000'; c.fillRect(0, 0, w, h);
+    const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, '#fff'); g.addColorStop(0.3, '#c8c8c8'); g.addColorStop(0.65, '#5a5a5a'); g.addColorStop(1, '#000');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  } });
+  const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
+  return [PLAYER, PARTNER].map((c) => {
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap: tex, transparent: true, depthWrite: false, opacity: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    m.renderOrder = 1; m.frustumCulled = false; m.visible = false; m.userData.noBatch = true; G.scene.add(m);
+    return { c, m, k: 0 };
+  });
+})();
+const _cv = new THREE.Vector3(), _cw = new THREE.Vector3(); G._CONTACT = CONTACT;
+G.LATE.add((dt) => {
+  for (const S of CONTACT) {
+    const c = S.c, mdl = c.m;
+    const on = !!(mdl && mdl.visible && mdl.parent && !c.lie && (c.sit || 0) < 0.3 && !c.hidden);
+    S.k = on ? Math.min(1, S.k + (dt || 0.016) * 4) : 0;
+    S.m.visible = S.k > 0.01;
+    if (!S.m.visible) continue;
+    let B = mdl.userData._contactB;
+    if (B === undefined || (!B.toes.length && (B.retry = (B.retry || 0) + 1) % 30 === 0)) {   // the real body arrives after the first frames
+      B = { hips: null, toes: [] };
+      mdl.traverse((o) => { if (!o.isBone) return; if (!B.hips && /Hips$/.test(o.name)) B.hips = o; if (/ToeBase$/.test(o.name)) B.toes.push(o); });
+      mdl.userData._contactB = B;
+    }
+    if (B.hips) B.hips.getWorldPosition(_cv); else _cv.set(c.x, c.y, c.z);
+    // the ground is where the lower (planted) foot is: c.y isn't always the surface (snow, the rig's own offset)
+    let fy = Infinity; for (const t of B.toes) { t.getWorldPosition(_cw); fy = Math.min(fy, _cw.y); }
+    const fl = G.floorAt ? G.floorAt(c.x, c.z) : c.y;
+    const gy = Math.max(fl, fy < Infinity ? fy - 0.04 : c.y) + 0.018;   // a hair above the boards or the snow (the ground mesh is only near terrainH between its vertices)
+    const inside = G.inside(c.x, c.z);
+    S.m.position.set(_cv.x * 0.7 + c.x * 0.3, gy, _cv.z * 0.7 + c.z * 0.3);
+    S.m.rotation.y = c.yaw || 0;
+    const sz = c === PLAYER ? 1.05 : 0.92; S.m.scale.set(sz, 1, sz * 0.85);
+    S.m.material.opacity = (inside ? 0.7 : 0.85) * S.k;   // stronger on snow, which is lit far past white and shrugs a light pool off
+  }
+});
 const BOOKS = [
   { t: 'A Field Guide to Winter Birds', cap: 'Reading about bullfinches. (It was about Gerald, really.)', run: async () => {
     await Y('“The bullfinch is a bird of fixed habits and few words, and will return to a favoured sill for years.”', K());
