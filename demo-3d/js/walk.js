@@ -60,8 +60,25 @@ const RING = (() => {
   const edge = new THREE.Mesh(new THREE.RingGeometry(CIRCLE.r - 0.05, CIRCLE.r + 0.35, 48), G.std({ color: '#c9d4c0', roughness: 0.85, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
   edge.rotation.x = -Math.PI / 2; edge.position.set(CIRCLE.x, y + 0.013, CIRCLE.z); g.add(edge);
   const r = G.seeded(31);
-  const tuftG = new THREE.ConeGeometry(0.025, 0.16, 4), tuft = new THREE.InstancedMesh(tuftG, G.std({ color: '#3f6a2c', roughness: 0.85 }), 420);
-  for (let i = 0; i < 420; i++) { const a = r() * Math.PI * 2, d = Math.sqrt(r()) * (CIRCLE.r - 0.1), x = CIRCLE.x + Math.cos(a) * d, z = CIRCLE.z + Math.sin(a) * d; tuft.setMatrixAt(i, G.mtx(x, fy(x, z) + 0.07, z, 1 + r(), 0.7 + r() * 0.8, 1 + r(), r() * 6, (r() - 0.5) * 0.4, (r() - 0.5) * 0.4)); }
+  // Grass: each tuft a few thin blades leaning out from the root, dark at the base and fresher at the tips (they were
+  // little four-sided green spikes).
+  const tuftG = (() => {
+    const P = [], C = [], base = new THREE.Color('#2c4a20'), tip = new THREE.Color('#7aa04a');
+    for (let k = 0; k < 5; k++) {
+      const a = k * 2.4 + 0.3, lean = 0.25 + (k % 3) * 0.12, h = 0.12 + (k % 2) * 0.05, w = 0.007;
+      const ca = Math.cos(a), sa = Math.sin(a), tx = ca * Math.sin(lean) * h, tz = sa * Math.sin(lean) * h, ty = Math.cos(lean) * h;
+      // a blade: a long thin triangle, its flat face across the direction it leans
+      const px = -sa * w, pz = ca * w;
+      P.push(-px, 0, -pz, px, 0, pz, tx, ty, tz);
+      C.push(base.r, base.g, base.b, base.r, base.g, base.b, tip.r, tip.g, tip.b);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.computeVertexNormals();
+    // light the blades as if their normals pointed up and out, so both faces read the same and none goes black
+    const N = g.attributes.normal; for (let i = 0; i < N.count; i++) { const x = P[i * 3], z = P[i * 3 + 2]; const l = Math.hypot(x, 0.8, z); N.setXYZ(i, x / l, 0.8 / l, z / l); }
+    return g;
+  })();
+  const tuft = new THREE.InstancedMesh(tuftG, G.std({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide }), 420);
+  for (let i = 0; i < 420; i++) { const a = r() * Math.PI * 2, d = Math.sqrt(r()) * (CIRCLE.r - 0.1), x = CIRCLE.x + Math.cos(a) * d, z = CIRCLE.z + Math.sin(a) * d; tuft.setMatrixAt(i, G.mtx(x, fy(x, z) + 0.005, z, 1 + r() * 0.6, 0.7 + r() * 0.8, 1 + r() * 0.6, r() * 6, (r() - 0.5) * 0.3, (r() - 0.5) * 0.3)); }
   G.fitInstanceBounds(tuft); tuft.castShadow = false; tuft.receiveShadow = true; g.add(tuft);
   const cols = ['#f2e26a', '#e88aa0', '#ffffff', '#b8a0e8'];
   cols.forEach((c, ci) => {
