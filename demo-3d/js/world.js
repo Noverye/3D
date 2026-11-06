@@ -583,6 +583,51 @@ function roofSnow(slab, across, len, top, down, seed = 1) {
   const m = new THREE.Mesh(g, G.ROOF_SNOW); m.castShadow = true; m.receiveShadow = true; slab.add(m);
   return lip.filter((q) => q[2] > top - 0.2).map((q) => down(q[0], q[1], q[2] - 0.02));
 }
+/* The cabin's log walls (their map's UVs run along the wall and up it, seven logs to a tile): each log lit as a
+ * round log, its top turned to the sky and its underside away, darkening into the joints; the chinking between them a
+ * recessed grey mortar of uneven width, shadowed under the log above; the lines between the logs wavering a little,
+ * as real logs do; and each log its own tone. */
+G.logWall = (m) => {
+  m.onBeforeCompile = (sh) => {
+    sh.fragmentShader = `
+      float lgH(float n) { return fract(sin(n * 127.1 + 1.7) * 43758.5453); }
+      float lgN(float x) { float i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(lgH(i), lgH(i + 1.0), f) * 2.0 - 1.0; }
+    ` + sh.fragmentShader
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        float lgY = vUv.y * 7.0, lgU = vUv.x * 2.75, lgK = floor(lgY);
+        float lgWv = mix(lgN(lgU * 0.9 + lgK * 7.13), lgN(lgU * 0.9 + (lgK + 1.0) * 7.13), smoothstep(0.0, 1.0, fract(lgY))) * 0.045;
+        float lgYs = lgY - lgWv, lgF = fract(lgYs), lgR = floor(lgYs);
+        float lgCb = 0.034 + 0.014 * lgN(lgU * 2.1 + lgR * 3.31), lgCt = 0.034 + 0.014 * lgN(lgU * 2.1 + (lgR + 1.0) * 3.31);
+        float lgT = (lgF - lgCb) / (1.0 - lgCb - lgCt);
+        float lgIn = step(0.0, lgT) * step(lgT, 1.0);
+        float lgAA = fwidth(lgYs) * 1.5;
+        float lgLog = smoothstep(-lgAA, lgAA, lgF - lgCb) * smoothstep(-lgAA, lgAA, (1.0 - lgCt) - lgF);
+        {
+          // the log: its own tone along it and row to row, darkening into the joints
+          float tone = 0.86 + 0.26 * lgH(lgR * 3.7 + 11.0) + 0.06 * lgN(lgU * 0.7 + lgR * 5.1);
+          float ao = mix(0.62, 1.0, smoothstep(0.0, 0.2, min(lgT, 1.0 - lgT)));
+          // the chinking: grey mortar, darker toward its top, in the shadow of the log over it
+          float q = lgF > 0.5 ? (lgF - (1.0 - lgCt)) / (lgCt * 2.0) : 0.5 + lgF / (lgCb * 2.0);
+          vec3 mortar = vec3(0.34, 0.32, 0.29) * (0.85 + 0.15 * lgN(lgU * 9.0 + lgR)) * (1.0 - 0.5 * smoothstep(0.35, 1.0, q));
+          diffuseColor.rgb = mix(mortar, diffuseColor.rgb * tone * ao, lgLog);
+        }`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        {
+          vec3 lgUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+          float lgV = dot(lgUp, normal);
+          if (abs(lgV) < 0.6) {
+            vec3 lgP = normalize(lgUp - normal * lgV);
+            float a = (clamp(lgT, 0.0, 1.0) - 0.5) * 1.9 * lgLog;   // up to 55 degrees toward the sky at its top, away at its bottom
+            normal = normalize(normal * cos(a) + lgP * sin(a));
+          }
+        }`);
+  };
+  m.customProgramCacheKey = () => 'log-wall';
+  m.envMapIntensity = 0.26;   // weathered wood: the sky only sheens on it (turned up to the sky, the logs' tops shone silver)
+  m.extensions = Object.assign({}, m.extensions, { derivatives: true });
+  m.needsUpdate = true;
+  return m;
+};
 /* ---------------- cabin ---------------- */
 const WT = 0.22; // wall thickness
 function wallMats(inner) {
@@ -661,7 +706,7 @@ function signTex() {
 function buildAnnex() {
   const A = ANNEX, h0 = 2.55, h1 = 2.05, cx = (A.x0 + A.x1) / 2, cz = (A.z0 + A.z1) / 2;
   G.box(A.x1 - A.x0 + 0.3, 0.4, A.z1 - A.z0 + 0.3, MAT.stone, cx, -0.2, cz, { uv: [1, 0.3], cast: false });
-  const L = MAT.logs.clone(); L.map = G.rep(TX.logs, 1 / 2.75, 1 / 2.75); L.bumpMap = G.rep(TX.logsB, 1 / 2.75, 1 / 2.75); G.MATS.push(L);
+  const L = G.logWall(MAT.logs.clone()); L.map = G.rep(TX.logs, 1 / 2.75, 1 / 2.75); L.bumpMap = G.rep(TX.logsB, 1 / 2.75, 1 / 2.75); G.MATS.push(L);
   // Side walls follow the roof line: tall against the cabin, lower at the far end.
   const sh = new THREE.Shape(); sh.moveTo(A.x0, -0.4); sh.lineTo(A.x1 + WT / 2, -0.4); sh.lineTo(A.x1 + WT / 2, h1); sh.lineTo(A.x0, h0); sh.closePath();
   for (const z of [A.z0, A.z1]) { const m = G.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: WT, bevelEnabled: false }), L), world); m.position.z = z - WT / 2; G.CAMBLOCK.push(m); }
@@ -687,7 +732,7 @@ function buildAnnex() {
 }
 G.WINDOWS = [];
 G.buildCabin = () => {
-  MAT.logsW = MAT.logs; MAT.boardsW = MAT.boards;
+  MAT.logsW = G.logWall(MAT.logs.clone()); G.MATS.push(MAT.logsW); MAT.boardsW = MAT.boards;
   const { x1, z1, z0, eave } = CAB, D = z1 - z0, zc = (z0 + z1) / 2;
   // Foundation
   G.box(x1 + 0.5, 0.45, D + 0.5, MAT.stone, x1 / 2, -0.235, zc, { uv: [4, 0.5], cast: false });   // top just under the floorboards (it used to cover them)
@@ -751,7 +796,7 @@ G.buildCabin = () => {
   // Gable ends (east and west).
   const gableShape = new THREE.Shape();
   gableShape.moveTo(z0 - 0.11, eave); gableShape.lineTo(z1 + 0.11, eave); gableShape.lineTo(CAB.ridgeZ, CAB.ridge + 0.02); gableShape.closePath();
-  const gMat = MAT.logs.clone(); gMat.map = G.rep(TX.logs, 1 / 2.75, 1 / 2.75); gMat.bumpMap = G.rep(TX.logsB, 1 / 2.75, 1 / 2.75); G.MATS.push(gMat);
+  const gMat = G.logWall(MAT.logs.clone()); gMat.map = G.rep(TX.logs, 1 / 2.75, 1 / 2.75); gMat.bumpMap = G.rep(TX.logsB, 1 / 2.75, 1 / 2.75); G.MATS.push(gMat);
   for (const x of [-0.11, x1 + 0.11]) {
     const g = new THREE.ExtrudeGeometry(gableShape, { depth: WT, bevelEnabled: false });
     const m = G.add(new THREE.Mesh(g, gMat), world);

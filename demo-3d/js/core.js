@@ -181,15 +181,18 @@ G.buildTextures = () => {
     const g = r < 0.006 ? 20 : 200 + (r * 1000 % 1) * 30; return [g, g, g];
   }, { srgb: false });
   // Exterior: stacked round logs with chinking.
+  // Exterior logs: only the wood, its grain running along each log, and a little of the shading round it; the logs'
+  // roundness, the chinking between them and each log's own tone are drawn by the walls' shader (G.logWall), so the
+  // light models them and the lines between them waver. (The chinking used to be painted in as dead-straight bright
+  // stripes, and the logs' shading painted on, so they read as a striped wall.)
   TX.logs = canvasTex(512, (u, v) => {
     const row = Math.floor(v * 7), f = (v * 7) % 1;
-    if (f < 0.07) { const c = 205 + fbm(u * 40, v * 40) * 25; return [c, c * 0.95, c * 0.88]; }
-    const shade = Math.sin(((f - 0.07) / 0.93) * Math.PI);
+    const shade = Math.sin(f * Math.PI);
     const grain = fbm(u * 3 + row * 11, v * 70, 3) * 0.25 + fbm(u * 50, v * 400, 2) * 0.06;
-    const t = (0.35 + shade * 0.6) * (0.85 + grain) * (0.9 + ((row * 7) % 5) / 25);
+    const t = (0.78 + shade * 0.22) * (0.85 + grain);
     return [128 * t, 82 * t, 52 * t];
   });
-  TX.logsB = canvasTex(256, (u, v) => { const f = (v * 7) % 1; const g = f < 0.07 ? 30 : 60 + Math.sin(((f - 0.07) / 0.93) * Math.PI) * 170 + G.fbm(u * 60, v * 300, 2) * 20; return [g, g, g]; }, { srgb: false });
+  TX.logsB = canvasTex(256, (u, v) => { const g = 128 + G.fbm(u * 60, v * 300, 2) * 60 + G.fbm(u * 8, v * 90, 2) * 30; return [g, g, g]; }, { srgb: false });
   // Floor: wide oak planks.
   // Oak floorboards, darker and browner than the pine walls so the room has a floor under it: nine boards to the
   // 2.4 m tile, each its own length, tone and grain, a dark line at every joint.
@@ -456,7 +459,7 @@ G.buildMaterials = () => {
     boards: std({ map: TX.wallBoards, bumpMap: TX.wallBoardsB, bumpScale: 0.004, color: '#f4e9dd', roughness: 0.72, env: 0.24 }),   // golden pine
     ceiling: std({ map: TX.ceilWash, bumpMap: TX.wallBoardsB, bumpScale: 0.003, color: '#ffffff', roughness: 0.85, env: 0.3 }),   // limewashed boards
     paintedBoards: std({ map: TX.paintBoards, bumpMap: TX.wallBoardsB, bumpScale: 0.004, color: '#7f97a6', roughness: 0.62, env: 0.3 }),   // the bedroom wall, dusty blue
-    logs: std({ map: TX.logs, bumpMap: TX.logsB, bumpScale: 0.03, roughness: 0.85, env: 0.4 }),
+    logs: std({ map: TX.logs, bumpMap: TX.logsB, bumpScale: 0.006, roughness: 0.85, env: 0.4 }),
     floor: std({ map: TX.floor, bumpMap: TX.floorB, bumpScale: 0.003, color: '#f2e6dc', roughness: 0.46, env: 0.45 }),
     shingle: std({ map: TX.shingle, roughness: 0.9 }),
     stone: std({ map: TX.stone, bumpMap: TX.stone, bumpScale: 0.02, roughness: 0.9, env: 0.3 }),
