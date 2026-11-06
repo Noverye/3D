@@ -489,6 +489,27 @@ G.buildMaterials = () => {
     candle: std({ color: '#f2e8d6', roughness: 0.6, emissive: '#ffb060', emissiveIntensity: 0.06 }),
   });
   MAT.glassOut.side = THREE.FrontSide; MAT.glassIn.side = THREE.FrontSide;
+  // Snow sparkles: here and there in the snow a flat ice crystal, tilted its own way, flashes as it catches the sun
+  // (or a lantern at night) and goes out again as you move. Only where the light falls, not in shadow, and only near
+  // enough to see: further off they would just be noise.
+  MAT.snowGround.onBeforeCompile = (sh) => {
+    sh.vertexShader = 'varying vec3 vSnW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvSnW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+    sh.fragmentShader = `varying vec3 vSnW;
+float snH( vec3 p ) { p = fract( p * vec3( 0.1031, 0.1030, 0.0973 ) ); p += dot( p, p.yxz + 33.33 ); return fract( ( p.x + p.y ) * p.z ); }
+vec3 snGlint( vec3 N, vec3 V, vec3 L ) {
+	float fade = 1.0 - smoothstep( 6.0, 20.0, length( vSnW - cameraPosition ) );
+	if ( fade <= 0.0 ) return vec3( 0.0 );
+	vec3 c = floor( vSnW * 34.0 );
+	if ( snH( c ) > 0.3 ) return vec3( 0.0 );
+	vec3 r = vec3( snH( c + 1.7 ), snH( c + 4.3 ), snH( c + 9.1 ) ) * 2.0 - 1.0;
+	vec3 fN = normalize( N + mat3( viewMatrix ) * r * 0.85 );
+	return vec3( 1.0, 0.98, 0.95 ) * pow( max( dot( fN, normalize( L + V ) ), 0.0 ), 260.0 ) * 10.0 * fade;
+}
+` + sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', THREE.ShaderChunk.lights_physical_pars_fragment.replace(
+      'reflectedLight.directDiffuse += ( 1.0 - clearcoatDHR ) * irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );',
+      'reflectedLight.directDiffuse += ( 1.0 - clearcoatDHR ) * irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );\n\treflectedLight.directSpecular += irradiance * snGlint( geometry.normal, geometry.viewDir, directLight.direction );'));
+  };
+  MAT.snowGround.customProgramCacheKey = () => 'snow-glint';
   // A lit window seen from outside is not one even sheet of cream: the room's light is strongest low in the middle
   // (the lamps, the fire) and falls off toward the frame, deepening to amber at the edges.
   MAT.glassOut.emissive.set('#ff8c34');

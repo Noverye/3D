@@ -39,12 +39,49 @@ function terrainH(x, z) {
   return Math.max(h, shoreH(x, z));
 }
 G.terrainH = terrainH;
+/* Snow banked up against the cabin, where the wind drifts it and the roof sheds it: deepest along the back (north)
+ * wall and round the chimney, then the west end, lower at the front and lowest against the porch, and dug away round
+ * the porch steps where everyone comes and goes. Under the eaves, the snow that slid off the roof has left a ridge
+ * along the drip line. (The snow used to meet the foundation stones in one straight hard line all the way round.) */
+const BANK_R = [   // [x0, z0, x1, z1, height at the wall]: the outer faces of the walls (−1: by which side it is)
+  [CAB.x0 - 0.11, CAB.z0 - 0.11, CAB.x1 + 0.11, CAB.z1 + 0.11, -1],
+  [ANNEX.x0 - 0.1, ANNEX.z0 - 0.11, ANNEX.x1 + 0.11, ANNEX.z1 + 0.11, 0.34],
+  [7.475, CAB.z0 - 0.875, 8.525, CAB.z0 - 0.11, 0.52],   // the chimney breast
+  [PORCH.x0, PORCH.z0, PORCH.x1, PORCH.z1, 0.17],
+];
+function bankH(x, z) {
+  if (x < -3 || x > 20 || z < CAB.z0 - 3.2 || z > PORCH.stepZ1 + 2) return 0;
+  let ws = 0, hs = 0, d = 99;
+  for (const R of BANK_R) {
+    const di = rectDist(x, z, R[0], R[1], R[2], R[3]);
+    if (di > 2.6) continue;
+    let b = R[4];
+    if (b < 0) {
+      const cx = clamp(x, R[0], R[2]), cz = clamp(z, R[1], R[3]), l = Math.hypot(x - cx, z - cz) || 1, nx = (x - cx) / l, nz = (z - cz) / l;
+      b = 0.36 + 0.15 * Math.max(0, -nz) + 0.06 * Math.max(0, -nx) - 0.09 * Math.max(0, nz);
+    }
+    const w = Math.exp(-di * 5); ws += w; hs += w * b; d = Math.min(d, di);
+  }
+  if (d > 2.6) return 0;
+  const h = (hs / ws) * (0.8 + 0.5 * fbm(x * 0.55 + 3.1, z * 0.55, 2));
+  const wdt = (0.7 + h * 1.6) * (0.85 + 0.3 * fbm(x * 0.3 + 7, z * 0.3, 2));
+  let s = h * (1 - smooth(0, wdt, d));
+  const north = z < CAB.z0 - 0.11, south = z > CAB.z1 + 0.11 && (x < PORCH.x0 - 0.3 || x > PORCH.x1 + 0.3);
+  if (x > CAB.x0 - 0.5 && x < CAB.x1 + 0.5 && (north || south)) {
+    const de = north ? CAB.z0 - 0.11 - z : z - CAB.z1 - 0.11;
+    s += 0.11 * (0.7 + 0.6 * fbm(x * 0.8, z * 0.8 + 9, 2)) * Math.exp(-(((de - 0.58) / 0.24) ** 2));
+  }
+  s *= smooth(0.2, 0.9, rectDist(x, z, PORCH.stepX0, PORCH.z1, PORCH.stepX1, PORCH.stepZ1));
+  if (z > PORCH.z1) s *= smooth(0.9, 1.7, Math.abs(x - pathX(Math.max(z, 7.6))));
+  return Math.max(0, s);
+}
+G.bankH = bankH;
 G.floorAt = (x, z) => {
   if (x > CAB.x0 - 0.05 && x < CAB.x1 + 0.05 && z > CAB.z0 - 0.05 && z < CAB.z1 + 0.05) return 0;
   if (x > PORCH.x0 && x < PORCH.x1 && z >= PORCH.z0 && z < PORCH.z1) return 0;
   if (x > PORCH.stepX0 && x < PORCH.stepX1 && z >= PORCH.z1 && z < PORCH.stepZ1) return lerp(0, GROUND, (z - PORCH.z1) / (PORCH.stepZ1 - PORCH.z1));
   if (G.onIce(x, z)) return LAKE.y;
-  return terrainH(x, z);
+  return terrainH(x, z) + bankH(x, z) * 0.6;   // feet sink a little into the banked snow
 };
 // The ice, and a shelf of packed snow that brings the shore up to meet it so you can step on and off.
 G.onIce = (x, z) => Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r - 0.05;
@@ -123,6 +160,33 @@ G.buildTerrain = () => {
   const pathMat = G.std({ map: pathTex(false), bumpMap: pathTex(true), bumpScale: 0.012, roughness: 0.8, transparent: true, depthWrite: false, env: 0.6 });
   pathMat.polygonOffset = true; pathMat.polygonOffsetFactor = -2;
   G.add(new THREE.Mesh(pg, pathMat), world, false, true);
+  // The banks against the cabin: a fine grid laid round it, kept only where there is bank, in the ground's own
+  // material and texture coordinates so it melts into the snow at its foot.
+  {
+    const st = 0.13, X0 = -2.9, Z0 = CAB.z0 - 3.1, nx = Math.ceil((19.9 - X0) / st), nz = Math.ceil((PORCH.stepZ1 + 1.9 - Z0) / st);
+    const solid = (x, z) => BANK_R.some((R) => x > R[0] && x < R[2] && z > R[1] && z < R[3]);
+    const H = [], IN = [];
+    for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) { const x = X0 + i * st, z = Z0 + j * st; H.push(bankH(x, z)); IN.push(solid(x, z)); }
+    const id = (i, j) => j * (nx + 1) + i, map = new Map(), P = [], UV = [], I = [];
+    const vert = (i, j) => {
+      const k = id(i, j); if (map.has(k)) return map.get(k);
+      const x = X0 + i * st, z = Z0 + j * st;
+      P.push(x, terrainH(x, z) + H[k] - 0.012, z);
+      UV.push((0.5 + (x - CLEAR.x) / 240) * 18, (0.5 - (z - CLEAR.z - 20) / 240) * 18);
+      map.set(k, P.length / 3 - 1); return P.length / 3 - 1;
+    };
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const q = [id(i, j), id(i + 1, j), id(i, j + 1), id(i + 1, j + 1)];
+      if (q.every((k) => IN[k]) || q.every((k) => H[k] < 0.004)) continue;
+      const a0 = vert(i, j), a1 = vert(i + 1, j), b0 = vert(i, j + 1), b1 = vert(i + 1, j + 1);
+      I.push(a0, b0, a1, a1, b0, b1);
+    }
+    const bg = new THREE.BufferGeometry();
+    bg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); bg.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); bg.setIndex(I);
+    bg.computeVertexNormals();
+    const bank = G.add(new THREE.Mesh(bg, MAT.snowGround || MAT.snow), world, false, true);
+    bank.name = 'snowBank';
+  }
   // Frozen lake.
   const lake = G.add(new THREE.Mesh(new THREE.CircleGeometry(LAKE.r, 64), MAT.ice), world, false, true);
   lake.rotation.x = -Math.PI / 2; lake.position.set(LAKE.x, LAKE.y, LAKE.z);
@@ -482,7 +546,7 @@ G.buildForest = () => {
   for (let i = 0; i < 160; i++) {
     const a = r() * Math.PI * 2, d = 8 + r() * 26;
     const x = CLEAR.x + Math.cos(a) * d, z = CLEAR.z + Math.sin(a) * d;
-    if (rectDist(x, z, -1, -1, 18, 8.2) < 0.6) continue;
+    if (rectDist(x, z, -1, CAB.z0 - 1, 18, 8.2) < 0.6) continue;   // clear of the cabin (and of its back wall, out at CAB.z0)
     if (z > 7 && z < PATH_END + 2 && Math.abs(x - pathX(z)) < 2.6) continue;
     const s = 0.35 + r() * 0.9;
     drifts.push(G.mtx(x, terrainH(x, z) - 0.02, z, s * (1 + r()), s * 0.5, s * (1 + r()), r() * 6));
