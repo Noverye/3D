@@ -374,7 +374,7 @@ const PAL = {
   sky: [C('#9a94c8'), C('#22325a')], gnd: [C('#f0d2d0'), C('#1a2238')], hemiI: [1.7, 0.75],
   fog: [C('#c08e9c'), C('#0c1324')], exposure: [0.92, 1.3],
 };
-const DAY = { keyCol: C('#fff0dc'), keyI: 3.3, sky: C('#b4c8e6'), gnd: C('#e8edf4'), hemiI: 1.3, hemiIn: 1.0, fog: C('#c6d3e4'), exposure: 0.74, glass: C('#a8b8c8'), skyIn: C('#f2e2c8'), gndIn: C('#c49a74') };
+const DAY = { keyCol: C('#fff0dc'), keyI: 3.3, sky: C('#b4c8e6'), gnd: C('#e8edf4'), hemiI: 1.3, hemiIn: 1.25, fog: C('#c6d3e4'), exposure: 0.74, glass: C('#a8b8c8'), skyIn: C('#f4ebdf'), gndIn: C('#b08e72') };   // indoors by day the fill comes down off the pale ceiling and up off the oak floor
 const GLASS_WARM = C('#ffb46a'), tmpC = new THREE.Color();
 function updateLighting(t, dt, focus) {
   STATE.tod = damp(STATE.tod, STATE.todTarget, 0.5, dt);
@@ -391,7 +391,7 @@ function updateLighting(t, dt, focus) {
   key.target.position.copy(focus);
   key.color.copy(PAL.keyCol[0]).lerp(PAL.keyCol[1], n).lerp(DAY.keyCol, d);
   key.intensity = lerp(lerp(PAL.keyI[0], PAL.keyI[1], n), DAY.keyI, d);
-  // By day, indoors the fill is the warm light bouncing off pine boards rather than the blue sky.
+  // By day, indoors the fill is the light bouncing round the room (the pale ceiling, the pine, the floor) rather than the blue sky.
   hemi.color.copy(PAL.sky[0]).lerp(PAL.sky[1], n).lerp(DAY.sky, d).lerp(DAY.skyIn, ik * 0.8);
   hemi.groundColor.copy(PAL.gnd[0]).lerp(PAL.gnd[1], n).lerp(DAY.gnd, d).lerp(DAY.gndIn, ik * 0.8);
   // Indoors the sky fill drops (the room is lit by its lamps and fire), less so by day: light bounces in off the snow.

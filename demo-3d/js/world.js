@@ -221,7 +221,8 @@ G.buildSky = () => {
   G.envRoom = (() => {
     const W = 512, H = 256, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const c = cv.getContext('2d'), g = c.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#5a4030'); g.addColorStop(0.42, '#8a6446'); g.addColorStop(0.5, '#9a7252'); g.addColorStop(0.58, '#6e4c34'); g.addColorStop(1, '#3a2a20');
+    // the limewashed ceiling above, pine walls round the middle, the oak floor below
+    g.addColorStop(0, '#b8b0a4'); g.addColorStop(0.3, '#9a8a78'); g.addColorStop(0.42, '#8a6446'); g.addColorStop(0.5, '#9a7252'); g.addColorStop(0.58, '#6e4c34'); g.addColorStop(1, '#3e3028');
     c.fillStyle = g; c.fillRect(0, 0, W, H);
     for (const u of [0.08, 0.3, 0.55, 0.8]) { const rg = c.createRadialGradient(u * W, H * 0.45, 0, u * W, H * 0.45, 34); rg.addColorStop(0, 'rgba(240,244,250,0.95)'); rg.addColorStop(1, 'rgba(240,244,250,0)'); c.fillStyle = rg; c.fillRect(0, 0, W, H); }
     const t = new THREE.CanvasTexture(cv); t.mapping = THREE.EquirectangularReflectionMapping; t.encoding = THREE.sRGBEncoding;
@@ -541,6 +542,47 @@ G.buildPath = () => {
   }
 };
 
+/* Snow lying on a roof, built on its slab: thick and drifted across the middle, with wind ripples, thinning to a
+ * rounded edge short of each gable (a strip of shingles shows there, as it does on a real roof), and at the eave a
+ * heavy rounded lip curling over and under the edge. (It was a white box on each slope: a plastic slab.) The slab is a
+ * box `across` wide and `len` long down the slope, its top at y = top in its own frame; `down` maps (a, d, y) — across,
+ * distance down from the top end, height — to that frame. Returns the points along the lip's underside (slab frame)
+ * for the icicles. */
+G.ROOF_SNOW = null;
+function roofSnow(slab, across, len, top, down, seed = 1) {
+  if (!G.ROOF_SNOW) G.ROOF_SNOW = G.std({ color: '#e8edf4', bumpMap: G.rep(TX.snowB, 1, 1), bumpScale: 0.03, roughnessMap: TX.snowR, roughness: 0.85, env: 0.7 });
+  const NA = Math.max(24, Math.round(across * 9)), ND = Math.max(10, Math.round(len * 9)), NR = 9, P = [], UV = [], I = [], lip = [];
+  const nz = (x, y) => G.simplex.noise(x + seed * 13.1, y - seed * 7.7);
+  const inset = 0.1, fade = 0.32;
+  const H = (a, d) => {   // depth of snow at (a, d)
+    const e = Math.min(a, across - a) - inset;   // from the edge it stops short of
+    if (e <= 0) return -0.01;
+    const edge = Math.sqrt(Math.min(1, e / fade));
+    const drift = 0.2 + 0.05 * nz(a * 0.45, d * 0.6) + 0.02 * nz(a * 2.1, d * 2.7) + 0.006 * Math.sin(a * 9 + d * 2 + nz(a, d) * 2);
+    const ridge = 0.55 + 0.45 * G.smooth(0, 0.5, d);   // thinner up at the ridge, under its cap
+    return drift * edge * ridge;
+  };
+  const rows = ND + 1 + NR;
+  for (let j = 0; j < rows; j++) for (let i = 0; i <= NA; i++) {
+    const a = (i / NA) * across;
+    let d, y;
+    if (j <= ND) { d = (j / ND) * len; y = top + H(a, d); }
+    else {   // the lip: a half-round turned over the eave, its radius from the depth there, the underside sagging in lumps
+      const th = ((j - ND) / NR) * Math.PI, hE = Math.max(0, H(a, len)), R = (hE + 0.16) / 2, sag = 1 + 0.25 * Math.max(0, nz(a * 1.7, 9)) * Math.sin(th / 2);
+      d = len + Math.sin(th) * R * (0.75 + 0.25 * sag); y = top + hE - R + R * Math.cos(th) * (th > Math.PI / 2 ? sag : 1);
+      if (hE <= 0) { d = len; y = top - 0.01; }
+      if (j === rows - 1 || j === rows - 3) lip.push([a, len + R * 0.35, y]);
+    }
+    const q = down(a, d, y); P.push(q[0], q[1], q[2]);
+    UV.push(a / 1.6, d / 1.6);
+  }
+  for (let j = 0; j < rows - 1; j++) for (let i = 0; i < NA; i++) { const a0 = j * (NA + 1) + i, a1 = a0 + NA + 1; I.push(a0, a1, a0 + 1, a1, a1 + 1, a0 + 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); g.setIndex(I); g.computeVertexNormals();
+  // facing up off the roof (the winding depends on how `down` turns the frame)
+  const N = g.attributes.normal; let up = 0; for (let k = 0; k < N.count; k++) up += N.getY(k); if (up < 0) { for (let t = 0; t < I.length; t += 3) { const x = I[t + 1]; I[t + 1] = I[t + 2]; I[t + 2] = x; } g.setIndex(I); g.computeVertexNormals(); }
+  const m = new THREE.Mesh(g, G.ROOF_SNOW); m.castShadow = true; m.receiveShadow = true; slab.add(m);
+  return lip.filter((q) => q[2] > top - 0.2).map((q) => down(q[0], q[1], q[2] - 0.02));
+}
 /* ---------------- cabin ---------------- */
 const WT = 0.22; // wall thickness
 function wallMats(inner) {
@@ -632,7 +674,7 @@ function buildAnnex() {
   const run = A.x1 - A.x0 + 0.6, slope = Math.atan2(h0 - h1, run), len = Math.hypot(run, h0 - h1);
   const roof = G.box(len, 0.12, A.z1 - A.z0 + 0.7, MAT.shingle, cx + 0.15, (h0 + h1) / 2 + 0.12, cz, { uv: [1, 1] });
   roof.rotation.z = -slope; G.CAMBLOCK.push(roof);
-  const sn = G.box(len - 0.05, 0.2, A.z1 - A.z0 + 0.6, MAT.snow, cx + 0.15, (h0 + h1) / 2 + 0.27, cz, { r: 0.08 }); sn.rotation.z = -slope;
+  { const aw = A.z1 - A.z0 + 0.7; roofSnow(roof, aw, len, 0.06, (a, d, y) => [d - len / 2, y, a - aw / 2], 5); }
   G.COLL.push({ x0: CAB.x1 + 0.05, z0: A.z0 - 0.15, x1: A.x1 + 0.15, z1: A.z1 + 0.15 });
   // The door, from the kitchen side: closed, with the sign.
   const dz = 3.85;
@@ -723,16 +765,17 @@ G.buildCabin = () => {
     const cz = CAB.ridgeZ + s * run / 2, cy = (CAB.ridge + eave) / 2;
     const slab = G.box(rw, 0.16, len, MAT.shingle, rcx, cy, cz, { uv: [rw / 2, len / 2] });
     slab.rotation.x = s * slope; G.CAMBLOCK.push(slab);
-    const snow = G.box(rw - 0.05, 0.26, len - 0.1, MAT.snow, rcx, 0, 0, { r: 0.12, seg: 4 });
-    snow.position.set(rcx, cy + Math.cos(slope) * 0.2, cz + s * Math.sin(slope) * 0.2);
-    snow.rotation.x = s * slope;
-    // Snow lip and icicles along the eave.
-    const ez = CAB.ridgeZ + s * (run + 0.2), ey = eave - 0.17;
-    const lip = G.cyl(0.13, 0.13, rw - 0.1, MAT.snow, rcx, ey + 0.08, ez, { seg: 10 }); lip.rotation.z = Math.PI / 2; lip.scale.x = 0.8;
+    // The snow on it, and icicles hanging from its lip along the eave.
+    const lip = roofSnow(slab, rw, len, 0.08, (a, d, y) => [a - rw / 2, y, s * (d - len / 2)], s > 0 ? 2 : 3);
+    slab.updateMatrixWorld(true);
     const ic = new THREE.ConeGeometry(0.025, 1, 5);
     const r = G.seeded(s > 0 ? 5 : 6), icM = G.std({ color: '#dcebf7', roughness: 0.08, transparent: true, opacity: 0.85, env: 1.4 });
-    const cnt = 46, im = new THREE.InstancedMesh(ic, icM, cnt);
-    for (let i = 0; i < cnt; i++) { const l = 0.08 + Math.pow(r(), 2.2) * 0.45; im.setMatrixAt(i, G.mtx(RX0 + 0.2 + r() * (rw - 0.4), ey - l / 2 + 0.02, ez + (r() - 0.5) * 0.06, 1, l, 1, 0, Math.PI)); }
+    const cnt = 46, im = new THREE.InstancedMesh(ic, icM, cnt), v3 = new THREE.Vector3();
+    for (let i = 0; i < cnt; i++) {
+      const l = 0.08 + Math.pow(r(), 2.2) * 0.45, q = lip[Math.floor(r() * lip.length)];
+      v3.set(q[0], q[1], q[2]).applyMatrix4(slab.matrixWorld);
+      im.setMatrixAt(i, G.mtx(v3.x + (r() - 0.5) * 0.1, v3.y - l / 2 + 0.03, v3.z + (r() - 0.5) * 0.04, 1, l, 1, 0, Math.PI));
+    }
     G.fitInstanceBounds(im);
     world.add(im);
   }
@@ -770,8 +813,7 @@ G.buildCabin = () => {
   const prRun = PORCH.z1 + 0.35 - PORCH.z0, prRise = 0.45, prSlope = Math.atan2(prRise, prRun), prLen = Math.hypot(prRun, prRise);
   const pr = G.box(PORCH.x1 - PORCH.x0 + 0.5, 0.12, prLen, MAT.shingle, (PORCH.x0 + PORCH.x1) / 2, 2.7 - prRise / 2, PORCH.z0 + prRun / 2, { uv: [4, 1] });
   pr.rotation.x = prSlope; G.CAMBLOCK.push(pr);
-  const prs = G.box(PORCH.x1 - PORCH.x0 + 0.42, 0.2, prLen - 0.05, MAT.snow, (PORCH.x0 + PORCH.x1) / 2, 2.7 - prRise / 2 + 0.15, PORCH.z0 + prRun / 2, { r: 0.09 });
-  prs.rotation.x = prSlope;
+  { const pw = PORCH.x1 - PORCH.x0 + 0.5; roofSnow(pr, pw, prLen, 0.06, (a, d, y) => [a - pw / 2, y, d - prLen / 2], 4); }
   G.box(PORCH.x1 - PORCH.x0, 0.16, 0.14, MAT.darkWood, (PORCH.x0 + PORCH.x1) / 2, 2.38, PORCH.z1 - 0.12);
   const pc = G.add(new THREE.Mesh(new THREE.PlaneGeometry(PORCH.x1 - PORCH.x0, prLen), MAT.boards), world, false, true);
   pc.rotation.x = Math.PI / 2 + prSlope; pc.position.set((PORCH.x0 + PORCH.x1) / 2, 2.6 - prRise / 2 - 0.02, PORCH.z0 + prRun / 2);
