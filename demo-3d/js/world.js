@@ -259,29 +259,87 @@ G.buildMountains = () => {
   }
   for (let j = 0; j < segR; j++) for (let i = 0; i < segA; i++) {
     const a = j * (segA + 1) + i, b = a + segA + 1;
-    I.push(a, b, a + 1, b, b + 1, a + 1);
+    I.push(a, a + 1, b, b, a + 1, b + 1);   // wound to face the valley (the other way round, the slopes facing you were culled and you saw the backs of the far ones through them)
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I);
   g.computeVertexNormals();
+  { // the ring's two ends are separate vertices in the same place: share their normals, or a line shows down the range
+    const N = g.attributes.normal;
+    for (let j = 0; j <= segR; j++) { const a0 = j * (segA + 1), a1 = a0 + segA; const x = N.getX(a0) + N.getX(a1), y = N.getY(a0) + N.getY(a1), z = N.getZ(a0) + N.getZ(a1), l = Math.hypot(x, y, z) || 1; N.setXYZ(a0, x / l, y / l, z / l); N.setXYZ(a1, x / l, y / l, z / l); }
+  }
   const rock = new THREE.Color('#55535f'), rockDark = new THREE.Color('#3b3a45'), forest = new THREE.Color('#1c2a2a'), snow = new THREE.Color('#eef1f7'), haze = new THREE.Color('#c9d3e2');
-  const N = g.attributes.normal, C = new Float32Array(P.length), c = new THREE.Color();
+  // Per vertex: the base colour (forest at the foot, rock or snow above it, from the slope), how snowy the slope is,
+  // and whether it is above the trees. The shader adds what a vertex every few metres can't: rock ribs running down
+  // the faces with snow lying in the gullies between, ledges of snow across the cliffs, strata in the rock and a
+  // rough surface, then the air between you and them. (They were pale, smooth and evenly snowed: grey paper.)
+  const N = g.attributes.normal, C = new Float32Array(P.length), K = new Float32Array(P.length / 3 * 2), c = new THREE.Color();
   for (let k = 0; k < P.length / 3; k++) {
     const x = P[k * 3], y = P[k * 3 + 1], z = P[k * 3 + 2], ny = Math.abs(N.getY(k)), a = Math.atan2(z - CLEAR.z, x - CLEAR.x);
     const steep = 1 - ny;   // 0 flat .. 1 vertical
     const snowLine = 15 + fbm(a * 3, y * 0.05) * 9;
     const keep = G.smooth(0.2, 0.07, steep + (fbm(a * 9, y * 0.12) - 0.5) * 0.08);   // how well snow stays on a slope this steep (the range is broad, so its faces are gentler than they look)
+    const snowK = keep * G.smooth(snowLine - 6, snowLine, y);
     if (y < 8) c.copy(forest).lerp(rock, G.smooth(2, 8, y) * 0.6);
-    else c.copy(rockDark).lerp(rock, G.smooth(0.4, 0.12, steep)).lerp(snow, keep * G.smooth(snowLine - 6, snowLine, y));
-    const far = G.smooth(130, 220, Math.hypot(x - CLEAR.x, z - CLEAR.z));
-    c.lerp(haze, 0.12 + far * 0.18);   // a little air between you and them
+    else c.copy(rockDark).lerp(rock, G.smooth(0.4, 0.12, steep)).lerp(snow, snowK);
     C[k * 3] = c.r; C[k * 3 + 1] = c.g; C[k * 3 + 2] = c.b;
+    K[k * 2] = snowK; K[k * 2 + 1] = G.smooth(6.5, 10, y);
   }
   g.setAttribute('color', new THREE.BufferAttribute(C, 3));
-  const mat = G.std({ vertexColors: true, roughness: 0.95, flatShading: true, env: 0.3 });
-  // Less of the scene's fog on them (it washed them out to the colour of the sky); the haze above stands in for it.
-  mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>', THREE.ShaderChunk.fog_fragment.replace('gl_FragColor.rgb = mix(', 'fogFactor *= 0.32;\n\tgl_FragColor.rgb = mix(')); };
-  mat.customProgramCacheKey = () => 'mountain-fog';
+  g.setAttribute('mtn', new THREE.BufferAttribute(K, 2));
+  const mat = G.std({ vertexColors: true, roughness: 0.95, env: 0.3 });
+  mat.extensions = { derivatives: true };
+  const U = { uHaze: { value: haze }, uSnowC: { value: snow }, uRockC: { value: new THREE.Color(0.11, 0.1, 0.1) }, uRockD: { value: new THREE.Color(0.042, 0.04, 0.045) }, uClr: { value: new THREE.Vector2(CLEAR.x, CLEAR.z) } };
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, U);
+    sh.vertexShader = 'attribute vec2 mtn;\nvarying vec2 vMtn;\nvarying vec3 vMW;\nvarying vec3 vMN;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vMtn = mtn; vMW = (modelMatrix * vec4(transformed, 1.0)).xyz; vMN = normalize(mat3(modelMatrix) * objectNormal);`);
+    sh.fragmentShader = `uniform vec3 uHaze, uSnowC, uRockC, uRockD; uniform vec2 uClr;
+      varying vec2 vMtn; varying vec3 vMW; varying vec3 vMN;
+      float mtH(vec2 i, float P) { i.x = mod(i.x, P); return fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453); }
+      float mtN(vec2 p, float P) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mtH(i, P), mtH(i + vec2(1.0, 0.0), P), f.x), mix(mtH(i + vec2(0.0, 1.0), P), mtH(i + vec2(1.0, 1.0), P), f.x), f.y); }
+      float mtF(vec2 p, float P) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * mtN(p, P); p = p * 2.0 + vec2(0.0, 7.31); P *= 2.0; a *= 0.5; } return s / 0.9375; }
+      ` + sh.fragmentShader
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        // Around the range (periodic, so there is no seam) and down its faces: cells long down the fall line and narrow
+        // across it, so the ribs and gullies run downhill.
+        vec2 rel = vMW.xz - uClr; float ang = atan(rel.y, rel.x), rr = length(rel);
+        const float MP = 230.0;
+        vec2 q = vec2((ang / 6.2831853 + 0.5) * MP, rr * 0.014 + vMW.y * 0.032);
+        float rib = 1.0 - abs(2.0 * mtF(q, MP) - 1.0);
+        float fine = mtF(q * vec2(3.0, 7.0) + vec2(0.0, 3.1), MP * 3.0);
+        float slope = 1.0 - clamp(normalize(vMN).y, 0.0, 1.0);
+        float above = vMtn.y;
+        // rock shows along the ribs, more of it the steeper the face
+        float big = mtN(q * vec2(0.08, 0.3) + vec2(0.0, 5.7), MP * 0.08);   // some faces mostly cliff, some mostly snow
+        // Snow lies on everything above the snow line but the ribs and the steepest faces, where the rock shows.
+        float snowLine = 9.0 + big * 9.0 + (fine - 0.5) * 6.0;
+        float exposed = smoothstep(0.62, 0.76, rib * rib * 0.85 + fine * 0.3 + slope * 0.32 + (big - 0.5) * 0.4 - 0.02) * above;
+        float sn = max(vMtn.x, smoothstep(snowLine - 3.0, snowLine + 3.0, vMW.y)) * (1.0 - exposed);
+        // ...and on the rock, ledges of snow across it where it is less steep
+        float ledge = smoothstep(0.58, 0.74, mtN(vec2(q.x * 0.4, vMW.y * 0.55 + fine * 2.4), MP * 0.4)) * smoothstep(0.42, 0.2, slope);
+        sn = max(sn, ledge * 0.9 * above * exposed * smoothstep(9.0, 14.0, vMW.y));
+        float strata = 0.78 + 0.34 * mtN(vec2(q.x * 1.2, vMW.y * 1.1 + fine * 1.5), MP * 1.2);
+        vec3 rockC = mix(uRockD, uRockC, fine) * strata;
+        vec3 snowC = uSnowC * (0.93 + 0.07 * fine);
+        diffuseColor.rgb = mix(diffuseColor.rgb, mix(rockC, snowC, sn), above);
+        float mtFar = smoothstep(130.0, 220.0, rr);
+        diffuseColor.rgb = mix(diffuseColor.rgb, uHaze, 0.12 + mtFar * 0.2);   // a little air between you and them
+        float mtBump = (rib * 1.4 + fine * 0.9) * (1.0 - sn * 0.65) * above;`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        { // the rough surface: tilt the normal by the slope of mtBump across the screen
+          vec3 mtSx = dFdx(-vViewPosition), mtSy = dFdy(-vViewPosition);
+          vec3 mtR1 = cross(mtSy, normal), mtR2 = cross(normal, mtSx);
+          float mtDet = dot(mtSx, mtR1);
+          vec2 mtDh = vec2(dFdx(mtBump), dFdy(mtBump));
+          vec3 mtGrad = sign(mtDet) * (mtDh.x * mtR1 + mtDh.y * mtR2);
+          normal = normalize(abs(mtDet) * normal - mtGrad);
+        }`)
+      // Less of the scene's fog on them (it washed them out to the colour of the sky); the haze above stands in for it.
+      .replace('#include <fog_fragment>', THREE.ShaderChunk.fog_fragment.replace('gl_FragColor.rgb = mix(', 'fogFactor *= 0.32;\n\tgl_FragColor.rgb = mix('));
+  };
+  mat.customProgramCacheKey = () => 'mountain-detail';
   const m = new THREE.Mesh(g, mat);
   m.receiveShadow = false; m.castShadow = false;
   world.add(m);
@@ -289,7 +347,8 @@ G.buildMountains = () => {
 
 /* ---------------- forest ---------------- */
 function pineGeometry(seed, lod = 0) {
-  // lod 0: full detail for trees near the clearing; lod 1: a low-poly stand-in for distant trees.
+  // lod 0: full detail for trees near the clearing; lod 1: the same spruce with fewer, simpler branches for distant
+  // trees (they were stacked cones with white tips, and looked like toys next to the near ones).
   const r = G.seeded(seed), parts = [];
   const radial = lod ? 7 : 18, hseg = lod ? 1 : 3;
   const H = 1;   // unit height; instances scale it
@@ -297,34 +356,23 @@ function pineGeometry(seed, lod = 0) {
   const snow = new THREE.Color('#eef3f8');
   parts.push({ geo: new THREE.CylinderGeometry(0.012, 0.028, 0.25, lod ? 4 : 6, 1, !!lod), mat: G.mtx(0, 0.12, 0), color: new THREE.Color('#3a2a20') });
   const tiers0 = 11 + Math.floor(r() * 4);
-  const tiers = lod ? 6 : tiers0;
+  const tiers = lod ? 8 : tiers0;
   for (let i = 0; i < tiers; i++) {
     const t = i / (tiers - 1);
     const y = 0.1 + t * 0.84, rad = lerp(0.26, 0.035, Math.pow(t, 0.8)) * (0.9 + r() * 0.2), h = lerp(0.17, 0.1, t);
-    const cone = new THREE.ConeGeometry(lod ? rad * 1.04 : rad, lod ? h * 1.5 : h, radial, hseg, true);
-    const p = cone.attributes.position;
-    for (let k = 0; k < p.count; k++) {
-      const yy = p.getY(k);
-      if (yy < -h * 0.4) { const ang = Math.atan2(p.getZ(k), p.getX(k)); const j = 0.9 + Math.sin(ang * 5 + seed + i) * 0.08; p.setX(k, p.getX(k) * j); p.setZ(k, p.getZ(k) * j); p.setY(k, yy - 0.012 - Math.sin(ang * 3 + i) * 0.008); }
-    }
-    cone.computeVertexNormals();
     const snowy = r() < 0.85;
     const base = green(t);
-    const ph = r() * 10;
-    if (lod) {   // two rings per tier: green skirt, snow-dusted tip
-      const tipC = base.clone().lerp(snow, snowy ? 0.55 : 0.15);
-      parts.push({ geo: cone, uv: [radial, 1], mat: G.mtx(0, y, 0, 1, 1, 1, r() * 6), color: (v) => (v.y > y + h * 0.2 ? tipC : base) });
-      continue;
-    }
-    // Near trees: a dark inner cone for body, then a ring of separate drooping branches round it, each its own
-    // length and angle, so the outline is ragged like a spruce's; snow lies only on their upper faces.
-    const inner = base.clone().multiplyScalar(0.55);
-    parts.push({ geo: new THREE.ConeGeometry(rad * 0.62, h * 1.25, 9, 1, true), mat: G.mtx(0, y, 0, 1, 1, 1, r() * 6), color: inner });
-    const nb = Math.max(6, Math.round(7 + rad * 30)), droop0 = lerp(0.55, 0.25, t);
-    for (let b = 0; b < nb * 2; b++) {
+    r();   // (a draw that used to be a phase: kept so the near trees keep their shapes)
+    // A dark inner cone for body, then a ring of separate drooping branches round it, each its own length and angle,
+    // so the outline is ragged like a spruce's; snow lies only on their upper faces. Distant trees get one ring of
+    // fewer, three-sided branches, and a fuller inner cone so the gaps between them read as shadow, not sky.
+    const inner = base.clone().multiplyScalar(lod ? 0.62 : 0.55);
+    parts.push({ geo: new THREE.ConeGeometry(rad * (lod ? 0.72 : 0.62), h * (lod ? 1.6 : 1.25), lod ? 6 : 9, 1, true), mat: G.mtx(0, y, 0, 1, 1, 1, r() * 6), color: inner });
+    const nb = lod ? Math.max(4, Math.round(4 + rad * 16)) : Math.max(6, Math.round(7 + rad * 30)), droop0 = lerp(0.55, 0.25, t);
+    for (let b = 0; b < (lod ? nb : nb * 2); b++) {
       const ring = b >= nb, bi = ring ? b - nb : b;   // two rings, the second shorter and a little higher, between the first
-      const phi = ((bi + (ring ? 0.5 : 0)) / nb) * Math.PI * 2 + (r() - 0.5) * 0.4, L = rad * (ring ? 0.7 : 0.95) * (0.85 + r() * 0.3), w = L * (0.42 + r() * 0.1), d = droop0 + (r() - 0.5) * 0.2 - (ring ? 0.08 : 0);
-      const br = new THREE.CylinderGeometry(w * 0.3, w, L, 4, 2, true);   // blunt-ended, not a spike (open: the ends are never seen)
+      const phi = ((bi + (ring ? 0.5 : 0)) / nb) * Math.PI * 2 + (r() - 0.5) * 0.4, L = rad * (ring ? 0.7 : lod ? 1.06 : 0.95) * (0.85 + r() * 0.3), w = L * (lod ? 0.7 : 0.42 + r() * 0.1), d = droop0 + (r() - 0.5) * 0.2 - (ring ? 0.08 : 0);
+      const br = new THREE.CylinderGeometry(w * 0.3, w, L, lod ? 3 : 4, lod ? 1 : 2, true);   // blunt-ended, not a spike (open: the ends are never seen)
       // a little sag along its length: the far half bends down further
       const bp = br.attributes.position; for (let k = 0; k < bp.count; k++) { const yy = bp.getY(k) / L + 0.5; bp.setX(k, bp.getX(k) - yy * yy * L * 0.18); }
       const M = new THREE.Matrix4().makeTranslation(0, y + (r() - 0.5) * h * 0.4 + (ring ? h * 0.3 : 0), 0)
@@ -336,7 +384,7 @@ function pineGeometry(seed, lod = 0) {
       const snowB = snowy && r() < 0.72, s0 = 0.3 + r() * 0.25;
       // snow in clumps on the outer, upward faces of some branches, with green between (whole slabs of it, on every
       // branch, made the trees look folded from white card)
-      parts.push({ geo: br, mat: M, uv: [4, 1], color: (v, n) => { const out = Math.hypot(v.x, v.z) / Math.max(1e-3, rad); return snowB && n.y > 0.52 && out > s0 ? snow : tone.clone().multiplyScalar(0.7 + Math.min(1, out) * 0.45); } });
+      parts.push({ geo: br, mat: M, uv: [lod ? 3 : 4, 1], color: (v, n) => { const out = Math.hypot(v.x, v.z) / Math.max(1e-3, rad); return snowB && n.y > 0.52 && out > s0 ? snow : tone.clone().multiplyScalar(0.7 + Math.min(1, out) * 0.45); } });
     }
   }
   const g = G.merge(parts);
@@ -357,7 +405,7 @@ function pineGeometry(seed, lod = 0) {
 G.buildForest = () => {
   const r = G.seeded(31);
   const mat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5, map: G.TX.needles, alphaTest: 0.5 });
-  const farMat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5, map: G.TX.skirt, alphaTest: 0.5 });
+  const farMat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5, map: G.TX.needles, alphaTest: 0.5 });
   // Gentle sway in the wind: the crown moves more than the trunk, each tree on its own phase.
   G.SWAY = { uTime: { value: 0 }, uGust: { value: 0 } };
   const sway = (mat, tag) => { mat.onBeforeCompile = (sh) => {
