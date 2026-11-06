@@ -653,10 +653,19 @@ G.buildCabin = () => {
   const fl = G.add(new THREE.Mesh(new THREE.PlaneGeometry(x1, D), MAT.floor), world, false, true);
   fl.rotation.x = -Math.PI / 2; fl.position.set(x1 / 2, 0.002, zc);
   const fuv = fl.geometry.attributes.uv; for (let i = 0; i < fuv.count; i++) fuv.setXY(i, fuv.getX(i) * x1 / 2.4, fuv.getY(i) * D / 2.4);
-  const ce = G.add(new THREE.Mesh(new THREE.PlaneGeometry(x1, D), MAT.boards), world, false, true);
+  const ce = G.add(new THREE.Mesh(new THREE.PlaneGeometry(x1, D), MAT.ceiling), world, false, true);
   ce.rotation.x = Math.PI / 2; ce.position.set(x1 / 2, CAB.wallH, zc); G.CAMBLOCK.push(ce);
   const cuv = ce.geometry.attributes.uv; for (let i = 0; i < cuv.count; i++) cuv.setXY(i, cuv.getX(i) * x1 / 2.75, cuv.getY(i) * D / 2.75);
   for (let x = 0.9; x < x1; x += 1.55) G.box(0.16, 0.2, D, MAT.beam, x, CAB.wallH - 0.1, zc, { cast: false });
+  // The bedroom's back wall, behind the bed, painted (a board wall of its own, just in front of the pine).
+  { const pw = new THREE.Mesh(new THREE.PlaneGeometry(4.78, CAB.wallH), MAT.paintedBoards);
+    const puv = pw.geometry.attributes.uv; for (let i = 0; i < puv.count; i++) puv.setXY(i, puv.getX(i) * 4.78 / 2.75, puv.getY(i) * CAB.wallH / 2.75);
+    pw.position.set(0.11 + 4.78 / 2, CAB.wallH / 2, z0 + 0.113); G.add(pw, world, false, true); }
+  // ...and the kitchen's back wall, round the window over the sink, a soft sage.
+  { const sh = new THREE.Shape(); sh.moveTo(11.11, 0); sh.lineTo(x1 - 0.11, 0); sh.lineTo(x1 - 0.11, CAB.wallH); sh.lineTo(11.11, CAB.wallH); sh.lineTo(11.11, 0);
+    const hole = new THREE.Path(); hole.moveTo(12.45, 1.15); hole.lineTo(12.45, 2.0); hole.lineTo(13.65, 2.0); hole.lineTo(13.65, 1.15); hole.lineTo(12.45, 1.15); sh.holes.push(hole);
+    const km = MAT.paintedBoards.clone(); km.map = G.rep(TX.paintBoards, 1 / 2.75, 1 / 2.75); km.bumpMap = G.rep(TX.wallBoardsB, 1 / 2.75, 1 / 2.75); km.color.set('#97a284'); G.MATS && G.MATS.push(km);
+    const kw = new THREE.Mesh(new THREE.ShapeGeometry(sh), km); kw.position.z = z0 + 0.113; G.add(kw, world, false, true); }
   // Walls (outer log face, inner boards).
   const W_win = { bedS: { a: 1.6, b: 3.2 }, livS1: { a: 8.6, b: 10.2 }, door: { a: 6.0, b: 7.0 } };
   // Back wall: a window over the kitchen sink, and one in the reading nook.

@@ -148,6 +148,21 @@ G.buildTextures = () => {
   };
   TX.wallBoards = canvasTex(512, pine);
   TX.wallBoardsB = canvasTex(256, (u) => { const lu = (u * PB) % 1; const g = lu < 0.014 ? 30 : lu < 0.035 ? 30 + (lu - 0.014) / 0.021 * 160 : lu > 0.98 ? 150 : 190; return [g, g, g]; }, { srgb: false });
+  // The ceiling: the same boards limewashed, the grain still showing through a milky white (all wood, walls, ceiling
+  // and floor in one golden orange, made every room a box of the same colour, and kept the light low).
+  TX.ceilWash = canvasTex(0, null, { w: TX.wallBoards.image.width, h: TX.wallBoards.image.height, draw: (c, w, h) => {
+    c.drawImage(TX.wallBoards.image, 0, 0, w, h);
+    c.globalCompositeOperation = 'saturation'; c.fillStyle = 'rgba(128,128,128,0.65)'; c.fillRect(0, 0, w, h);
+    c.globalCompositeOperation = 'source-over'; c.fillStyle = 'rgba(238,233,224,0.6)'; c.fillRect(0, 0, w, h);
+  } });
+  // The bedroom's painted wall: boards painted a dusty blue, the grooves and a ghost of the grain under the paint.
+  TX.paintBoards = canvasTex(0, null, { w: TX.wallBoards.image.width, h: TX.wallBoards.image.height, draw: (c, w, h) => {
+    c.fillStyle = '#ffffff'; c.fillRect(0, 0, w, h);
+    c.globalAlpha = 0.16; c.drawImage(TX.wallBoards.image, 0, 0, w, h); c.globalAlpha = 1;
+    c.globalCompositeOperation = 'saturation'; c.fillStyle = 'rgb(128,128,128)'; c.fillRect(0, 0, w, h);
+    c.globalCompositeOperation = 'multiply'; c.globalAlpha = 0.55; c.drawImage(TX.wallBoardsB.image, 0, 0, w, h);
+    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+  } });
   TX.boardsB = canvasTex(256, (u) => { const g = (u * 6) % 1 < 0.02 ? 40 : 170 + G.fbm(u * 80, 0, 2) * 30; return [g, g, g]; }, { srgb: false });
   // Snow: wind-ripples for the light to model (it was one flat white), tileable (whole-number waves only), and a few
   // crystals in every patch that catch the sun as you move.
@@ -176,13 +191,18 @@ G.buildTextures = () => {
   });
   TX.logsB = canvasTex(256, (u, v) => { const f = (v * 7) % 1; const g = f < 0.07 ? 30 : 60 + Math.sin(((f - 0.07) / 0.93) * Math.PI) * 170 + G.fbm(u * 60, v * 300, 2) * 20; return [g, g, g]; }, { srgb: false });
   // Floor: wide oak planks.
+  // Oak floorboards, darker and browner than the pine walls so the room has a floor under it: nine boards to the
+  // 2.4 m tile, each its own length, tone and grain, a dark line at every joint.
+  const FR = 9;
   TX.floor = canvasTex(512, (u, v) => {
-    const row = Math.floor(v * 6), off = (row * 0.37) % 1, seg = Math.floor((u + off) * 2);
-    const edge = (v * 6) % 1 < 0.025 || ((u + off) * 2) % 1 < 0.006 ? 0.5 : 1;
-    const t = (0.74 + ((row * 17 + seg * 31) % 7) / 28 + fbm(u * 3, v * 50 + row * 3, 3) * 0.3) * edge;
-    return [172 * t, 120 * t, 78 * t];   // warm oak (it was nearly mahogany)
+    const row = Math.floor(v * FR), off = G.hash1(row * 3.7) % 1, seg = Math.floor((u + off) * 2), id = row * 7 + seg * 3;
+    const edge = (v * FR) % 1 < 0.035 || ((u + off) * 2) % 1 < 0.006 ? 0.45 : 1;
+    const h = G.hash1(id * 1.93 + 0.4), warm = 0.94 + G.hash1(id * 2.71) * 0.1;
+    const grain = G.pfbm(u * 6 + h * 9, v * FR * 6, [6, FR * 6], 3) * 0.22 + G.pfbm(u * 40, v * FR * 14, [40, FR * 14], 2) * 0.07;
+    const t = (0.66 + h * 0.3 + grain) * edge;
+    return [150 * t * warm, 112 * t, 84 * t / warm];   // a greyer brown than the pine, so the warm light doesn't turn it to rust
   });
-  TX.floorB = canvasTex(256, (u, v) => { const row = Math.floor(v * 6), off = (row * 0.37) % 1; const e = (v * 6) % 1 < 0.025 || ((u + off) * 2) % 1 < 0.006; const g = e ? 40 : 160 + G.fbm(u * 40, v * 300, 2) * 30; return [g, g, g]; }, { srgb: false });
+  TX.floorB = canvasTex(256, (u, v) => { const row = Math.floor(v * FR), off = G.hash1(row * 3.7) % 1; const e = (v * FR) % 1 < 0.035 || ((u + off) * 2) % 1 < 0.006; const g = e ? 40 : 160 + G.fbm(u * 40, v * 300, 2) * 30; return [g, g, g]; }, { srgb: false });
   // Roof shingles.
   TX.shingle = canvasTex(256, (u, v) => {
     const row = Math.floor(v * 8), off = row % 2 ? 0.5 : 0, f = (v * 8) % 1;
@@ -433,9 +453,11 @@ const MAT = (G.MAT = {});
 G.buildMaterials = () => {
   const std = G.std;
   Object.assign(MAT, {
-    boards: std({ map: TX.wallBoards, bumpMap: TX.wallBoardsB, bumpScale: 0.004, color: '#fbeee0', roughness: 0.72, env: 0.24 }),   // golden pine
+    boards: std({ map: TX.wallBoards, bumpMap: TX.wallBoardsB, bumpScale: 0.004, color: '#f4e9dd', roughness: 0.72, env: 0.24 }),   // golden pine
+    ceiling: std({ map: TX.ceilWash, bumpMap: TX.wallBoardsB, bumpScale: 0.003, color: '#ffffff', roughness: 0.85, env: 0.3 }),   // limewashed boards
+    paintedBoards: std({ map: TX.paintBoards, bumpMap: TX.wallBoardsB, bumpScale: 0.004, color: '#7f97a6', roughness: 0.62, env: 0.3 }),   // the bedroom wall, dusty blue
     logs: std({ map: TX.logs, bumpMap: TX.logsB, bumpScale: 0.03, roughness: 0.85, env: 0.4 }),
-    floor: std({ map: TX.floor, bumpMap: TX.floorB, bumpScale: 0.003, color: '#f0d9c0', roughness: 0.55, env: 0.4 }),
+    floor: std({ map: TX.floor, bumpMap: TX.floorB, bumpScale: 0.003, color: '#f2e6dc', roughness: 0.46, env: 0.45 }),
     shingle: std({ map: TX.shingle, roughness: 0.9 }),
     stone: std({ map: TX.stone, bumpMap: TX.stone, bumpScale: 0.02, roughness: 0.9, env: 0.3 }),
     beam: std({ map: TX.bark, color: '#7a5a42', roughness: 0.8 }),
