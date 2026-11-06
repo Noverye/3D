@@ -406,8 +406,9 @@ function updateLighting(t, dt, focus) {
   G.renderer.toneMappingExposure = lerp(lerp(PAL.exposure[0], PAL.exposure[1], n), DAY.exposure, d) * (1 + ik * 0.3) * (STATE.exposureMul || 1);
   const camIn0 = G.inside(G.camera.position.x, G.camera.position.z);
   const env = d > 0.5 ? (camIn0 ? G.envRoom : G.envDay) : n > 0.5 ? G.envNight : G.envSunset; if (G.scene.environment !== env) G.scene.environment = env;
-  MAT.glassOut.emissiveIntensity = lerp(0.5, 1.0, n) * (1 - d);
-  MAT.glassOut.color.copy(GLASS_WARM).lerp(DAY.glass, d);
+  for (const m of G.GLASS_OUT) { m.emissiveIntensity = lerp(0.5, 1.0, n) * (1 - d); m.color.copy(GLASS_WARM).lerp(DAY.glass, d); }
+  MAT.glassOut.userData.U.uGDay.value = d;
+  G.glassLightKey = Math.round(d * 3) + '|' + Math.round((STATE.fogKs || 1) * 4);   // when this changes, the window reflections are redrawn
   const dark = 1 - d;   // outdoor lanterns and the porch lamp are off by day
   // Interior lights
   const fl = 0.82 + Math.sin(t * 13) * 0.08 + Math.sin(t * 7.3) * 0.07 + Math.sin(t * 23.1) * 0.03;
@@ -1889,6 +1890,7 @@ function frame(now) {
   }
   // Input pressed this frame must survive until simulate() reads it.
   simulate(dt);
+  G.glassCapture(dt);   // one face of one window's reflection, when they're out of date
   composer.render(dt);
   if (G.onFrameEnd) { const f = G.onFrameEnd; G.onFrameEnd = null; try { f(); } catch (e) { console.error(e); } }   // read the canvas in the same task it was drawn
   bubble(dt);

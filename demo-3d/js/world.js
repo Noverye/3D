@@ -679,13 +679,22 @@ function windowAt(axis, c, a, b, y0, y1, outward) {
   // snow on the outside sill
   const sill = axis === 'x' ? G.box(w + 0.2, 0.06, 0.16, MAT.snow, mid, y0 - 0.005, c + outward * 0.18, { r: 0.025 }) : G.box(0.16, 0.06, w + 0.2, MAT.snow, c + outward * 0.18, y0 - 0.005, mid, { r: 0.025 });
   // glass: warm glow outward, dark night inward
+  // Each pane carries its size in metres and a seed of its own (for the glass shaders: ripples, tilt, frost).
+  const seed = Math.floor(((Math.abs(Math.sin(mid * 12.9898 + c * 78.233)) * 43758.5453) % 1) * 997);
   const pane = (mat, off, flip) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    const g = new THREE.PlaneGeometry(w, h), sz = [];
+    for (let i = 0; i < g.attributes.position.count; i++) sz.push(w, h, seed);
+    g.setAttribute('gsz', new THREE.Float32BufferAttribute(sz, 3));
+    // The inner face looks the other way, so mirror its u: the frost then lies in the same place seen from either side.
+    if (mat === MAT.glassIn) { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, 1 - uv.getX(i)); }
+    const m = new THREE.Mesh(g, mat);
     if (axis === 'x') { m.position.set(mid, (y0 + y1) / 2, c + off); m.rotation.y = flip ? Math.PI : 0; }
     else { m.position.set(c + off, (y0 + y1) / 2, mid); m.rotation.y = flip ? -Math.PI / 2 : Math.PI / 2; }
     m.renderOrder = 3; world.add(m); return m;
   };
-  const out = pane(MAT.glassOut, outward * 0.012, outward < 0);
+  // The outer pane gets a material of its own: it reflects its own cube map of what is in front of it (see below).
+  const gm = G.glassOutSetup(MAT.glassOut.clone()); G.MATS.push(gm);
+  const out = pane(gm, outward * 0.012, outward < 0);
   const inn = pane(MAT.glassIn, -outward * 0.012, outward > 0);
   if (axis === 'z') { out.rotation.y = outward > 0 ? Math.PI / 2 : -Math.PI / 2; inn.rotation.y = outward > 0 ? -Math.PI / 2 : Math.PI / 2; }
   G.WINDOWS.push({ out, inn });
@@ -731,6 +740,53 @@ function buildAnnex() {
   G.STUDY_DOOR = { x: CAB.x1 - 0.5, z: dz };
 }
 G.WINDOWS = [];
+/* Window reflections by day (the glass shader is G.glassOutSetup in core.js). Each window keeps a small cube map of
+ * the world as seen from just outside its glass: the sky, the forest across the clearing, the porch posts, the yard.
+ * When the light has changed since it was drawn and the camera is outdoors by day, its faces are redrawn one a frame,
+ * nearest window first (the face looking into the wall is never seen, so it's skipped). Characters, falling snow,
+ * smoke and the glass itself are left out of it: they move, and the reflection doesn't. */
+const GLASS = { hide: [] };
+function glassCube(w) {
+  const p = new THREE.Vector3(), q = new THREE.Quaternion();
+  w.out.getWorldPosition(p); w.out.getWorldQuaternion(q);
+  const nrm = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+  w.rt = new THREE.WebGLCubeRenderTarget(G.Q.glass || 256, { format: THREE.RGBAFormat, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter });
+  w.cam = new THREE.CubeCamera(0.1, 400, w.rt);
+  w.cam.position.copy(p).addScaledVector(nrm, 0.3); w.cam.updateMatrixWorld(true);
+  const ax = Math.abs(nrm.x) > Math.abs(nrm.z) ? 0 : 4;
+  w.skip = ax + ((ax === 0 ? nrm.x : nrm.z) > 0 ? 1 : 0);   // the face looking back into the wall
+  w.out.material.userData.U.uGCube.value = w.rt.texture;
+  w.key = null; w.todo = []; w.ready = false;
+}
+function glassFace(w, f) {
+  const R = G.renderer, prev = R.getRenderTarget(), au = R.shadowMap.autoUpdate;
+  const hide = GLASS.hide; hide.length = 0;
+  for (const o of G.scene.children) if (o.visible && (o.isPoints || o.isSprite || (o.userData && o.userData.hips))) { o.visible = false; hide.push(o); }
+  for (const v of G.WINDOWS) { v.out.visible = false; v.inn.visible = false; }
+  R.shadowMap.autoUpdate = false;   // the shadow maps from this frame still hold
+  R.setRenderTarget(w.rt, f); R.clear(); R.render(G.scene, w.cam.children[f]);
+  R.setRenderTarget(prev); R.shadowMap.autoUpdate = au;
+  for (const v of G.WINDOWS) { v.out.visible = true; v.inn.visible = true; }
+  for (const o of hide) o.visible = true;
+}
+G.glassCapture = (dt, force) => {
+  if (!G.WINDOWS.length) return;
+  const key = G.glassLightKey, day = MAT.glassOut.userData.U.uGDay.value, cp = G.camera.position;
+  for (const w of G.WINDOWS) {
+    if (!w.rt) glassCube(w);
+    const U = w.out.material.userData.U; U.uGHave.value = Math.min(w.ready ? 1 : 0, U.uGHave.value + dt * 2.5);
+    if (w.key !== key) { w.key = key; w.todo = [0, 1, 2, 3, 4, 5].filter((f) => f !== w.skip); }
+  }
+  if (!force && (day < 0.05 || G.inside(cp.x, cp.z))) return;
+  for (;;) {
+    let best = null, bd = 1e9;
+    for (const w of G.WINDOWS) { if (!w.todo.length) continue; const d = w.cam.position.distanceTo(cp); if (d < bd && (force || d < 45)) { bd = d; best = w; } }
+    if (!best) return;
+    glassFace(best, best.todo.shift());
+    if (!best.todo.length) best.ready = true;
+    if (!force) return;
+  }
+};
 G.buildCabin = () => {
   MAT.logsW = G.logWall(MAT.logs.clone()); G.MATS.push(MAT.logsW); MAT.boardsW = MAT.boards;
   const { x1, z1, z0, eave } = CAB, D = z1 - z0, zc = (z0 + z1) / 2;

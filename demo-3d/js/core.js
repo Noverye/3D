@@ -43,9 +43,9 @@ G.MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'on
 
 /* ---------------- quality presets ---------------- */
 G.PRESETS = {
-  Low: { dpr: 1, shadows: false, dof: false, ssao: false, bloom: 0.35, shadowSize: 1024, trees: 0.45, snow: 1500 },
-  High: { dpr: 1.5, shadows: true, dof: true, ssao: false, bloom: 0.5, shadowSize: 2048, trees: 1, snow: 3000 },
-  Epic: { dpr: 2, shadows: true, dof: true, ssao: true, bloom: 0.55, shadowSize: 4096, trees: 1, snow: 4500 },
+  Low: { glass: 128, dpr: 1, shadows: false, dof: false, ssao: false, bloom: 0.35, shadowSize: 1024, trees: 0.45, snow: 1500 },
+  High: { glass: 256, dpr: 1.5, shadows: true, dof: true, ssao: false, bloom: 0.5, shadowSize: 2048, trees: 1, snow: 3000 },
+  Epic: { glass: 256, dpr: 2, shadows: true, dof: true, ssao: true, bloom: 0.55, shadowSize: 4096, trees: 1, snow: 4500 },
 };
 G.qName = G.MOBILE ? 'Low' : 'High';
 try { G.qName = localStorage.getItem('cbs.base.quality') || G.qName; } catch (e) { /* storage unavailable */ }
@@ -492,17 +492,133 @@ G.buildMaterials = () => {
   // A lit window seen from outside is not one even sheet of cream: the room's light is strongest low in the middle
   // (the lamps, the fire) and falls off toward the frame, deepening to amber at the edges.
   MAT.glassOut.emissive.set('#ff8c34');
-  MAT.glassOut.onBeforeCompile = (sh) => {
-    sh.vertexShader = 'varying vec2 vGU;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvGU = uv;');
-    sh.fragmentShader = 'varying vec2 vGU;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  // Shared by both faces of the window glass: the pane's size and seed, noise, and the frost on it.
+  const GW_VERT = 'attribute vec3 gsz;\nvarying vec2 vGU;\nvarying vec3 vGS;\n';
+  const GW_HEAD = `varying vec2 vGU; varying vec3 vGS;
+float gwH( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
+float gwN( vec2 p ) { vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
+	return mix( mix( gwH( i ), gwH( i + vec2( 1.0, 0.0 ) ), f.x ), mix( gwH( i + vec2( 0.0, 1.0 ) ), gwH( i + vec2( 1.0, 1.0 ) ), f.x ), f.y ); }
+// The pane's seed, a whole number: hashing a varying that is only nearly constant would flicker pixel to pixel.
+float gwSeed() { return floor( vGS.z + 0.5 ); }
+float gwFrost( out vec2 gid ) {
+	// Where on the glass: metres across the window, which of the four panes, how far to that pane's edges.
+	vec2 gp = vGU * vGS.xy, gm = vec2( 0.5, 0.55 ) * vGS.xy; gid = step( gm, gp );
+	vec2 glo = mix( vec2( 0.0 ), gm + 0.0225, gid ), ghi = mix( gm - 0.0225, vGS.xy, gid );
+	float gdx = min( gp.x - glo.x, ghi.x - gp.x ) * 1.3, gdy = min( ( gp.y - glo.y ) * 0.5, ( ghi.y - gp.y ) * 4.0 );
+	// Frost: thickest in the bottom corners, a ragged feathery fringe along the edges, clear in the middle.
+	float gfd = 1.0 / ( 1.0 / max( gdx, 1e-3 ) + 1.0 / max( gdy, 1e-3 ) );
+	float gsd = gwSeed();
+	float gfn = gwN( gp * 11.0 + gsd * 0.37 ) * 0.6 + gwN( gp * 27.0 - gsd * 0.53 ) * 0.4;
+	float gband = 0.012 + 0.05 * gfn * gfn;
+	// Crystals in long feathery streaks, fanning out of the corners on the diagonals.
+	vec2 gq = gp - glo - ( ghi - glo ) * 0.5;
+	float gcr = gwN( vec2( gp.x * 46.0 + sign( gq.x * gq.y ) * gp.y * 30.0, gp.y * 9.0 - gp.x * 6.0 ) );
+	float gfa = smoothstep( gband, gband * 0.15, gfd ) * ( 0.3 + 0.7 * pow( gcr, 1.4 ) ) + smoothstep( gband * 0.45, 0.0, gfd ) * 0.4;
+	return clamp( gfa, 0.0, 1.0 ) * 0.82;
+}`;
+  // By day the room behind a window is far darker than the snow outside, so the glass reads by what it reflects. Each
+  // window keeps a small cube map of the world as seen from just outside it (world.js: the sky, the forest across the
+  // clearing, the porch posts, the snow), so a pane shows what is really in front of it; until that is drawn it falls
+  // back on a sketch of the same (sky, a ring of spruces round the clearing, snow). Old hand-made panes each sit at
+  // their own slight tilt and ripple a little, so the reflection wavers and breaks from pane to pane, and frost has
+  // crept in from the corners. It is composited as glass is: the reflection added on top and the room behind dimmed
+  // (not a milky sheet laid over it). The reflection is added after tone mapping, as the cube map already was.
+  const GU = { uGDay: { value: 0 } };
+  G.GLASS_OUT = [];
+  G.glassOutSetup = (m) => {
+    const U = (m.userData.U = { uGDay: GU.uGDay, uGCube: { value: null }, uGHave: { value: 0 } });
+    m.blending = THREE.CustomBlending; m.blendSrc = THREE.OneFactor; m.blendDst = THREE.OneMinusSrcAlphaFactor;
+    m.extensions = { derivatives: true };
+    m.customProgramCacheKey = () => 'glassOut-glow-cube';
+    m.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, U);
+      sh.uniforms.uGSun = { value: G.SUN_DAY.clone().normalize() };
+      sh.uniforms.uGClr = { value: new THREE.Vector3(G.CLEAR.x, G.CLEAR.z, G.CLEAR.r) };
+      sh.vertexShader = GW_VERT + 'varying vec3 vGW;\nvarying vec3 vGN;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+	vGU = uv; vGS = gsz; vGW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz; vGN = normalize( mat3( modelMatrix ) * objectNormal );`);
+      sh.fragmentShader = `uniform float uGDay; uniform vec3 uGSun; uniform vec3 uGClr; uniform samplerCube uGCube; uniform float uGHave;
+varying vec3 vGW; varying vec3 vGN;
+${GW_HEAD}
+// The forest's silhouette height (m) at arc position s round the clearing's edge: a row of spruce cones.
+float gwTrees( float s, float row ) {
+	float hgt = 0.0, sp = 3.4, q = s / sp + row * 0.5;
+	for ( int k = -1; k <= 1; k++ ) {
+		float cell = floor( q ) + float( k ), r1 = gwH( vec2( cell, row ) ), r2 = gwH( vec2( cell, row + 7.0 ) );
+		float cx = ( cell + 0.5 + ( r1 - 0.5 ) * 0.7 ) * sp, ht = 10.0 + 8.0 * r2 + row * 2.5;
+		hgt = max( hgt, ht - abs( s - cx ) * ht / 2.3 );
+	}
+	return hgt;
+}
+\n` + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 	{
 		vec2 gd = abs( vGU - 0.5 ) * 2.0; float edge = max( gd.x, gd.y * 1.1 );
 		float k = smoothstep( 0.3, 1.0, edge );
 		totalEmissiveRadiance *= mix( 1.25, 0.4, k ) * ( 0.8 + 0.35 * ( 1.0 - vGU.y ) );
 		totalEmissiveRadiance *= mix( vec3( 1.0, 0.96, 0.9 ), vec3( 1.0, 0.62, 0.32 ), k );
-	}`);
+	}`).replace('#include <tonemapping_fragment>', `
+	vec2 gid; float gfa = gwFrost( gid ); vec2 gp = vGU * vGS.xy;
+	// By night (and at dusk) the frost catches the lamplight from inside, a brighter amber than the clear glass.
+	gl_FragColor = vec4( mix( gl_FragColor.rgb, gl_FragColor.rgb * 0.75 + totalEmissiveRadiance * 0.25, gfa * 0.8 ), mix( gl_FragColor.a, 0.9, gfa * 0.8 ) );
+	#include <tonemapping_fragment>
+	{
+		// Each pane at its own slight tilt, with the horizontal waves of drawn glass.
+		vec3 gN0 = normalize( vGN ), gT = normalize( cross( vec3( 0.0, 1.0, 0.0 ), gN0 ) );
+		float gs = gwSeed() + gid.x * 3.0 + gid.y * 5.0;
+		float gtx = ( gwH( vec2( gs, 1.0 ) ) - 0.5 ) * 0.03 + ( gwN( vec2( gp.x * 2.5, gp.y * 5.5 ) + gs ) - 0.5 ) * 0.03;
+		float gty = ( gwH( vec2( gs, 2.0 ) ) - 0.5 ) * 0.03 + ( gwN( vec2( gp.x * 2.0 + 7.0, gp.y * 6.5 ) + gs ) - 0.5 ) * 0.04;
+		vec3 gNw = normalize( gN0 + gT * gtx + vec3( 0.0, gty, 0.0 ) );
+		vec3 gV = normalize( vGW - cameraPosition ), gR = reflect( gV, gNw );
+		gR = normalize( gR + gN0 * max( 0.0, -dot( gR, gN0 ) ) );
+		vec3 grefl = vec3( 0.0 );
+		if ( uGHave < 0.999 ) {
+			// The sketch: what the reflected ray meets, the clearing's forest edge, the snow before it, or the sky.
+			vec2 go = vGW.xz - uGClr.xy, gdir = normalize( gR.xz + vec2( 1e-5 ) );
+			float gaz = atan( gdir.y, gdir.x ), grr = uGClr.z + 2.0 + 5.0 * gwN( vec2( gaz * 2.5, 3.0 ) );
+			float gb = dot( go, gdir ), gc = dot( go, go ) - grr * grr, gt = -gb + sqrt( max( gb * gb - gc, 0.0 ) );
+			vec2 ghit = go + gdir * gt; float garc = atan( ghit.y, ghit.x ) * grr;
+			float gtan = gR.y / max( length( gR.xz ), 1e-3 );
+			float gtree = ( gwTrees( garc, 0.0 ) - vGW.y ) / gt, gfoot = -vGW.y / gt;
+			float gaa = fwidth( gtan ) * 1.2 + 1e-4;
+			vec3 gsky = mix( vec3( 0.68, 0.74, 0.82 ), vec3( 0.24, 0.36, 0.6 ), smoothstep( 0.05, 0.75, gR.y ) );
+			vec3 gtrees = mix( vec3( 0.035, 0.045, 0.05 ), vec3( 0.08, 0.095, 0.11 ), smoothstep( 20.0, 60.0, gt ) * 0.6 );
+			vec3 gsk = mix( gsky, gtrees, smoothstep( gtree + gaa, gtree - gaa, gtan ) );
+			gsk = mix( gsk, vec3( 0.5, 0.54, 0.6 ), smoothstep( gfoot + gaa, gfoot - gaa, gtan ) );
+			grefl = gsk * ( 1.0 - uGHave );
+		}
+		if ( uGHave > 0.001 ) grefl += textureCube( uGCube, gR, 1.25 ).rgb * uGHave;   // a touch soft, as through old glass
+		grefl += vec3( 1.0, 0.97, 0.9 ) * pow( max( dot( gR, uGSun ), 0.0 ), 900.0 ) * 6.0;
+		float gcos = clamp( dot( -gV, gNw ), 0.0, 1.0 ), gF = 0.32 + 0.68 * pow( 1.0 - gcos, 3.0 );
+		vec3 gdayC = grefl * gF; float gdayA = 1.0 - ( 1.0 - gF ) * 0.45;
+		// Frost by day: white crystals lit by the snowlight; it hides what's behind and takes no clear reflection.
+		gdayC = mix( gdayC, vec3( 0.6, 0.64, 0.7 ), gfa ); gdayA = mix( gdayA, 0.97, gfa );
+		gl_FragColor = vec4( mix( gl_FragColor.rgb * gl_FragColor.a, gdayC, uGDay ), mix( gl_FragColor.a, gdayA, uGDay ) );
+	}`).replace('#include <fog_fragment>', `#include <fog_fragment>
+	#ifdef USE_FOG
+		gl_FragColor.rgb -= fogColor * fogFactor * ( 1.0 - gl_FragColor.a );   // fog on a premultiplied colour
+	#endif`);
+    };
+    G.GLASS_OUT.push(m);
+    return m;
   };
-  MAT.glassOut.customProgramCacheKey = () => 'glassOut-glow';
+  G.glassOutSetup(MAT.glassOut);
+  // The same frost seen from inside: by day it glows white with the snowlight behind it, by night it catches the
+  // room's lamplight faintly. (Same blending as the outer face, so the frost hides the view instead of greying it.)
+  MAT.glassIn.blending = THREE.CustomBlending; MAT.glassIn.blendSrc = THREE.OneFactor; MAT.glassIn.blendDst = THREE.OneMinusSrcAlphaFactor;
+  MAT.glassIn.onBeforeCompile = (sh) => {
+    sh.uniforms.uGDay = GU.uGDay;
+    sh.vertexShader = GW_VERT + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvGU = uv; vGS = gsz;');
+    sh.fragmentShader = 'uniform float uGDay;\n' + GW_HEAD + '\n' + sh.fragmentShader.replace('#include <tonemapping_fragment>', `
+	{
+		vec2 gid; float gfa = gwFrost( gid );
+		vec3 gfc = mix( vec3( 0.07, 0.06, 0.055 ) + outgoingLight * 0.6, vec3( 0.86, 0.9, 0.95 ), uGDay );
+		gl_FragColor = vec4( mix( gl_FragColor.rgb * gl_FragColor.a, gfc, gfa ), mix( gl_FragColor.a, mix( 0.75, 0.94, uGDay ), gfa ) );
+	}
+	#include <tonemapping_fragment>`).replace('#include <fog_fragment>', `#include <fog_fragment>
+	#ifdef USE_FOG
+		gl_FragColor.rgb -= fogColor * fogFactor * ( 1.0 - gl_FragColor.a );
+	#endif`);
+  };
+  MAT.glassIn.customProgramCacheKey = () => 'glassIn-frost';
 };
 
 /* ---------------- mesh helpers ---------------- */
