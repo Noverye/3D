@@ -440,6 +440,7 @@ async function attachBody(root, name, spec, bin) {
       if (spec.keepMaterials) u.necklineSmoothed = smoothNeckline(model);
       if (spec.keepMaterials) u.collarTucked = tuckCollar(model);
       if (spec.keepMaterials) u.darksLifted = liftDarks(model);
+      if (spec.keepMaterials) u.hoodMade = addHood(model, u);
       if (spec.keepMaterials) u.skinLight = skinLight(model);
       if (spec.keepMaterials) u.blush = blush(model);
       // Coat tails: spring bones the coat's skirt hangs from (tools/coats.py, coat_L / coat_R).
@@ -754,14 +755,19 @@ function skinLight(model) {
   return n;
 }
 /* Near-black clothes: his hoodie's texture is 12/255 and both pairs of leggings are almost as dark, so in any light
- * they read as flat black cut-outs with no folds. Lifted to a soft charcoal (still a black hoodie), so the light can
- * show their shape. */
+ * they read as flat black cut-outs with no folds. The hoodie gets a knitted charcoal-black jersey of its own (still a
+ * black hoodie) and the leggings are lifted a little, so the light can show their shape. */
 function liftDarks(model) {
   let n = 0;
   model.traverse((o) => {
     if (!o.isMesh || !o.material || o.material.userData.lifted) return;
     const m = o.material, mn = m.name || '';
-    if (/^top\.player/.test(mn)) { m.color.multiplyScalar(5.5); m.roughness = 0.92; }
+    if (/^top\.player/.test(mn)) {   // his hoodie: our own heathered jersey in place of its near-black texture
+      const rib = /rib/.test(mn);
+      m.map = G.TX.hoodKnit; m.color.setRGB(1, 1, 1); m.bumpMap = rib ? G.TX.hoodRibB : G.TX.hoodKnitB; m.bumpScale = rib ? 0.006 : 0.003; m.roughness = 0.92;
+      if (!rib) hoodiePocket(m, o.geometry);
+      clothSheen(m, 0.55, 0.09, '1.6');   // black cotton: its fibres catch a grazing light, which is what shows its folds
+    }
     else if (/^legs\./.test(mn)) m.color.multiplyScalar(1.8);
     else return;
     clothSheen(m);
@@ -772,26 +778,175 @@ function liftDarks(model) {
 /* Dark cloth: a black hoodie or leggings lit like plain paint is a flat silhouette with no folds. Real fabric is a
  * pile of fibres that catch light at grazing angles, so its form shows as a soft brighter rim toward its edges and
  * along each fold that turns away from you (a velvet-like sheen), stronger on the lit side. */
-const CLOTH_SHEEN = `
+const CLOTH_SHEEN = (k = 0.3, base = 0.05, p = '2.0') => `
 	reflectedLight.directDiffuse += ( 1.0 - clearcoatDHR ) * irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );
 	{
 		float cv = 1.0 - saturate( dot( geometry.normal, geometry.viewDir ) );
 		float cl = saturate( dot( geometry.normal, directLight.direction ) * 0.5 + 0.5 );
-		reflectedLight.directDiffuse += directLight.color * ( pow( cv, 2.0 ) * 0.3 * cl ) * ( material.diffuseColor * 2.0 + 0.05 );
+		reflectedLight.directDiffuse += directLight.color * ( pow( cv, ${p} ) * ${k.toFixed(3)} * cl ) * ( material.diffuseColor * 2.0 + ${base.toFixed(3)} );
 	}`;
-function clothSheen(m) {
+function clothSheen(m, k, base, p) {
   if (m.userData.clothSheen) return;
-  const prev = m.onBeforeCompile;
+  const prev = m.onBeforeCompile, tag = k == null ? '' : `${k},${base},${p}`;
   m.onBeforeCompile = (sh, r) => {
     if (prev) prev(sh, r);
     const chunk = THREE.ShaderChunk.lights_physical_pars_fragment;
     const line = 'reflectedLight.directDiffuse += ( 1.0 - clearcoatDHR ) * irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );';
     if (chunk.indexOf(line) < 0) return;
-    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk.replace(line, CLOTH_SHEEN));
+    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk.replace(line, k == null ? CLOTH_SHEEN() : CLOTH_SHEEN(k, base, p)));
   };
   const key = m.customProgramCacheKey ? m.customProgramCacheKey.bind(m) : () => '';
-  m.customProgramCacheKey = () => key() + '|clothSheen';
+  m.customProgramCacheKey = () => key() + '|clothSheen' + tag;
   m.userData.clothSheen = true;
+}
+/* His hoodie's kangaroo pocket. The model has none (the front was one plain sheet of black), so it is drawn on, placed
+ * from the hoodie's rest shape (front is +z, the hem at 0.91 m): a stitched top edge, the two slanted hand openings
+ * with a line of shadow inside each and their folded edge catching the light, and stitching down the sides to the
+ * hem. Each line fades out as it gets thinner than a pixel, so it never flickers at a distance. */
+const POCKET = (y0, k, hs) => { const f = (v) => v.toFixed(4); return `
+	{
+		vec2 pq = vRestP.xy;
+		const float yT = ${f(y0 + 0.254 * k)}, yB = ${f(y0 + 0.054 * k)}, wT = ${f(0.085 * k)}, wB = ${f(0.155 * k)}, yS = ${f(y0 + 0.134 * k)}, PK = ${f(k)};   // top edge, hem, half-widths, where the openings end
+		float front = smoothstep(0.3, 0.55, normalize(vRestN).z) * step(0.06 * PK, vRestP.z);
+		float ax = abs(pq.x);
+		vec2 q2 = vec2(ax, pq.y);
+		float dOpen = length((q2 - vec2(wT, yT)) - (vec2(wB, yS) - vec2(wT, yT)) * clamp(dot(q2 - vec2(wT, yT), vec2(wB - wT, yS - yT)) / dot(vec2(wB - wT, yS - yT), vec2(wB - wT, yS - yT)), 0.0, 1.0));
+		float dTop = ax < wT ? abs(pq.y - yT) : length(q2 - vec2(wT, yT));
+		float dSide = pq.y < yS && pq.y > yB ? abs(ax - wB) : 1.0;
+		float px = max(fwidth(pq.y), 1e-4);
+		// a line w wide, faded by how much of a pixel it covers
+		#define PLINE(d, w) ( (1.0 - smoothstep(w * 0.5, w * 0.5 + px, d)) * min(1.0, w / px) )
+		float inside = step(ax, mix(wB, wT, clamp((pq.y - yS) / (yT - yS), 0.0, 1.0))) * step(yB, pq.y) * step(pq.y, yT);
+		// the opening's folded edge (pocket side) catches the light; just outside it, the shadow of the gap
+		float sideOut = ax > mix(wT, wB, clamp((yT - pq.y) / (yT - yS), 0.0, 1.0)) ? 1.0 : 0.0;
+		float shade = 1.0;
+		shade -= 0.55 * PLINE(dOpen, 0.004 * PK) * sideOut;
+		shade += 0.35 * PLINE(max(0.0, dOpen - 0.003 * PK), 0.004 * PK) * (1.0 - sideOut) * inside;
+		shade -= 0.35 * PLINE(dTop, 0.0025 * PK);
+		shade -= 0.25 * PLINE(abs(dTop - 0.008 * PK), 0.0015 * PK) * inside;        // the stitching under the top edge
+		shade -= 0.25 * PLINE(dSide, 0.0015 * PK);
+		shade -= 0.25 * PLINE(abs(dOpen - 0.009 * PK), 0.0015 * PK) * inside;      // and along each opening
+		shade *= 1.0 - 0.06 * inside;                                               // two layers of cloth, a shade darker
+		diffuseColor.rgb *= mix(1.0, shade, front);
+	}` + (hs ? `
+	{   // the shadow the lowered hood casts round its edge on the back, and the roll on the shoulders under it
+		vec3 hp = vRestP;
+		float back = smoothstep(-0.2, -0.45, normalize(vRestN).z) * step(hp.z, 0.0);
+		float ht = clamp((${f(hs.yTop)} - hp.y) / ${f(hs.yTop - hs.yBot)}, 0.0, 1.2), htc = min(ht, 1.0);
+		float hw = ${f(hs.hw0)} * sqrt(max(0.0, 1.0 - htc * htc * htc)) * (1.0 - 0.12 * htc) + ${f(0.006 * k)};
+		float out1 = ht >= 1.0 ? length(vec2(hp.x, (hp.y - ${f(hs.yBot)}) * 1.6)) : abs(hp.x) - hw;   // how far outside the hood
+		float hsd = (1.0 - smoothstep(0.0, ${f(0.022 * k)}, out1)) * step(-0.004, out1) * step(hp.y, ${f(hs.yTop)});
+		vec2 re = vec2(hp.x / ${f(hs.Rx)}, (hp.z - ${f(hs.cz)}) / ${f(hs.Rz)});
+		float rd = (length(re) - 1.0) * ${f(hs.Rx)};                                   // from the roll's line round the neck
+		float rsd = (1.0 - smoothstep(${f(0.028 * k)}, ${f(0.05 * k)}, abs(rd))) * step(${f(0.026 * k)}, abs(rd)) * smoothstep(${f(hs.yBack - 0.06 * k)}, ${f(hs.yBack - 0.015 * k)}, hp.y);
+		diffuseColor.rgb *= 1.0 - 0.5 * max(hsd * back, rsd);
+	}` : '') + `
+`; };
+function hoodiePocket(m, geo) {
+  if (m.userData.pocket) return;
+  // placed from this hoodie's own rest shape (his, 0.72 m from hem to collar, or the boy's smaller one)
+  geo.computeBoundingBox(); const y0 = geo.boundingBox.min.y, k = (geo.boundingBox.max.y - y0) / 0.716;
+  const prev = m.onBeforeCompile;
+  m.extensions = Object.assign({}, m.extensions, { derivatives: true });
+  m.onBeforeCompile = (sh, r) => {
+    if (prev) prev(sh, r);
+    sh.vertexShader = 'varying vec3 vRestP;\nvarying vec3 vRestN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvRestP = position; vRestN = normal;');
+    sh.fragmentShader = 'varying vec3 vRestP;\nvarying vec3 vRestN;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n' + POCKET(y0, k, m.userData.hoodShape));
+  };
+  const key = m.customProgramCacheKey ? m.customProgramCacheKey.bind(m) : () => '';
+  m.customProgramCacheKey = () => key() + '|pocket' + y0.toFixed(3) + ',' + k.toFixed(3) + (m.userData.hoodShape ? '|hoodShadow' : '');
+  m.userData.pocket = true;
+}
+/* His hoodie had no hood (from behind, where you see him most, it was a plain crew-neck with drawstrings coming out
+ * of nothing). One is made here from the hoodie's own rest shape: a soft roll of cloth round the back and sides of
+ * the neck, ending at the drawstrings, and the hood itself lying down his upper back, touching at its edges and fuller
+ * in the middle, with a seam down its centre. Each vertex takes the skin weights of the nearest point of the hoodie, so
+ * it moves with it; it hides with the hoodie under his coat. */
+function addHood(model, u) {
+  let top = null, rib = null;
+  model.traverse((o) => { if (o.isSkinnedMesh && o.material) { if (o.material.name === 'top.player.game') top = o; if (o.material.name === 'top.player.rib.game') rib = o; } });
+  if (!top || !rib || top.userData.hood) return 0;
+  const TP = top.geometry.attributes.position, RP = rib.geometry.attributes.position;
+  top.geometry.computeBoundingBox(); const bb = top.geometry.boundingBox, k = (bb.max.y - bb.min.y) / 0.716;
+  const pts = [], add = (P) => { for (let i = 0; i < P.count; i++) pts.push(P.getX(i), P.getY(i), P.getZ(i)); };
+  add(TP); const nTop = pts.length / 3; add(RP);
+  // the neckline: centre and depth from the rib's top
+  let zmin = 9, zmax = -9, ymax = -9; for (let i = 0; i < RP.count; i++) ymax = Math.max(ymax, RP.getY(i));
+  for (let i = 0; i < RP.count; i++) if (RP.getY(i) > ymax - 0.05 * k) { zmin = Math.min(zmin, RP.getZ(i)); zmax = Math.max(zmax, RP.getZ(i)); }
+  // round the neck, out on the shoulders past the collar's raised edge (which reaches 12 cm out at the sides)
+  const cz = (zmin + zmax) / 2, Rz = (zmax - zmin) / 2 + 0.03 * k, Rx = 0.152 * k;
+  // the cloth's surface below a point (highest point within r in x,z), and the back's (furthest back within r in x,y)
+  const topY = (x, z, r) => { let y = -9; for (let i = 0; i < pts.length; i += 3) if (Math.abs(pts[i] - x) < r && Math.abs(pts[i + 2] - z) < r) y = Math.max(y, pts[i + 1]); return y; };
+  const backZ = (x, y, r) => { let z = 9; for (let i = 0; i < nTop * 3; i += 3) if (pts[i + 2] < 0 && Math.abs(pts[i] - x) < r && Math.abs(pts[i + 1] - y) < r) z = Math.min(z, pts[i + 2]); return z < 9 ? z : null; };
+  const P = [], UV = [], I = [];
+  const tile = 0.075 * k;
+  // 1. the roll round the neck: a flattened tube along an ellipse round the collar, open at the front
+  const A0 = 0.48, A1 = Math.PI * 2 - 0.48, NA = 44, NT = 12, rH = 0.03 * k, rV = 0.021 * k;
+  const path = [];
+  for (let a = 0; a <= NA; a++) {
+    const th = A0 + (A1 - A0) * (a / NA), x = Math.sin(th) * Rx, z = cz + Math.cos(th) * Rz;
+    path.push([x, z, th]);
+  }
+  // it lies at one height round the back and sides and drops a little to the front, where the drawstrings come out
+  // (following the cloth under it point by point made it ride up over the collar's edge into two horns)
+  const yBack = topY(0, cz - Rz, 0.02 * k), yFront = Math.min(yBack, topY(Math.sin(A0) * Rx, cz + Math.cos(A0) * Rz, 0.02 * k));
+  for (let a = 0; a <= NA; a++) { const f = Math.abs(path[a][2] - Math.PI) / (Math.PI - A0); path[a].push(yBack + (yFront - yBack) * f * f); }
+  let arc = 0;
+  for (let a = 0; a <= NA; a++) {
+    const [x, z, th, y0] = path[a], f = a / NA, end = Math.min(1, Math.min(f, 1 - f) / 0.14), taper = 0.45 + 0.55 * Math.sin(end * Math.PI / 2);
+    if (a) arc += Math.hypot(x - path[a - 1][0], z - path[a - 1][1]);
+    const ox = Math.sin(th), oz = Math.cos(th) * (Rx / Rz);   // outward in x,z
+    const ol = Math.hypot(ox, oz), nx = ox / ol, nz = oz / ol;
+    const yc = y0 + rV * 0.55 * taper;
+    for (let t = 0; t <= NT; t++) {
+      const ph = (t / NT) * Math.PI * 2, c = Math.cos(ph), sn = Math.sin(ph);
+      const rr = rH * taper * (c > 0 ? 1 : 0.7);   // fuller on the outside, where it rolls over
+      P.push(x + nx * (c * rr + rH * 0.25), yc + sn * rV * taper, z + nz * (c * rr + rH * 0.25));
+      UV.push(arc / tile, (t / NT) * (2 * Math.PI * rH) / tile);
+    }
+  }
+  for (let a = 0; a < NA; a++) for (let t = 0; t < NT; t++) { const i0 = a * (NT + 1) + t, i1 = i0 + NT + 1; I.push(i0, i1, i0 + 1, i1, i1 + 1, i0 + 1); }
+  // 2. the hood lying down the back, a rounded shield: its top tucked under the roll, its point between the shoulder
+  // blades, fuller in the middle, and its folded edge standing off the back a little (s, t run 10% past the outline
+  // for the edge, which comes down to the cloth)
+  const base = P.length / 3, NU = 20, NV = 16, yTop = yBack + rV * 0.3, yBot = yTop - 0.26 * k, hw0 = 0.142 * k;
+  for (let j = 0; j <= NV; j++) {
+    const t = (j / NV) * 1.1, tc = Math.min(1, t), y = yTop + (yBot - yTop) * t;
+    const hw = hw0 * Math.sqrt(Math.max(0, 1 - Math.pow(tc, 3))) * (1 - 0.12 * tc) + 0.006 * k;
+    for (let i = 0; i <= NU; i++) {
+      const ss = ((i / NU) * 2 - 1) * 1.1, sc = Math.max(-1, Math.min(1, ss)), x = ss * hw;
+      const zb = backZ(x, y, 0.022 * k); const zs = zb == null ? cz - Rz : zb;
+      const edge = Math.max(Math.abs(ss), t);
+      const full = Math.pow(Math.max(0, 1 - sc * sc), 0.5) * Math.sin(Math.PI * Math.min(1, 0.2 + tc * 0.85));
+      const seam = 1 - 0.25 * Math.exp(-Math.pow(sc / 0.07, 2));   // the centre seam, a shallow crease
+      const off = edge <= 1 ? 0.008 + 0.026 * full * seam : 0.008 * Math.max(0, 1 - (edge - 1) / 0.1);
+      P.push(x, y, zs - off * k);
+      UV.push((x + 0.2) / tile, (yTop - y) / tile);
+    }
+  }
+  for (let j = 0; j < NV; j++) for (let i = 0; i < NU; i++) { const i0 = base + j * (NU + 1) + i, i1 = i0 + NU + 1; I.push(i0, i0 + 1, i1, i1, i0 + 1, i1 + 1); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
+  g.setIndex(I); g.computeVertexNormals();
+  // skin weights from the nearest point of the hoodie (its body, not the rib)
+  const SI = top.geometry.attributes.skinIndex, SW = top.geometry.attributes.skinWeight, n = P.length / 3;
+  const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+  for (let v = 0; v < n; v++) {
+    let best = -1, bd = 1e9; const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2];
+    for (let i = 0; i < nTop; i++) { const dx = pts[i * 3] - x, dy = pts[i * 3 + 1] - y, dz = pts[i * 3 + 2] - z, d = dx * dx + dy * dy + dz * dz; if (d < bd) { bd = d; best = i; } }
+    for (let c = 0; c < 4; c++) { si[v * 4 + c] = SI.array[best * SI.itemSize + c]; sw[v * 4 + c] = SW.array[best * SW.itemSize + c]; }
+  }
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+  g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+  const hood = new THREE.SkinnedMesh(g, top.material);
+  hood.name = 'drape_' + top.name; hood.position.copy(top.position); hood.quaternion.copy(top.quaternion); hood.scale.copy(top.scale);
+  hood.castShadow = top.castShadow; hood.receiveShadow = top.receiveShadow; hood.frustumCulled = top.frustumCulled;
+  top.parent.add(hood); hood.bind(top.skeleton, top.bindMatrix);
+  hood.visible = top.visible; top.userData.hood = hood;
+  top.material.userData.hoodShape = { yTop, yBot, hw0, Rx, Rz, cz, yBack }; top.material.needsUpdate = true;   // for its shadow on the hoodie (hoodiePocket)
+  u.realTop = (u.realTop || []).concat(hood);
+  return n;
 }
 /* The hoodie's neckline: its edge was cut in square teeth (a low-poly band whose edge vertices sit at alternating
  * heights), so it read as a jagged black crenellation under the chin. Find the open edge round the neck and even out

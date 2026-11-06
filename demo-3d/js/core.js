@@ -235,6 +235,29 @@ G.buildTextures = () => {
   // Jersey (hoodie).
   TX.jersey = canvasTex(256, (u, v) => { const t = 0.9 + G.fbm(u * 60, v * 60, 2) * 0.08 + Math.sin(v * 400) * 0.015; return [255 * t, 255 * t, 255 * t]; });
   TX.jerseyB = canvasTex(128, (u, v) => { const g = 128 + G.fbm(u * 50, v * 50, 2) * 60; return [g, g, g]; }, { srgb: false });
+  // His hoodie: charcoal-black cotton jersey, heathered. One tile is 7.5 cm of hoodie (the model's UVs), the knit's
+  // columns running down it: 40 columns of V-shaped stitches, each leg of each stitch a yarn of its own shade, mostly
+  // near-black with a few lighter fibres through it, as a black cotton-mix is when you look closely. It reflects about
+  // as much as real black cotton; the model's own texture was a hundredth of white, which no cloth is, so the hoodie
+  // was a flat black cut-out in any light.
+  {
+    const NC = 40, NR = 56, H = (a, b, c) => G.hash1(a * 12.9898 + b * 78.233 + c * 37.719);
+    const knit = (u, v) => {   // -> [yarn height 0..1, yarn id] for this point of the tile
+      const cx = u * NC, cy = v * NR, ix = Math.floor(cx), iy = Math.floor(cy), fx = cx - ix, fy = cy - iy;
+      const left = fx < 0.5, d = left ? Math.abs(fx - (0.08 + fy * 0.36)) : Math.abs(fx - (0.92 - fy * 0.36));
+      const h = Math.max(0, 1 - d / 0.24); return [h * h * (3 - 2 * h) * (0.8 + 0.2 * Math.sin(fy * Math.PI)), ix * 3 + (left ? 0 : 1), iy];
+    };
+    TX.hoodKnit = canvasTex(256, (u, v) => {
+      const [h, yi, yr] = knit(u, v), r = H(yi % (NC * 3), yr % NR, 1), r2 = H(yi % (NC * 3), yr % NR, 2);
+      let l = 0.26 + (r - 0.5) * 0.05;                      // the black yarn, each a shade of its own (sRGB 0..1)
+      if (r2 > 0.84) l += 0.1 + (r2 - 0.84) * 0.6;           // a lighter fibre through it
+      l *= 0.7 + 0.4 * h;                                     // the yarn's crown catches more than the gap between
+      const c = 255 * l; return [c, c * 1.01, c * 1.05];
+    });
+    TX.hoodKnitB = canvasTex(256, (u, v) => { const g = 60 + knit(u, v)[0] * 150; return [g, g, g]; }, { srgb: false });
+    // the cuffs, hem and collar: 1x1 rib, a raised column then a sunken one, 24 pairs to the tile
+    TX.hoodRibB = canvasTex(128, (u, v) => { const c = 0.5 + 0.5 * Math.cos(u * 24 * 2 * Math.PI), k = knit(u, v)[0]; const g = 40 + c * 150 + k * 45; return [g, g, g]; }, { srgb: false });
+  }
   // Wool coating (the overcoats): a dense, slightly fuzzy melton with a faint twill running across it.
   // One tile is 30 cm of coat (tools/overcoat.py lays the UVs out at that scale).
   TX.wool = canvasTex(256, (u, v) => { const tw = Math.sin((u + v) * 96 * Math.PI) * 0.018, t = 0.9 + G.fbm(u * 90, v * 90, 3) * 0.07 + G.fbm(u * 12, v * 12, 2) * 0.03 + tw; return [255 * t, 255 * t, 255 * t]; });
