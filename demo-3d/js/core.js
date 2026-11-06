@@ -258,6 +258,18 @@ G.buildTextures = () => {
     // the cuffs, hem and collar: 1x1 rib, a raised column then a sunken one, 24 pairs to the tile
     TX.hoodRibB = canvasTex(128, (u, v) => { const c = 0.5 + 0.5 * Math.cos(u * 24 * 2 * Math.PI), k = knit(u, v)[0]; const g = 40 + c * 150 + k * 45; return [g, g, g]; }, { srgb: false });
   }
+  // Firebrick, blackened with years of fires: one tile is 48 x 45 cm, six courses of two bricks, each brick its own
+  // shade of burnt red-brown, some nearly black with soot, the mortar dark.
+  TX.firebrick = canvasTex(256, (u, v, x, y) => {
+    const row = Math.floor(v * 6), fy = v * 6 - row, off = row % 2 ? 0.5 : 0, bu = u * 2 + off, col = Math.floor(bu), fx = bu - col;
+    const mortar = Math.min(fx, 1 - fx) < 0.025 || Math.min(fy, 1 - fy) < 0.07;
+    const h = G.hash1((col % 2) * 7.1 + row * 3.3 + 0.5), soot = G.hash1(col * 1.7 + row * 9.1 + 2.0);
+    const k = (0.75 + G.fbm(u * 40, v * 40, 2) * 0.25) * (soot > 0.7 ? 0.45 : 1);
+    if (mortar) return [38, 33, 30];
+    return [(104 + h * 44) * k, (54 + h * 20) * k, (40 + h * 12) * k];
+  });
+  // Wood ash: pale grey, soft and uneven, with flecks of charcoal.
+  TX.ash = canvasTex(128, (u, v, x, y) => { const g = 0.55 + G.fbm(u * 18, v * 18, 3) * 0.25 - (G.hash1(x * 3.1 + y * 7.7) > 0.93 ? 0.35 : 0); const c = 255 * Math.max(0.08, g); return [c, c * 0.97, c * 0.93]; });
   // Wool coating (the overcoats): a dense, slightly fuzzy melton with a faint twill running across it.
   // One tile is 30 cm of coat (tools/overcoat.py lays the UVs out at that scale).
   TX.wool = canvasTex(256, (u, v) => { const tw = Math.sin((u + v) * 96 * Math.PI) * 0.018, t = 0.9 + G.fbm(u * 90, v * 90, 3) * 0.07 + G.fbm(u * 12, v * 12, 2) * 0.03 + tw; return [255 * t, 255 * t, 255 * t]; });
@@ -506,6 +518,80 @@ G.pillowGeo = (w, h, d, seed = 1) => {
 G.pillow = (w, h, d, mat, x, y, z, o = {}) => {
   const m = G.add(new THREE.Mesh(G.pillowGeo(w, h, d, o.seed || x * 3.1 + z), mat), o.parent, o.cast !== false, true);
   m.position.set(x, y, z);
+  return m;
+};
+/* Upholstery: a block with soft edges whose faces swell a little, as stuffed cloth does (a rounded box is flat on
+ * every face, so a chair made of them read as foam blocks). It is a sphere pushed out to a rounded box (n: how square,
+ * 3 a soft roll, 8 a crisp block), then each face crowned: top, the sides, and one face (front: -z) fuller still.
+ * UVs are laid flat on each face at uvM metres to a tile. */
+G.puffGeo = (w, h, d, o = {}) => {
+  const n = o.n || 6, ct = o.top == null ? 0.12 : o.top, cs = o.side == null ? 0.05 : o.side, cf = o.front || 0, uvM = o.uvM || 0.3, seed = o.seed || 1;
+  const g = new THREE.SphereGeometry(1, o.ws || 40, o.hs || 28), P = g.attributes.position, UV = g.attributes.uv, N0 = [];
+  const a = w / 2, b = h / 2, c = d / 2;
+  for (let i = 0; i < P.count; i++) {
+    const dx = P.getX(i), dy = P.getY(i), dz = P.getZ(i);
+    const t = Math.pow(Math.pow(Math.abs(dx / a), n) + Math.pow(Math.abs(dy / b), n) + Math.pow(Math.abs(dz / c), n), -1 / n);
+    let x = dx * t, y = dy * t, z = dz * t;
+    const ux = x / a, uy = y / b, uz = z / c, fx = Math.max(0, 1 - ux * ux), fy = Math.max(0, 1 - uy * uy), fz = Math.max(0, 1 - uz * uz);
+    const wr = 1 + 0.04 * Math.sin(ux * 6 + seed) * Math.sin(uz * 5 - seed);
+    if (y > 0) y += ct * b * fx * fz * wr;
+    x += Math.sign(x) * cs * a * fy * fz;
+    z += (z < 0 ? -(cs + cf) : cs) * c * fx * fy * wr;
+    P.setXYZ(i, x, y, z);
+    // flat on the face it most faces
+    const ax = Math.abs(ux), ay = Math.abs(uy), az = Math.abs(uz);
+    if (ay >= ax && ay >= az) UV.setXY(i, x / uvM, z / uvM); else if (ax >= az) UV.setXY(i, z / uvM, y / uvM); else UV.setXY(i, x / uvM, y / uvM);
+  }
+  g.computeVertexNormals();
+  G.weldNormals(g);
+  return g;
+};
+// Vertices in the same place share one normal (a sphere's seam and poles are split, which shows as a line).
+G.weldNormals = (g) => {
+  const P = g.attributes.position, N = g.attributes.normal, by = new Map();
+  for (let i = 0; i < P.count; i++) { const k = P.getX(i).toFixed(4) + ',' + P.getY(i).toFixed(4) + ',' + P.getZ(i).toFixed(4); (by.get(k) || by.set(k, []).get(k)).push(i); }
+  by.forEach((L) => { if (L.length < 2) return; let x = 0, y = 0, z = 0; for (const i of L) { x += N.getX(i); y += N.getY(i); z += N.getZ(i); } const l = Math.hypot(x, y, z) || 1; for (const i of L) N.setXYZ(i, x / l, y / l, z / l); });
+  N.needsUpdate = true;
+};
+/* Shade where stuffed parts press together (a seat cushion against the arms and the back, the arms into the base):
+ * each vertex of the meshes in `group` that use `mat` is darkened by how much of the other parts lies within r of it,
+ * and toward the floor, written as vertex colours (the room has no ambient occlusion, so a chair of one colour read
+ * as one blob). */
+G.contactShade = (group, mat, r = 0.07, k = 0.5) => {
+  group.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(group.matrixWorld).invert(), meshes = [];
+  group.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  const cell = r, grid = new Map(), v = new THREE.Vector3(), key = (x, y, z) => x + ',' + y + ',' + z;
+  const pos = meshes.map((m, mi) => {
+    const M = new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld), P = m.geometry.attributes.position, out = new Float32Array(P.count * 3);
+    for (let i = 0; i < P.count; i++) {
+      v.fromBufferAttribute(P, i).applyMatrix4(M); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z;
+      const kk = key(Math.floor(v.x / cell), Math.floor(v.y / cell), Math.floor(v.z / cell)); (grid.get(kk) || grid.set(kk, []).get(kk)).push(mi, i);
+    }
+    return out;
+  });
+  meshes.forEach((m, mi) => {
+    if (m.material !== mat) return;
+    const p = pos[mi], n = p.length / 3, C = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2], cx = Math.floor(x / cell), cy = Math.floor(y / cell), cz = Math.floor(z / cell);
+      let s = 0;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
+        const L = grid.get(key(cx + a, cy + b, cz + c)); if (!L) continue;
+        for (let j = 0; j < L.length; j += 2) { if (L[j] === mi) continue; const q = pos[L[j]], o = L[j + 1] * 3, d = Math.hypot(q[o] - x, q[o + 1] - y, q[o + 2] - z); if (d < r) s += 1 - d / r; }
+      }
+      const ao = (1 - k * Math.min(1, s / 8)) * (0.72 + 0.28 * G.smooth(0.02, 0.3, y));
+      C[i * 3] = C[i * 3 + 1] = C[i * 3 + 2] = ao;
+    }
+    m.geometry.setAttribute('color', new THREE.BufferAttribute(C, 3));
+  });
+  mat.vertexColors = true; mat.needsUpdate = true;
+};
+G.puff = (w, h, d, mat, x, y, z, o = {}) => {
+  const m = G.add(new THREE.Mesh(G.puffGeo(w, h, d, o), mat), o.parent, o.cast !== false, true);
+  m.position.set(x, y, z);
+  if (o.rx) m.rotation.x = o.rx;
+  if (o.rz) m.rotation.z = o.rz;
   return m;
 };
 G.cyl = (rt, rb, h, mat, x, y, z, o = {}) => {

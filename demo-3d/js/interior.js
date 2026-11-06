@@ -183,6 +183,24 @@ function buildHomely() {
   // fairy lights along the living-room beam, over the sofa
   for (let i = 0; i <= 36; i++) { const t = i / 36, b = new THREE.Mesh(new THREE.SphereGeometry(0.013, 6, 4), MAT.bulb); b.position.set(5.3 + t * 5.4, 2.5 - Math.sin(t * Math.PI * 4) * 0.07, 3.95); W.add(b); }
 }
+/* A throw laid over the arm of a chair or sofa: a cloth following `path` (x, y in the parent's frame, from the seat,
+ * over the arm, down the outside) from z0 to z1, the part that hangs rippling more toward its free edge. */
+function drapeOver(parent, mat, path, z0, z1, o = {}) {
+  const len = [0]; for (let i = 1; i < path.length; i++) len.push(len[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+  const L = len[len.length - 1], top = len[o.hangFrom || 4];
+  const at = (s) => { let i = 1; while (i < path.length - 1 && len[i] < s) i++; const f = (s - len[i - 1]) / (len[i] - len[i - 1]); return [path[i - 1][0] + (path[i][0] - path[i - 1][0]) * f, path[i - 1][1] + (path[i][1] - path[i - 1][1]) * f]; };
+  const NS = 36, NZ = Math.max(12, Math.round((z1 - z0) * 40)), P = [], UV = [], I = [];
+  for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NS; i++) {
+    const sl = (i / NS) * L, zz = z0 + (j / NZ) * (z1 - z0), [px, py] = at(sl), hang = Math.max(0, (sl - top) / (L - top));
+    const fold = Math.sin(zz * 22 + 1.3) * 0.012 * hang + Math.sin(zz * 9) * 0.006 * hang;
+    P.push(px + fold + 0.012, py + 0.008 - hang * hang * Math.abs(Math.sin(zz * 11)) * 0.03, zz + Math.sin(sl * 9) * 0.01 * hang);
+    UV.push(sl / 0.3, (zz - z0) / 0.3);
+  }
+  for (let j = 0; j < NZ; j++) for (let i = 0; i < NS; i++) { const a0 = j * (NS + 1) + i, a1 = a0 + NS + 1; I.push(a0, a0 + 1, a1, a1, a0 + 1, a1 + 1); }
+  const tg = new THREE.BufferGeometry(); tg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); tg.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); tg.setIndex(I); tg.computeVertexNormals();
+  const tm = mat.clone(); tm.side = THREE.DoubleSide; G.MATS.push(tm);
+  return G.add(new THREE.Mesh(tg, tm), parent, true, true);
+}
 function buildRooms() {
   const W = G.world;
   /* ===== Bedroom ===== */
@@ -229,15 +247,66 @@ function buildRooms() {
 
   /* ===== Living room ===== */
   const fx = 8.0;
-  box(2.0, 2.7, 0.62, MAT.stone, fx, 1.35, 0.35, { coll: true, cam: true, uv: [1.2, 1.6] });
+  // The chimney breast, built round a real firebox 32 cm deep (it was a solid block with a black panel on its face,
+  // the logs on the hearth in front of it, so with the fire out it was a black rectangle). The stone is laid by its
+  // position, so the courses run on across the pieces.
+  const stoneUV = (m, du = 0.6, dv = 0.593) => { const g = m.geometry, P = g.attributes.position, N = g.attributes.normal, UVa = g.attributes.uv;
+    for (let i = 0; i < P.count; i++) { const x = P.getX(i) + m.position.x, y = P.getY(i) + m.position.y, z = P.getZ(i) + m.position.z, nx = Math.abs(N.getX(i)), ny = Math.abs(N.getY(i));
+      if (ny > 0.5) UVa.setXY(i, x * du, z * dv); else if (nx > 0.5) UVa.setXY(i, z * du, y * dv); else UVa.setXY(i, x * du, y * dv); } UVa.needsUpdate = true; };
+  const FB = { x0: fx - 0.5, x1: fx + 0.5, top: 0.81, back: 0.34, face: 0.66 };
+  G.COLL.push({ x0: fx - 1.0, z0: 0.04, x1: fx + 1.0, z1: 0.66 });
+  for (const [x0, x1, y0, y1, z0, z1] of [[fx - 1, FB.x0, 0, FB.top, 0.04, 0.66], [FB.x1, fx + 1, 0, FB.top, 0.04, 0.66], [fx - 1, fx + 1, FB.top, 2.7, 0.04, 0.66], [FB.x0, FB.x1, 0, FB.top, 0.04, FB.back]])
+    stoneUV(box(x1 - x0, y1 - y0, z1 - z0, MAT.stone, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, { cam: true }));
   box(2.25, 0.12, 0.44, MAT.darkWood, fx, 1.42, 0.62, { r: 0.02 });
-  box(1.0, 0.78, 0.25, G.std({ color: '#070504', roughness: 1, env: 0 }), fx, 0.42, 0.56, { cast: false });
   box(1.7, 0.06, 0.6, MAT.stone, fx, 0.03, 0.98, { cast: false });
+  { // inside: splayed sides and a back of sooty firebrick, darker toward the top; a floor of ash; the soot above
+    const brick = G.std({ map: TX.firebrick, bumpMap: TX.firebrick, bumpScale: 0.01, roughness: 0.95, env: 0.1, vertexColors: true });
+    const wall = (pts, soot) => {   // a quad from 4 corners (bl, br, tr, tl), brick laid at 0.48 x 0.45 m, soot by height
+      const g = new THREE.PlaneGeometry(1, 1, 6, 6), P = g.attributes.position, UVa = g.attributes.uv, C = new Float32Array(P.count * 3);
+      const [bl, br, tr, tl] = pts.map((q) => new THREE.Vector3(...q)), wdt = bl.distanceTo(br), hgt = bl.distanceTo(tl), v3 = new THREE.Vector3();
+      for (let i = 0; i < P.count; i++) {
+        const u = P.getX(i) + 0.5, w = P.getY(i) + 0.5;
+        v3.copy(bl).lerp(br, u).lerp(new THREE.Vector3().copy(tl).lerp(tr, u), w); P.setXYZ(i, v3.x, v3.y, v3.z);
+        UVa.setXY(i, (u * wdt) / 0.48, (w * hgt) / 0.45);
+        const k = (1 - 0.62 * Math.pow(w, 1.3) * soot) * (0.85 + 0.15 * Math.sin(u * Math.PI));
+        C[i * 3] = C[i * 3 + 1] = C[i * 3 + 2] = k;
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.translate(-fx, 0, -0.5); g.computeVertexNormals();
+      const m = G.add(new THREE.Mesh(g, brick), null, false, true); m.position.set(fx, 0, 0.5);   // placed at the hearth, so it moves back with the hearth wall (G.ZM goes by position)
+      return m;
+    };
+    const bx0 = fx - 0.36, bx1 = fx + 0.36, y0 = 0.06, y1 = FB.top;
+    wall([[bx0, y0, FB.back + 0.001], [bx1, y0, FB.back + 0.001], [bx1, y1, FB.back + 0.001], [bx0, y1, FB.back + 0.001]], 1);
+    wall([[FB.x0 + 0.002, y0, FB.face], [bx0, y0, FB.back + 0.001], [bx0, y1, FB.back + 0.001], [FB.x0 + 0.002, y1, FB.face]], 0.8);
+    wall([[bx1, y0, FB.back + 0.001], [FB.x1 - 0.002, y0, FB.face], [FB.x1 - 0.002, y1, FB.face], [bx1, y1, FB.back + 0.001]], 0.8);
+    // its roof, black with soot, and the floor of ash
+    const roof = new THREE.Mesh(new THREE.PlaneGeometry(1.0, FB.face - FB.back), G.std({ color: '#0d0a09', roughness: 1, env: 0 }));
+    roof.rotation.x = Math.PI / 2; roof.position.set(fx, FB.top - 0.001, (FB.back + FB.face) / 2); G.add(roof, null, false, false);
+    const ash = new THREE.Mesh(new THREE.PlaneGeometry(1.0, FB.face - FB.back + 0.02), G.std({ map: G.rep(TX.ash, 2.5, 1), roughness: 1, env: 0.1 }));
+    ash.rotation.x = -Math.PI / 2; ash.position.set(fx, 0.061, (FB.back + FB.face) / 2 + 0.01); G.add(ash, null, false, true);
+    // soot stained up the stone above the opening
+    const sootTex = G.canvasTex(0, null, { w: 128, h: 64, draw: (c, w, h) => { const g = c.createRadialGradient(w / 2, h, 4, w / 2, h, w * 0.55); g.addColorStop(0, 'rgba(10,8,7,0.85)'); g.addColorStop(0.6, 'rgba(10,8,7,0.35)'); g.addColorStop(1, 'rgba(10,8,7,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h); } });
+    const soot = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.42), new THREE.MeshStandardMaterial({ map: sootTex, transparent: true, depthWrite: false, roughness: 1, color: '#ffffff', polygonOffset: true, polygonOffsetFactor: -2 }));
+    soot.position.set(fx, FB.top + 0.2, FB.face + 0.002); G.add(soot, null, false, false);
+    // a pair of iron firedogs for the logs to lie across
+    const iron = G.std({ color: '#1b1918', roughness: 0.55, metalness: 0.6, env: 0.4 });
+    for (const s of [-1, 1]) {
+      const ax = fx + s * 0.24;
+      cyl(0.014, 0.02, 0.2, iron, ax, 0.16, FB.face - 0.03, { seg: 10 });
+      sph(0.026, iron, ax, 0.27, FB.face - 0.03, [1, 1, 1], G.world, 12);
+      box(0.026, 0.026, 0.28, iron, ax, 0.085, FB.face - 0.16);
+      box(0.12, 0.02, 0.026, iron, ax, 0.07, FB.face - 0.03);
+    }
+  }
   // Logs that glow from underneath where they're burning (their own material: emissive with the fire).
-  const logM = MAT.bark.clone(); logM.emissive = new THREE.Color('#ff4a10'); logM.emissiveIntensity = 0;
-  const logA = cyl(0.065, 0.065, 0.6, logM, fx - 0.05, 0.13, 0.74); logA.rotation.z = Math.PI / 2; logA.rotation.y = 0.3;
-  const logB = cyl(0.06, 0.06, 0.55, logM, fx + 0.05, 0.22, 0.74); logB.rotation.z = Math.PI / 2; logB.rotation.y = -0.4;
-  const logC = cyl(0.05, 0.055, 0.5, logM, fx + 0.02, 0.17, 0.82); logC.rotation.z = Math.PI / 2 - 0.35; logC.rotation.y = 1.25;
+  // (a paler bark than the trees', and sawn ends showing their rings, so the logs read even with the fire out)
+  const logM = MAT.bark.clone(); logM.color.setRGB(1.45, 1.35, 1.25); logM.emissive = new THREE.Color('#ff4a10'); logM.emissiveIntensity = 0;
+  const ringTex = G.canvasTex(0, null, { w: 64, h: 64, draw: (c, w, h) => { const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); g.addColorStop(0, '#c9a77a'); g.addColorStop(0.78, '#b08a5e'); g.addColorStop(0.86, '#6a4a32'); g.addColorStop(1, '#3a2a1e'); c.fillStyle = g; c.fillRect(0, 0, w, h); c.strokeStyle = 'rgba(110,78,50,0.35)'; for (let r = 4; r < w * 0.38; r += 3 + (r % 5)) { c.beginPath(); c.arc(w / 2 + 1, h / 2, r, 0, Math.PI * 2); c.stroke(); } } });
+  const endM = G.std({ map: ringTex, roughness: 0.9, env: 0.2 }); endM.emissive = new THREE.Color('#ff4a10'); endM.emissiveIntensity = 0;
+  const log = (r0, r1, l, x, y, z, rz, ry) => { const m = cyl(r0, r1, l, logM, x, y, z); m.material = [logM, endM, endM]; m.rotation.z = rz; m.rotation.y = ry; return m; };
+  log(0.065, 0.065, 0.6, fx - 0.05, 0.165, 0.5, Math.PI / 2, 0.3);
+  log(0.06, 0.06, 0.55, fx + 0.05, 0.27, 0.49, Math.PI / 2, -0.4);
+  log(0.05, 0.055, 0.5, fx + 0.02, 0.2, 0.57, Math.PI / 2 - 0.35, 1.25);
   // A bed of coals under them: a low mound with a slowly crawling glow.
   const coalM = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uPower: { value: 1 } },
@@ -250,8 +319,8 @@ function buildRooms() {
         gl_FragColor = vec4(mix(ash, hot * (0.8 + crack * 1.4), crack * uPower), 1.0); }`,
   });
   const coals = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 6, 0, Math.PI * 2, 0, Math.PI / 2), coalM);
-  coals.scale.set(1.15, 0.14, 0.42); coals.position.set(fx, 0.05, 0.7); W.add(coals);
-  const fireG = new THREE.Group(); fireG.position.set(fx, 0.15, 0.74); W.add(fireG);
+  coals.scale.set(1.1, 0.14, 0.4); coals.position.set(fx, 0.065, 0.5); W.add(coals);
+  const fireG = new THREE.Group(); fireG.position.set(fx, 0.19, 0.5); W.add(fireG);
   const firePlanes = [];
   // Tongues of flame at different depths and sizes (each its own flicker), a small bright core in the middle.
   const TONGUES = [[-0.16, 0.05, 0.34, 0.52], [0.0, -0.05, 0.42, 0.72], [0.15, 0.04, 0.32, 0.5], [-0.07, 0.1, 0.26, 0.42], [0.09, -0.1, 0.28, 0.46], [-0.24, -0.04, 0.2, 0.3], [0.24, 0.0, 0.2, 0.32]];
@@ -281,14 +350,29 @@ function buildRooms() {
   // Tall bookshelf left of the fireplace.
   bookshelf(6.15, 0.3, 1.5, 0.34, 2.4, 0);
   // Sofa facing the fire.
+  // Upholstered like the armchair: short legs, a stuffed base, rolled arms, a leaning back, two plump seat cushions
+  // and two at the back, the pillows, and the plaid throw over an arm. (It was rounded boxes, with the throw a tilted
+  // slab.) Its back is +z; it faces the fire.
   const sx = 8.0, sz = 3.0;
-  box(2.2, 0.44, 0.92, MAT.sofa, sx, 0.22, sz, { coll: true, r: 0.07, seg: 4 });
-  box(2.2, 0.58, 0.24, MAT.sofa, sx, 0.66, sz + 0.38, { r: 0.09, seg: 4 });
-  for (const s of [-1, 1]) box(0.22, 0.64, 0.92, MAT.sofa, sx + s * 1.1, 0.32, sz, { r: 0.09, seg: 4 });
-  for (const s of [-1, 1]) box(0.96, 0.15, 0.64, MAT.sofa, sx + s * 0.5, 0.51, sz - 0.08, { r: 0.07, seg: 4 });
-  const pil1 = G.pillow(0.44, 0.42, 0.16, MAT.knitCream, sx - 0.72, 0.77, sz + 0.2, { seed: 2 }); pil1.rotation.set(-0.3, 0.3, 0.12);
-  const pil2 = G.pillow(0.42, 0.4, 0.16, MAT.plaid, sx + 0.75, 0.76, sz + 0.2, { seed: 3 }); pil2.rotation.set(-0.3, -0.25, -0.1);
-  const drape = box(0.7, 0.04, 1.0, MAT.plaid, sx + 0.95, 0.68, sz + 0.05, { r: 0.02 }); drape.rotation.set(0.2, 0, -0.5);
+  const sofa = new THREE.Group(); sofa.position.set(sx, 0, sz); W.add(sofa);
+  const sm = MAT.sofa.clone(); G.MATS.push(sm);
+  G.COLL.push({ x0: sx - 1.1, z0: sz - 0.46, x1: sx + 1.1, z1: sz + 0.46 });
+  for (const [lx, lz] of [[-1.0, -0.38], [1.0, -0.38], [-1.0, 0.38], [1.0, 0.38]]) cyl(0.028, 0.02, 0.11, MAT.darkWood, lx, 0.055, lz, { parent: sofa, seg: 10 });
+  G.puff(2.2, 0.3, 0.9, sm, 0, 0.255, 0, { parent: sofa, n: 8, top: 0.03, side: 0.03, seed: 11 });
+  for (const s of [-1, 1]) {
+    G.puff(0.2, 0.42, 0.9, sm, s * 1.0, 0.44, 0, { parent: sofa, n: 6, top: 0.05, side: 0.06, seed: 12 + s });
+    G.puff(0.24, 0.14, 0.94, sm, s * 1.02, 0.65, -0.01, { parent: sofa, n: 3, top: 0.08, side: 0.08, seed: 14 + s });
+  }
+  G.puff(1.84, 0.55, 0.2, sm, 0, 0.7, 0.36, { parent: sofa, n: 6, top: 0.08, side: 0.04, front: 0.05, rx: -0.12, seed: 16 });
+  for (const s of [-1, 1]) {
+    G.puff(0.9, 0.15, 0.68, sm, s * 0.45, 0.485, -0.07, { parent: sofa, n: 5, top: 0.28, side: 0.08, front: 0.1, seed: 17 + s });
+    G.puff(0.88, 0.42, 0.15, sm, s * 0.45, 0.75, 0.22, { parent: sofa, n: 4, top: 0.1, side: 0.1, front: 0.3, rx: -0.2, seed: 19 + s });
+  }
+  const pil1 = G.pillow(0.44, 0.42, 0.16, MAT.knitCream, sx - 0.68, 0.76, sz + 0.06, { seed: 2 }); pil1.rotation.set(-0.3, 0.3, 0.12);
+  const pil2 = G.pillow(0.42, 0.4, 0.16, MAT.plaid, sx + 0.7, 0.75, sz + 0.06, { seed: 3 }); pil2.rotation.set(-0.3, -0.25, -0.1);
+  // the plaid throw over the right arm, the way the old slab was meant to lie
+  drapeOver(sofa, MAT.plaid, [[0.8, 0.6], [0.87, 0.63], [0.93, 0.7], [1.02, 0.755], [1.105, 0.725], [1.15, 0.62], [1.165, 0.42], [1.16, 0.18]], -0.42, 0.3);
+  G.contactShade(sofa, sm);
   G.SOFA = { x: sx, z: sz, seatY: 0.6 };
   G.INTER.push({ id: 'sofa', pos: [sx, 0.5, sz - 0.6], r: 1.1, label: () => (G.STATE.cuddled ? 'Sofa' : 'Curl up together'), act: () => G.Story.cuddle() });
   // Blanket used in the cuddle scene (hidden until then).
@@ -312,12 +396,23 @@ function buildRooms() {
   candle(tx - 0.45, 0.46, tz - 0.16, 0.09, 0.03);
   G.INTER.push({ id: 'cake', pos: [tx, 0.6, tz], r: 1.1, label: () => (G.CAKE.lit ? 'Make a wish' : 'Cake'), act: () => G.Story.cake() });
   // Armchair.
+  // An upholstered reading chair: short turned legs, a stuffed base, rolled arms, a back that leans a little, a plump
+  // seat cushion and one at the back, and a knitted throw over the arm. (It was four rounded boxes with a flat cream
+  // slab on the seat.) Its back is +z; it faces -z, to the fire.
   const chair = new THREE.Group(); chair.position.set(6.25, 0, 1.95); chair.rotation.y = -0.91; W.add(chair);   // turned to face the fire
-  const cm = G.std({ map: TX.wool, bumpMap: TX.woolB, bumpScale: 0.002, color: '#6c3322', roughness: 1, env: 0.25 });   // rust wool (it was so dark it read as a hole in the room)
-  box(0.86, 0.42, 0.82, cm, 0, 0.21, 0, { parent: chair, r: 0.07, seg: 4 });
-  box(0.86, 0.64, 0.2, cm, 0, 0.72, 0.33, { parent: chair, r: 0.08, seg: 4 });
-  for (const s of [-1, 1]) box(0.16, 0.56, 0.82, cm, s * 0.43, 0.33, 0, { parent: chair, r: 0.07, seg: 4 });
-  box(0.6, 0.05, 0.6, MAT.knitCream, 0, 0.45, -0.02, { parent: chair, r: 0.02 });
+  const cm = G.std({ map: G.rep(TX.wool, 1, 1), bumpMap: TX.woolB, bumpScale: 0.003, color: '#6e2c16', roughness: 1, env: 0.25 });   // rust wool (it was so dark it read as a hole in the room, then a dusty rose)
+  for (const [lx, lz] of [[-0.36, -0.32], [0.36, -0.32], [-0.36, 0.32], [0.36, 0.32]]) cyl(0.026, 0.018, 0.11, MAT.darkWood, lx, 0.055, lz, { parent: chair, seg: 10 });
+  G.puff(0.86, 0.3, 0.8, cm, 0, 0.255, 0, { parent: chair, n: 8, top: 0.04, side: 0.03, seed: 1 });                       // the base
+  for (const s of [-1, 1]) {
+    G.puff(0.16, 0.42, 0.8, cm, s * 0.35, 0.44, 0.0, { parent: chair, n: 6, top: 0.05, side: 0.06, seed: 2 + s });         // the arm
+    G.puff(0.2, 0.13, 0.84, cm, s * 0.365, 0.64, -0.01, { parent: chair, n: 3, top: 0.08, side: 0.08, seed: 4 + s });     // its roll
+  }
+  G.puff(0.78, 0.6, 0.18, cm, 0, 0.74, 0.32, { parent: chair, n: 6, top: 0.1, side: 0.05, front: 0.06, rx: -0.14, seed: 6 });   // the back, leaning
+  G.puff(0.56, 0.14, 0.62, cm, 0, 0.465, -0.05, { parent: chair, n: 5, top: 0.32, side: 0.1, front: 0.12, seed: 7 });           // the seat cushion
+  G.puff(0.54, 0.42, 0.13, cm, 0, 0.73, 0.2, { parent: chair, n: 4, top: 0.1, side: 0.12, front: 0.35, rx: -0.2, seed: 8 });    // the back cushion
+  // the throw, over the right arm: lying on the edge of the seat, up over the roll, and hanging down outside
+  drapeOver(chair, MAT.knitCream, [[0.17, 0.53], [0.25, 0.56], [0.31, 0.69], [0.37, 0.745], [0.445, 0.715], [0.49, 0.61], [0.505, 0.42], [0.5, 0.2]], -0.3, 0.26);
+  G.contactShade(chair, cm);
   G.propify('armchair', chair);
   G.COLL.push({ x0: 5.75, z0: 1.45, x1: 6.75, z1: 2.45 });
   // East wall bookshelf, floor lamp, plant, rug.

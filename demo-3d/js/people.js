@@ -1393,7 +1393,7 @@ function setRealLids(u, a) {   // a: 0 open, 1 shut (measured from the visible e
   for (const pv of u.realLids) { const cap = pv.userData.cap; cap.rotation.x = (LID_EDGE + a * (1 - LID_EDGE)) * LID_SHUT; cap.visible = a > 0.01; }
 }
 function makeRealLids(model) {
-  let eyes = null, skin = null, head = null;
+  let eyes = null, skin = null, head = null; const u0 = model.userData;
   model.traverse((o) => { if (o.isMesh && /high-?poly/i.test(o.name)) eyes = o; if (o.isMesh && /body/.test(o.material.name || '')) skin = o; if (o.isBone && /Head$/.test(o.name)) head = o; });
   if (!eyes || !head) return null;
   eyes.updateMatrixWorld(true); if (skin) skin.updateMatrixWorld(true);
@@ -1420,16 +1420,19 @@ function makeRealLids(model) {
       for (let i = 0; i < SP.count; i++) {
         v.fromBufferAttribute(SP, i).applyMatrix4(skin.matrixWorld);
         const dx = v.x - c.x, dy = v.y - c.y, dz = v.z - c.z;
-        if (dz < -r || dx * dx + dy * dy > (r * 5) * (r * 5) || dz > r * 4) continue;
+        // the upper lid's own skin: just above the opening, below the brow, in front of the eye's middle
+        if (dy < r * 0.45 || dy > r * 1.5 || Math.abs(dx) > r * 1.0 || dz < -r * 0.2 || dz > r * 2.5) continue;
         const u = UV.getX(i), w = UV.getY(i);
         const px = Math.max(0, Math.min(PW - 1, Math.round(u * (PW - 1)))), py = Math.max(0, Math.min(PH - 1, Math.round(w * (PH - 1))));
         const k = (py * PW + px) * 4; if (pix[k + 3] < 128) continue;
         samp.push([pix[k], pix[k + 1], pix[k + 2], pix[k] * 0.3 + pix[k + 1] * 0.59 + pix[k + 2] * 0.11]);
       }
       if (samp.length >= 6) {
-        samp.sort((a, b) => b[3] - a[3]); const top = samp.slice(0, Math.max(3, Math.floor(samp.length * 0.5)));
-        const avg = [0, 1, 2].map((j) => top.reduce((t, x) => t + x[j], 0) / top.length / 255);
-        col = new THREE.Color(avg[0] * 0.88, avg[1] * 0.8, avg[2] * 0.78).convertSRGBToLinear();   // a closed lid sits back in the socket's shade, darker and pinker than the cheek (it lit up like a bare eyeball)
+        // the middle of them: not the darkest quarter (lashes, the brow, painted shadow) nor the brightest tenth
+        samp.sort((a, b) => b[3] - a[3]); const mid = samp.slice(Math.floor(samp.length * 0.1), Math.max(Math.floor(samp.length * 0.1) + 3, Math.floor(samp.length * 0.75)));
+        const avg = [0, 1, 2].map((j) => mid.reduce((t, x) => t + x[j], 0) / mid.length / 255);
+        col = new THREE.Color(avg[0] * 0.72, avg[1] * 0.66, avg[2] * 0.64).convertSRGBToLinear();   // a closed lid sits back in the socket's shade, darker than the skin above it (it catches more light than the textured face does)
+        u0.lidSampled = avg.map((x) => Math.round(x * 255));
       }
     }
     const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.78, envMapIntensity: 0.12 });
@@ -1444,10 +1447,18 @@ function makeRealLids(model) {
     // reads as a lid, not a patch of skin with a hard edge.
     const lg = new THREE.SphereBufferGeometry(r * 1.035, 24, 14, 0, Math.PI * 2, 0, LID_COVER), lp = lg.attributes.position, cols = new Float32Array(lp.count * 3);
     for (let i = 0; i < lp.count; i++) {
-      const t = Math.acos(Math.max(-1, Math.min(1, lp.getY(i) / (r * 1.035)))) / LID_COVER, e = Math.max(0, Math.min(1, (t - 0.68) / 0.32)), sh = 0.9 * (1 - 0.7 * e * e * (3 - 2 * e));   // a darker lash line along its edge
+      // a thin dark lash line along its edge and a soft shade just above it (the dark band was a third of the lid, a
+      // few millimetres deep, so a shut eye seen from a little above was mostly lash line: a dark disc)
+      const t = Math.acos(Math.max(-1, Math.min(1, lp.getY(i) / (r * 1.035)))) / LID_COVER, sh = 0.93 * (1 - 0.14 * G.smooth(0.7, 0.9, t) - 0.6 * G.smooth(0.9, 1.0, t));
       cols[i * 3] = sh; cols[i * 3 + 1] = sh * 0.97; cols[i * 3 + 2] = sh * 0.95;
     }
     lg.setAttribute('color', new THREE.BufferAttribute(cols, 3)); mat.vertexColors = true;
+    // Lit as the face round it, not as a ball: shut, the lid is a gentle curve continuing the face's, so its normals
+    // lean most of the way toward the way the face looks, seen from the cap's closed angle. (Lit as
+    // the eyeball's sphere it shone pink on him, facing the light, and went dark on her with her head bowed.)
+    { const LN = lg.attributes.normal, nv = new THREE.Vector3(), fwd = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(1, 0, 0), -LID_SHUT);
+      for (let i = 0; i < LN.count; i++) { nv.set(LN.getX(i), LN.getY(i), LN.getZ(i)).multiplyScalar(0.35).addScaledVector(fwd, 0.65).normalize(); LN.setXYZ(i, nv.x, nv.y, nv.z); }
+      LN.needsUpdate = true; }
     const lid = new THREE.Mesh(lg, mat);
     lid.castShadow = false; lid.visible = false; lid.userData.lid = true;
     pivot.add(lid); pivot.userData.cap = lid;
