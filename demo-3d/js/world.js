@@ -651,28 +651,67 @@ G.buildForest = () => {
   world.add(dm);
 };
 
+/* Peeled poles and logs, sawn at their ends (the porch, the path's fence and lanterns): pole(A, B, r0, r1, cap, out)
+ * adds one from A to B, radius r0 at A and r1 at B, the wood's grain running along it (one row of TX.logs, mirrored
+ * round it so there's no seam); cap 1 puts a sawn end (TX.logEnd) at A, 2 at B. build() makes them into two meshes,
+ * the sides and the ends; mesh(parts, material) makes a mesh of some kept apart. tone: their shade [least, spread]
+ * and tint. */
+function poleSet(seed, tone = [0.74, 0.18], tint = '#ffffff') {
+  const r = G.seeded(seed), up = new THREE.Vector3(0, 1, 0), parts = [], ends = [], tc = new THREE.Color(tint);
+  const sideM = G.std({ map: TX.logs, bumpMap: TX.logsB, bumpScale: 0.004, roughness: 0.85, env: 0.35, vertexColors: true });
+  const endM = G.std({ map: TX.logEnd, color: '#c8c0b6', roughness: 0.92, env: 0.2, vertexColors: true });
+  const pole = (A, B, r0, r1 = r0, cap = 0, out = parts, seg = 10) => {
+    const a = new THREE.Vector3(...A), b = new THREE.Vector3(...B), d = b.clone().sub(a), len = d.length();
+    const g = new THREE.CylinderGeometry(r1, r0, len, seg, 1, true), P = g.attributes.position, U = g.attributes.uv, row = Math.floor(r() * 7), off = r();
+    for (let i = 0; i < P.count; i++) { const ang = Math.atan2(P.getX(i), P.getZ(i)); U.setXY(i, (P.getY(i) + len / 2) / 2.75 + off, (row + 0.3 + 0.4 * Math.abs(ang / Math.PI)) / 7); }
+    const M = new THREE.Matrix4().makeTranslation(...a.clone().add(b).multiplyScalar(0.5).toArray())
+      .multiply(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(up, d.clone().normalize())))
+      .multiply(new THREE.Matrix4().makeRotationY(r() * 6.28));
+    const col = tc.clone().multiplyScalar(tone[0] + r() * tone[1]);
+    out.push({ geo: g, mat: M, uv: true, color: col });
+    for (const [bit, rr, y, rx] of [[1, r0, -len / 2, Math.PI / 2], [2, r1, len / 2, -Math.PI / 2]]) if (cap & bit) {
+      const c = new THREE.CircleGeometry(rr * 0.96, seg); c.rotateZ(r() * 6.28); c.rotateX(rx); c.translate(0, y, 0); ends.push({ geo: c, mat: M, uv: true, color: col });
+    }
+  };
+  const mesh = (ps, m) => { const x = new THREE.Mesh(G.merge(ps), m); x.castShadow = x.receiveShadow = true; world.add(x); return x; };
+  return { r, pole, parts, ends, sideM, endM, mesh, build: () => { if (parts.length) mesh(parts, sideM); if (ends.length) mesh(ends, endM); } };
+}
 /* ---------------- path: fence and lanterns ---------------- */
 G.PATH_LIGHTS = [];
 G.buildPath = () => {
-  const r = G.seeded(9);
-  const capMat = MAT.snow, rail = G.std({ map: TX.bark, color: '#8a6a52', roughness: 0.9 });
-  // Split-rail fence on both sides.
+  // Post-and-rail fence down both sides: round posts, sawn off at the top under a cap of snow, and two weathered grey
+  // pole rails between each pair, run on a little past the posts, each its own girth and not quite level, with a ridge
+  // of snow along the top one and a thinner one along the lower. (It was square dark posts with blocks of snow on them,
+  // and the rails were striped round like barber's poles.)
+  const PS = poleSet(9, [0.7, 0.22], '#d6cfc6'), r = PS.r, snowP = [];
+  const ridge = (A, B, w, h, lift) => {   // a ridge of snow lying along a rail from A to B
+    const a = new THREE.Vector3(...A), d = new THREE.Vector3(...B).sub(a), len = d.length(); d.normalize();
+    const sd = new THREE.Vector3().crossVectors(d, new THREE.Vector3(0, 1, 0)).normalize(), n = Math.max(2, Math.ceil(len / 0.14)), K = 6, P = [], I = [], seed = r() * 50;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, taper = Math.min(1, (Math.min(t, 1 - t) * len) / 0.14), hh = h * taper * (0.75 + 0.5 * (0.5 + 0.5 * G.simplex.noise(t * len * 2.2 + seed, seed))), ww = w * (0.55 + 0.45 * taper);
+      for (let k = 0; k <= K; k++) { const th = (Math.PI * k) / K, p = a.clone().addScaledVector(d, t * len).addScaledVector(sd, Math.cos(th) * ww); p.y += lift + Math.sin(th) * hh; P.push(p.x, p.y, p.z); }
+    }
+    for (let i = 0; i < n; i++) for (let k = 0; k < K; k++) { const q = i * (K + 1) + k; I.push(q, q + K + 1, q + 1, q + 1, q + K + 1, q + K + 2); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals();
+    if (g.attributes.normal.getY(Math.floor(n / 2) * (K + 1) + Math.floor(K / 2)) < 0) { for (let t = 0; t < I.length; t += 3) { const x = I[t + 1]; I[t + 1] = I[t + 2]; I[t + 2] = x; } g.setIndex(I); g.computeVertexNormals(); }
+    snowP.push({ geo: g, mat: new THREE.Matrix4(), color: new THREE.Color(1, 1, 1) });
+  };
+  const cap = new THREE.SphereGeometry(1, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2);
   for (const side of [-1, 1]) {
     let prev = null;
     for (let z = 9.4; z <= PATH_END; z += 2.6) {
-      const x = pathX(z) + side * 2.4, y = terrainH(x, z);
-      const post = G.box(0.13, 1.1, 0.13, rail, x, y + 0.5, z, { r: 0.02, seg: 1 });
-      post.rotation.y = r() * 0.3;
-      G.box(0.18, 0.08, 0.18, capMat, x, y + 1.08, z, { r: 0.04 });
+      const x = pathX(z) + side * 2.4, y = terrainH(x, z), top = y + 1.05 + (r() - 0.5) * 0.08, pr = 0.07 + r() * 0.015;
+      PS.pole([x, y - 0.3, z], [x + (r() - 0.5) * 0.04, top, z + (r() - 0.5) * 0.04], pr * 1.08, pr, 2);
+      snowP.push({ geo: cap, mat: G.mtx(x, top - 0.005, z, pr * 1.15, 0.06, pr * 1.15, r() * 6), color: new THREE.Color(1, 1, 1) });
       if (prev) {
-        const dx = x - prev.x, dz = z - prev.z, len = Math.hypot(dx, dz);
+        const dx = x - prev.x, dz = z - prev.z, len = Math.hypot(dx, dz), ux = dx / len, uz = dz / len;
         // You can't walk through the fence: a row of small blockers along each rail.
         for (let t = 0; t <= 1.001; t += 0.25 / len) { const cx = prev.x + dx * t, cz = prev.z + dz * t; G.COLL.push({ x0: cx - 0.09, z0: cz - 0.09, x1: cx + 0.09, z1: cz + 0.09, fence: true }); }
-        for (const h of [0.45, 0.85]) {
-          const m = G.add(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, len, 7), rail), world);
-          m.position.set((x + prev.x) / 2, (y + prev.y) / 2 + h, (z + prev.z) / 2);
-          m.rotation.x = Math.PI / 2; m.rotation.z = -Math.atan2(dx, dz) * 0; m.lookAt(x, y + h, z); m.rotateX(Math.PI / 2);
-          if (h > 0.8) { const s = G.add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, len, 7, 1), capMat), world); s.position.copy(m.position); s.position.y += 0.05; s.quaternion.copy(m.quaternion); s.scale.set(1, 1, 0.6); }
+        for (const h of [0.42, 0.84]) {
+          const rr = 0.045 + r() * 0.015, ov = 0.06 + r() * 0.08, h0 = prev.y + h + (r() - 0.5) * 0.05, h1 = y + h + (r() - 0.5) * 0.05;
+          const A = [prev.x - ux * ov, h0, prev.z - uz * ov], B = [x + ux * ov, h1, z + uz * ov];
+          PS.pole(A, B, rr, rr * (0.85 + r() * 0.2), 3);
+          ridge(A, B, rr * 1.15, h > 0.8 ? 0.06 : 0.03, rr * 0.75);
         }
       }
       prev = { x, y, z };
@@ -683,33 +722,43 @@ G.buildPath = () => {
   G.glowTex = glowTex;
   const poolMat = new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   G.poolMat = poolMat;
+  // Each lantern is a small iron one, glazed on four sides under a little pyramid roof with a ring on top and a cap of
+  // snow, on a stub of log. Its glass glows at night; by day it's unlit glass. (They were stacked boxes, orange all day.)
   const lanternGlass = new THREE.MeshBasicMaterial({ color: '#ffc27a' });
+  lanternGlass.userData = { on: new THREE.Color('#ffc27a'), off: new THREE.Color('#4f5154') }; G.PATH_GLASS = lanternGlass;
+  const iron = MAT.darkMetal, roofG = new THREE.ConeGeometry(0.15, 0.1, 4, 1); roofG.rotateY(Math.PI / 4);
   let side = -1;
   for (let z = 9.2; z <= PATH_END; z += 5.2) {
     side = -side;
-    const x = pathX(z) + side * 1.65, y = terrainH(x, z);
-    G.box(0.14, 0.62, 0.14, MAT.darkWood, x, y + 0.31, z, { r: 0.02 });
-    G.box(0.2, 0.05, 0.2, MAT.darkMetal, x, y + 0.64, z);
-    G.box(0.13, 0.16, 0.13, lanternGlass, x, y + 0.75, z, { cast: false });
-    G.box(0.22, 0.05, 0.22, MAT.darkMetal, x, y + 0.85, z);
-    G.box(0.24, 0.07, 0.24, MAT.snow, x, y + 0.9, z, { r: 0.03 });
+    const x = pathX(z) + side * 1.65, y = terrainH(x, z), ry = r() * 0.3;
+    PS.pole([x, y - 0.25, z], [x, y + 0.6, z], 0.075, 0.07, 0);
+    const L = new THREE.Group(); L.position.set(x, y + 0.6, z); L.rotation.y = ry; world.add(L);
+    G.box(0.17, 0.035, 0.17, iron, 0, 0.018, 0, { parent: L });
+    G.box(0.12, 0.17, 0.12, lanternGlass, 0, 0.12, 0, { parent: L, cast: false });
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) G.box(0.016, 0.19, 0.016, iron, sx * 0.065, 0.12, sz * 0.065, { parent: L });
+    for (const sx of [-1, 1]) { G.box(0.135, 0.012, 0.012, iron, 0, 0.12, sx * 0.065, { parent: L, cast: false }); G.box(0.012, 0.012, 0.135, iron, sx * 0.065, 0.12, 0, { parent: L, cast: false }); }
+    G.box(0.16, 0.02, 0.16, iron, 0, 0.215, 0, { parent: L });
+    const roof = new THREE.Mesh(roofG, iron); roof.position.y = 0.27; roof.castShadow = true; L.add(roof);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.006, 5, 10), iron); ring.position.y = 0.345; L.add(ring);
+    const sn = new THREE.Mesh(cap, MAT.snow); sn.scale.set(0.115, 0.05, 0.115); sn.position.y = 0.285; L.add(sn);
     const pool = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), poolMat);
     pool.rotation.x = -Math.PI / 2; pool.position.set(x, y + 0.03, z); world.add(pool);
-    G.PATH_LIGHTS.push({ x, y: y + 0.75, z, pool });
+    G.PATH_LIGHTS.push({ x, y: y + 0.72, z, pool });
   }
+  PS.build();
+  { const m = new THREE.Mesh(G.merge(snowP), MAT.snow); m.castShadow = true; m.receiveShadow = true; world.add(m); }
 };
 
-/* Snow lying on a roof, built on its slab: thick and drifted across the middle, with wind ripples, thinning to a
- * rounded edge short of each gable (a strip of shingles shows there, as it does on a real roof), and at the eave a
- * heavy rounded lip curling over and under the edge. (It was a white box on each slope: a plastic slab.) The slab is a
- * box `across` wide and `len` long down the slope, its top at y = top in its own frame; `down` maps (a, d, y) — across,
- * distance down from the top end, height — to that frame. Returns the points along the lip's underside (slab frame)
- * for the icicles. */
 // Soffit boards (under a roof's overhangs): tongue-and-groove running down the slope, a tile of six boards to 0.9 m.
 const SOFFIT = (across, len) => {
   const m = G.std({ map: G.rep(TX.boards, across / 0.9, len / 2), color: '#9a7a5e', roughness: 0.8, env: 0.2 });
   return m;
 };
+/* Snow lying on a roof, built on its slab: thick and drifted across the middle, with wind ripples, rounding over each
+ * verge and tucking under it, and at the eave a heavy rounded lip curling over and under the edge. (It was a white box on each slope: a plastic slab.) The slab is a
+ * box `across` wide and `len` long down the slope, its top at y = top in its own frame; `down` maps (a, d, y) — across,
+ * distance down from the top end, height — to that frame. Returns the points along the lip's underside (slab frame)
+ * for the icicles. */
 G.ROOF_SNOW = null;
 function roofSnow(slab, across, len, top, down, seed = 1) {
   if (!G.ROOF_SNOW) G.ROOF_SNOW = G.std({ color: '#e8edf4', bumpMap: G.rep(TX.snowB, 1, 1), bumpScale: 0.03, roughnessMap: TX.snowR, roughness: 0.85, env: 0.7 });
@@ -1172,27 +1221,11 @@ G.buildCabin = () => {
   // both ends. (They were square dark boards with a row of thin square sticks: a deck from a catalogue.)
   const posts = [3.5, 5.8, 7.2, 9.3, 11.3], pz = PORCH.z1 - 0.12, BEAM_Y = 2.4;
   {
-    const r = G.seeded(21), up = new THREE.Vector3(0, 1, 0), parts = [], ends = [];
-    const poleM = G.std({ map: TX.logs, bumpMap: TX.logsB, bumpScale: 0.004, roughness: 0.85, env: 0.35, vertexColors: true });
-    const endM = G.std({ map: TX.logEnd, color: '#c8c0b6', roughness: 0.92, env: 0.2, vertexColors: true });
-    // a pole from A to B, radius r0 at A and r1 at B, the grain running along it; cap: 1 a sawn end at A, 2 at B
-    const pole = (A, B, r0, r1 = r0, cap = 0, out = parts, seg = 10) => {
-      const a = new THREE.Vector3(...A), b = new THREE.Vector3(...B), d = b.clone().sub(a), len = d.length();
-      const g = new THREE.CylinderGeometry(r1, r0, len, seg, 1, true), P = g.attributes.position, U = g.attributes.uv, row = Math.floor(r() * 7), off = r();
-      for (let i = 0; i < P.count; i++) { const ang = Math.atan2(P.getX(i), P.getZ(i)); U.setXY(i, (P.getY(i) + len / 2) / 2.75 + off, (row + 0.3 + 0.4 * Math.abs(ang / Math.PI)) / 7); }
-      const M = new THREE.Matrix4().makeTranslation(...a.clone().add(b).multiplyScalar(0.5).toArray())
-        .multiply(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(up, d.clone().normalize())))
-        .multiply(new THREE.Matrix4().makeRotationY(r() * 6.28));
-      const col = new THREE.Color(1, 1, 1).multiplyScalar(0.74 + r() * 0.18);
-      out.push({ geo: g, mat: M, uv: true, color: col });
-      for (const [bit, rr, y, rx] of [[1, r0, -len / 2, Math.PI / 2], [2, r1, len / 2, -Math.PI / 2]]) if (cap & bit) {
-        const c = new THREE.CircleGeometry(rr * 0.96, seg); c.rotateZ(r() * 6.28); c.rotateX(rx); c.translate(0, y, 0); ends.push({ geo: c, mat: M, uv: true, color: col });
-      }
-    };
+    const PS = poleSet(21), { r, pole, parts } = PS;
     // the posts (each a mesh of its own: the camera keeps from parking behind one)
     for (const x of posts) {
       const one = []; pole([x, 0, pz], [x + (r() - 0.5) * 0.02, BEAM_Y, pz], 0.105, 0.095, 0, one, 12);
-      const m = new THREE.Mesh(G.merge(one), poleM); m.castShadow = m.receiveShadow = true; world.add(m); G.CAMBLOCK.push(m);
+      G.CAMBLOCK.push(PS.mesh(one, PS.sideM));
       G.COLL.push({ x0: x - 0.11, z0: pz - 0.11, x1: x + 0.11, z1: pz + 0.11 });
       // knee braces up to the beam (not out past the ends)
       for (const sx of [-1, 1]) if (!(x === posts[0] && sx < 0) && !(x === posts[posts.length - 1] && sx > 0)) pole([x, BEAM_Y - 0.5, pz], [x + sx * 0.46, BEAM_Y - 0.04, pz], 0.045, 0.045);
@@ -1214,7 +1247,7 @@ G.buildCabin = () => {
     // and down both ends, from the wall to the corner posts
     rail([PORCH.x0 + 0.1, CAB.z1 + 0.13], [PORCH.x0 + 0.1, pz]); rail([PORCH.x1 - 0.1, CAB.z1 + 0.13], [PORCH.x1 - 0.1, pz]);
     G.COLL.push({ x0: PORCH.x0 - 0.1, z0: PORCH.z0, x1: PORCH.x0 + 0.15, z1: PORCH.z1 }, { x0: PORCH.x1 - 0.15, z0: PORCH.z0, x1: PORCH.x1 + 0.1, z1: PORCH.z1 });
-    for (const [ps, m] of [[parts, poleM], [ends, endM]]) { const mesh = new THREE.Mesh(G.merge(ps), m); mesh.castShadow = true; mesh.receiveShadow = true; world.add(mesh); }
+    PS.build();
   }
   // Porch roof (lean-to)
   const prRun = PORCH.z1 + 0.35 - PORCH.z0, prRise = 0.45, prSlope = Math.atan2(prRise, prRun), prLen = Math.hypot(prRun, prRise);
