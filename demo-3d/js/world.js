@@ -419,8 +419,8 @@ G.buildMountains = () => {
 // highest, its side shoots drooping away from it) and sagging along its length, then lifting a little at the tip as a
 // spruce's do. u runs across it, v from the trunk end (0) to the tip (1). (They were flattened four-sided slabs, solid
 // green, and up close the trees looked folded from card.)
-function frondGeo(L, W, sag = 0.16, arch = 0.38, lift = 0.05, NX = 5) {
-  const NA = 3, pos = [], uv = [], idx = [];
+function frondGeo(L, W, sag = 0.16, arch = 0.38, lift = 0.05, NX = 5, NA = 3) {
+  const pos = [], uv = [], idx = [];
   for (let j = 0; j <= NA; j++) {
     const t = j / NA, hw = W * (1 - 0.4 * t), y = (-sag * t * t + lift * Math.max(0, t - 0.6) * 2.5) * L;
     for (let i = 0; i < NX; i++) {
@@ -444,7 +444,6 @@ function pineGeometry(seed, lod = 0) {
   const radial = lod ? 7 : 18, hseg = lod ? 1 : 3;
   const H = 1;   // unit height; instances scale it
   const green = (t) => new THREE.Color().setHSL(0.39 + r() * 0.03, 0.32, 0.1 + t * 0.06);
-  const snow = new THREE.Color('#eef3f8');
   // (near trees: the trunk and the inner cones take the bough texture's stem, which is a little brighter than the old one)
   const solid = lod ? 1 : 0.78;
   parts.push({ geo: new THREE.CylinderGeometry(0.012, 0.028, 0.25, lod ? 4 : 6, 1, !!lod), mat: G.mtx(0, 0.12, 0), color: new THREE.Color('#3a2a20').multiplyScalar(solid) });
@@ -460,10 +459,26 @@ function pineGeometry(seed, lod = 0) {
     // so the outline is ragged like a spruce's; snow lies only on their upper faces. Distant trees get one ring of
     // fewer, three-sided branches, and a fuller inner cone so the gaps between them read as shadow, not sky.
     const inner = base.clone().multiplyScalar(lod ? 0.62 : 0.6);
-    // (near trees: needled all over like the boughs, never see-through: aSnow.y -1 tells the shader so)
-    parts.push({ geo: new THREE.ConeGeometry(rad * (lod ? 0.72 : 0.62), h * (lod ? 1.6 : 1.25), lod ? 6 : 9, 1, true), mat: G.mtx(0, y, 0, 1, 1, 1, r() * 6), color: inner, uv: lod ? undefined : [7, 1], snow: lod ? undefined : [0, -1] });
+    // (needled all over like the boughs, never see-through: aSnow.y -1 tells the shader so)
+    parts.push({ geo: new THREE.ConeGeometry(rad * (lod ? 0.72 : 0.62), h * (lod ? 1.6 : 1.25), lod ? 6 : 9, 1, true), mat: G.mtx(0, y, 0, 1, 1, 1, r() * 6), color: inner, uv: [lod ? 5 : 7, 1], snow: [0, -1] });
     const nb = lod ? Math.max(4, Math.round(4 + rad * 16)) : Math.max(6, Math.round(7 + rad * 30)), droop0 = lerp(0.55, 0.25, t);
-    if (!lod) {
+    if (lod) {
+      // Distant trees: the same needled boughs, simpler (one segment along, three across) and more of them, so
+      // the edge of the forest is feathered like the trees near the cabin. (They were three-sided slabs, smooth and
+      // faceted, with flat white tips: from the yard the forest's edge looked stiff, as if cut from card.)
+      const nf = Math.round(nb * 1.6);   // every other one shorter and a little higher, between the long ones
+      for (let b = 0; b < nf; b++) {
+        const two = b % 2, phi = (b / nf) * Math.PI * 2 + (r() - 0.5) * 0.3, L = rad * (two ? 0.85 : 1.15) * (0.85 + r() * 0.3), W = L * 0.48 * (0.9 + r() * 0.2), d = droop0 + 0.08 + (r() - 0.5) * 0.2;
+        const M = new THREE.Matrix4().makeTranslation(0, y + (r() - 0.5) * h * 0.4 + (two ? h * 0.3 : 0), 0).multiply(new THREE.Matrix4().makeRotationY(phi)).multiply(new THREE.Matrix4().makeRotationZ(-d));
+        const tone = base.clone().offsetHSL((r() - 0.5) * 0.02, 0, (r() - 0.5) * 0.03);
+        const sAmt = snowy && r() < 0.85 ? 0.62 + r() * 0.35 : 0, sSeed = r();   // (a little more: it has to read from further off)
+        parts.push({ geo: frondGeo(L, W, 0.15, 0.36, 0.04, 3, 1), mat: M, uv: true,
+          color: (v) => tone.clone().multiplyScalar(0.72 + Math.min(1, Math.hypot(v.x, v.z) / Math.max(1e-3, rad)) * 0.42),
+          snow: sAmt ? (v) => [sAmt * (0.35 + 0.65 * smooth(0.12, 0.6, Math.hypot(v.x, v.z) / Math.max(1e-3, rad))), sSeed] : null });
+      }
+      continue;
+    }
+    {
       // Near trees: two rings of boughs, the second shorter and a little higher, between the first. Each is a card of
       // needled side shoots (TX.frond) at its own length, droop and roll; snow lies along some of them, more toward
       // the outside of the tree, where the tier above doesn't shelter it, in clumps the shader finds from aSnow.
@@ -486,23 +501,6 @@ function pineGeometry(seed, lod = 0) {
       }
       continue;
     }
-    for (let b = 0; b < (lod ? nb : nb * 2); b++) {
-      const ring = b >= nb, bi = ring ? b - nb : b;   // two rings, the second shorter and a little higher, between the first
-      const phi = ((bi + (ring ? 0.5 : 0)) / nb) * Math.PI * 2 + (r() - 0.5) * 0.4, L = rad * (ring ? 0.7 : lod ? 1.06 : 0.95) * (0.85 + r() * 0.3), w = L * (lod ? 0.7 : 0.42 + r() * 0.1), d = droop0 + (r() - 0.5) * 0.2 - (ring ? 0.08 : 0);
-      const br = new THREE.CylinderGeometry(w * 0.3, w, L, lod ? 3 : 4, lod ? 1 : 2, true);   // blunt-ended, not a spike (open: the ends are never seen)
-      // a little sag along its length: the far half bends down further
-      const bp = br.attributes.position; for (let k = 0; k < bp.count; k++) { const yy = bp.getY(k) / L + 0.5; bp.setX(k, bp.getX(k) - yy * yy * L * 0.18); }
-      const M = new THREE.Matrix4().makeTranslation(0, y + (r() - 0.5) * h * 0.4 + (ring ? h * 0.3 : 0), 0)
-        .multiply(new THREE.Matrix4().makeRotationY(phi))
-        .multiply(new THREE.Matrix4().makeRotationZ(-(Math.PI / 2 + d)))
-        .multiply(new THREE.Matrix4().makeTranslation(0, L / 2, 0))
-        .multiply(new THREE.Matrix4().makeScale(0.28, 1, 1));
-      const tone = base.clone().offsetHSL((r() - 0.5) * 0.02, 0, (r() - 0.5) * 0.03);
-      const snowB = snowy && r() < 0.72, s0 = 0.3 + r() * 0.25;
-      // snow in clumps on the outer, upward faces of some branches, with green between (whole slabs of it, on every
-      // branch, made the trees look folded from white card)
-      parts.push({ geo: br, mat: M, uv: [lod ? 3 : 4, 1], color: (v, n) => { const out = Math.hypot(v.x, v.z) / Math.max(1e-3, rad); return snowB && n.y > 0.52 && out > s0 ? snow : tone.clone().multiplyScalar(0.7 + Math.min(1, out) * 0.45); } });
-    }
   }
   const g = G.merge(parts);
   // Light the tree as one soft, rounded mass: every flat branch shaded on its own facet made it look folded from
@@ -522,7 +520,6 @@ function pineGeometry(seed, lod = 0) {
 G.buildForest = () => {
   const r = G.seeded(31);
   const mat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5, map: G.TX.frond, alphaTest: 0.5, side: THREE.DoubleSide });
-  const farMat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5, map: G.TX.needles, alphaTest: 0.5 });
   // Gentle sway in the wind: the crown moves more than the trunk, each tree on its own phase.
   G.SWAY = { uTime: { value: 0 }, uGust: { value: 0 } };
   const SWAY_V = `#include <begin_vertex>
@@ -572,7 +569,7 @@ G.buildForest = () => {
         if (frSn > 0.0 && gl_FrontFacing) normal = normalize(mix(normal, (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz, frSn * 0.7));`);
   };
   mat.customProgramCacheKey = () => 'pine-sway' + tag; };
-  sway(mat, '-near-frond', true); sway(farMat, '-far');
+  sway(mat, '-near-frond', true);
   mat.extensions = { derivatives: true };
   // their shadows: the needles' own outline (not the whole card), swaying with the tree
   const nearDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: G.TX.frond, alphaTest: 0.5, side: THREE.DoubleSide });
@@ -614,7 +611,7 @@ G.buildForest = () => {
     world.add(im);
   });
   place(variants, lists, true, mat, nearDepth);
-  place(farVariants, farLists, false, farMat);
+  place(farVariants, farLists, false, mat);   // (the distant trees too: the same needled boughs, fewer of them)
   // Snow-covered shrubs and drifts.
   // Indexed sphere so vertex normals are shared and the drifts read as soft, rounded snow
   // (an icosahedron is non-indexed, which gave every face its own normal: faceted "rocks").
