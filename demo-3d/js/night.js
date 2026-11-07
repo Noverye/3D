@@ -465,6 +465,8 @@ inter('nDoor', [14.6, 1, 2.45], 0.9, 'The door', async () => {
 G.swapBodies = () => {
   const a = PLAYER.m; PLAYER.m = PARTNER.m; PARTNER.m = a;
   const st = PLAYER.scarfTail; PLAYER.scarfTail = PARTNER.scarfTail; PARTNER.scarfTail = st;
+  // A coat, an armful of logs, the snow on a hat: these go with the body (as when playing as her, game.js).
+  for (const k of ['dressed', 'carry', 'holdPose', 'snowAcc', 'snowyT', 'cold']) { const v = PLAYER[k]; PLAYER[k] = PARTNER[k]; PARTNER[k] = v; }
   for (const c of [PLAYER, PARTNER]) { c._hsp = null; c._ikOff = null; c.lookAt = null; c.hugWith = null; c.holdWith = null; c.lie = false; c.sit = c.sitTarget = 0; }
   NIGHT.swapped = !NIGHT.swapped;
 };

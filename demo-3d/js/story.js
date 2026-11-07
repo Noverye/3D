@@ -222,7 +222,10 @@ const canHear = () => !PARTNER.hidden && !PARTNER.script && !PARTNER.slide && (s
 // Interactions that talk take the scene; the player can't walk off mid-sentence. Afterwards Partner may react.
 async function run(fn, id) {
   if (STATE.busy) return;
-  S.inInter = !!id && !!STATE.asHer;   // playing as her: she does the thing herself (see game.js)
+  // playing as her: she does the thing herself (see game.js), unless it's a scene with the two of them talking (a
+  // moment in the snow, cocoa at the hob, reading in the window seat), which plays out as the story's scenes do
+  const it = id && findInter(id);
+  S.inInter = !!id && !!STATE.asHer && !(it && it.scene && it.scene());
   STATE.busy = true; S.pSpoke = false;
   try { await fn(); } catch (e) { console.error(e); }
   S.inInter = false;
@@ -1105,7 +1108,7 @@ CH.morning = async () => {
   })();
   await until(() => S.flags.breakfastDone);
   G.setHold(false);
-  PARTNER.lead = { x: 6.45, z: 7.95, waitLines: ['Boots, {toHim}. The walk awaits.', 'Do come along, {toHim}.', 'The day isn’t getting any younger. Nor are you.'] };
+  PARTNER.lead = { x: 6.45, z: 7.95, waitLines: ['Boots, {toHim}. The walk awaits.', 'Do come along, {toHim}.', 'The day isn’t getting any younger. Nor are you.'], herHint: '(The walk. Out through the front door; he’ll follow.)' };
   G.bark('Boots, please! The snow won’t wait.', 2.8);
   await until(() => S.flags.leaveHouse || (PLAYER.z > 6.9 && Math.abs(PLAYER.x - 6.5) < 2.2));
   STATE.noControl = true;

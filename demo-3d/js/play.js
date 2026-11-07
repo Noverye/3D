@@ -367,20 +367,22 @@ function mugFor(m, col) {
 }
 const MUGS = { player: mugFor(G.KIDS ? G.KIDS.adults.player : PLAYER.m, '#8a3a2e'), partner: mugFor(G.KIDS ? G.KIDS.adults.partner : PARTNER.m, '#efe7da') };
 const COCOA = { t: 0 };
+const mugOf = (c) => (G.herBody(c) ? MUGS.partner : MUGS.player);   // by body: playing as her, yours is the cream one
 function setMug(c, on) {
-  const m = c === PLAYER ? MUGS.player : MUGS.partner; m.visible = on;
+  const m = mugOf(c); m.visible = on;
   c.holdPose = on ? 'cup' : (c.holdPose === 'cup' ? null : c.holdPose);
-  const id = c === PLAYER ? 'cocoaY' : 'cocoaP';
+  const id = m === MUGS.player ? 'cocoaY' : 'cocoaP';
   if (on) { const w = m.getWorldPosition(new THREE.Vector3()); G.steam(id, w.x, w.y + 0.06, w.z, { rate: 1.2, dur: 999, size: 0.45 }); } else G.steam(id, 0, 0, 0, { off: true });
 }
 G.setMug = (c, on) => setMug(c, on);
 function cocoaTick(dt) {
-  for (const [c, m, id] of [[PLAYER, MUGS.player, 'cocoaY'], [PARTNER, MUGS.partner, 'cocoaP']]) {
+  for (const c of [PLAYER, PARTNER]) {
+    const m = mugOf(c), id = m === MUGS.player ? 'cocoaY' : 'cocoaP';
     if (!m.visible) continue;
     const w = m.getWorldPosition(new THREE.Vector3()); G.steamMove(id, w.x, w.y + 0.06, w.z);
     if (c.carry || c.lie || c.angel || PARTNER.task && c === PARTNER && PARTNER.task.o.id !== 'nap' && PARTNER.task.o.id !== 'read') setMug(c, false);
   }
-  if (COCOA.t > 0) { COCOA.t -= dt; if (COCOA.t <= 0) { if (MUGS.partner.visible) { setMug(PARTNER, false); if (!G.busy()) G.bark(pick(['*sets down her empty mug, very satisfied*', 'That was the best cocoa of my life. Don’t tell the last one.']), 2.6); } setMug(PLAYER, false); } }
+  if (COCOA.t > 0) { COCOA.t -= dt; if (COCOA.t <= 0) { const her = G.herBody(PLAYER) ? PLAYER : PARTNER, him = her === PLAYER ? PARTNER : PLAYER; if (MUGS.partner.visible) { setMug(her, false); if (!G.busy()) G.bark(pick(['*sets down her empty mug, very satisfied*', 'That was the best cocoa of my life. Don’t tell the last one.']), 2.6); } setMug(him, false); } }
 }
 const kettle = A.findInter('kettle'), teaAct = kettle.raw, teaLabel = kettle.label;
 kettle.label = () => (A.morning() && !S.flags.teaMade ? teaLabel() : L.cocoaCh !== S.chapter ? 'Make cocoa' : 'Kettle');
@@ -507,7 +509,7 @@ G.LATE.add((dt) => {
     const inside = G.inside(c.x, c.z);
     S.m.position.set(_cv.x * 0.7 + c.x * 0.3, gy, _cv.z * 0.7 + c.z * 0.3);
     S.m.rotation.y = c.yaw || 0;
-    const sz = c === PLAYER ? 1.05 : 0.92; S.m.scale.set(sz, 1, sz * 0.85);
+    const sz = G.herBody(c) ? 0.92 : 1.05; S.m.scale.set(sz, 1, sz * 0.85);
     S.m.material.opacity = (inside ? 0.7 : 0.85) * S.k;   // stronger on snow, which is lit far past white and shrugs a light pool off
   }
 });

@@ -178,7 +178,7 @@ CH.walk = async () => {
     }
   })();
   // She leads to the end of the path; the walk's beats follow on as you reach them.
-  await lead(6.3, 31.5, ['The meadow, {toHim}! It’s just past the end of the path.', 'Keep up. Snow waits for no one.']);
+  await lead(6.3, 31.5, ['The meadow, {toHim}! It’s just past the end of the path.', 'Keep up. Snow waits for no one.'], '(The meadow, just past the end of the path. Lead the way.)');
   if (!live()) return;
   await meadow(); if (!live()) return;
   await hill(); if (!live()) return;
@@ -187,11 +187,12 @@ CH.walk = async () => {
   await homeward(live);
 };
 // Walk ahead to a place; wait for you there (and for any snowman you're in the middle of).
-function lead(x, z, lines) {
+// (Playing as her, you're the one who knows the way: you walk there, he follows, and herHint says where.)
+function lead(x, z, lines, herHint) {
   return new Promise((res) => {
-    PARTNER.lead = { x, z, waitLines: lines, cb: null };
+    PARTNER.lead = { x, z, waitLines: lines, cb: null, herHint };
     const check = async () => {
-      await until(() => !PARTNER.lead || (PARTNER.lead.arrived && Math.hypot(PLAYER.x - x, PLAYER.z - z) < 3.2 && !G.busy() && !S.flags.noTogether));
+      await until(() => !PARTNER.lead || ((PARTNER.lead.arrived || STATE.asHer) && Math.hypot(PLAYER.x - x, PLAYER.z - z) < (STATE.asHer ? 2.4 : 3.2) && !G.busy() && !S.flags.noTogether));
       PARTNER.lead = null; res();
     };
     check();
@@ -297,7 +298,7 @@ async function hill() {
   });
   STATE.busy = false;
   G.bark('The lake next. Down we go. Carefully. Mostly carefully.', 3);
-  await lead(SHORE.x - 0.3, SHORE.z - 0.6, ['The lake, {dear}! Before the light goes.', 'Down here!']);
+  await lead(SHORE.x - 0.3, SHORE.z - 0.6, ['The lake, {dear}! Before the light goes.', 'Down here!'], '(Down to the lake, before the light goes.)');
 }
 
 async function lake() {

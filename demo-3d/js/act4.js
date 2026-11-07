@@ -550,8 +550,8 @@ async function afterReunion() {
  * Act IV from her side (playing as Partner): she's the one out in the snow. She leaves the trail, looks in at
  * the window, and waits where it's summer. Something wearing him finds her first.
  * ===================================================================== */
-// Dress a body when the bodies are swapped (the clothes belong to the model, not to who's driving it).
-const dressBody = (c, on) => G.setDressed(G.NIGHT && G.NIGHT.swapped ? (c === PLAYER ? PARTNER : PLAYER) : c, on);
+// Dress whoever c is driving (the clothes belong to the body, and G.setDressed goes by the body: life.js).
+const dressBody = (c, on) => G.setDressed(c, on);
 const herA4 = () => here() && !!S.flags.herA4;
 const H4 = {};
 async function lastHer() {

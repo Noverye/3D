@@ -44,7 +44,7 @@ async function pointTowards(g) {
   p.forcePose = 'wave'; await G.wait(1.1); if (p.forcePose === 'wave') p.forcePose = null;
 }
 function updateHelp(dt) {
-  const g = hers() ? goal() : null;
+  const g = hers() && !STATE.asHer ? goal() : null;   // (playing as her, the way is yours to show: see the hints in game.js)
   if (!g) { HELP.t = 0; HELP.key = null; return; }
   const key = g.lines[0];
   if (key !== HELP.key) { HELP.key = key; HELP.t = 0; HELP.best = 1e9; HELP.said = 0; }
@@ -200,7 +200,7 @@ function updateMeanwhile(dt) {
   if (S.chapter === 'morning' && PARTNER.lie && PARTNER.cuddle && !PLAYER.lie && !G.busy()) { G.lieDown(PARTNER, G.BED.R, PARTNER.z, PARTNER.lieRoll || 0, 0); G.shapeBed({ R: true }); }
   if (S.chapter !== VIG.ch) { VIG.ch = S.chapter; VIG.n = 0; VIG.t = 0; VIG.cd = 40; }
   VIG.cd -= dt;
-  if (!/^(morning|evening)$/.test(S.chapter || '') || !hers() || VIG.on) { VIG.t = 0; return; }
+  if (!/^(morning|evening)$/.test(S.chapter || '') || !hers() || VIG.on || STATE.asHer) { VIG.t = 0; return; }   // (her side of the house is the one you're in)
   const apart = dist() > 6.5 && !(A.sameRoom && A.sameRoom());
   const id = apart && !G.busy() && !PLAYER.lie && !STATE.noControl ? vigFor() : null;
   VIG.t = id ? VIG.t + dt : 0;

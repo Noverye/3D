@@ -80,13 +80,15 @@ const GEAR = {
   player: buildGear(ADULT.player, { coat: '#5c5f63', hat: '#3a3d44', scarf: '#b8322a', boots: '#4a3426' }),
   partner: buildGear(ADULT.partner, { fem: true, coat: '#a8875e', hat: '#ece4d6', scarf: '#7a4a5e', boots: '#6b4a32', pom: true }),
 };
-const gearOf = (c) => (c === PLAYER ? GEAR.player : GEAR.partner);
+// By body, not by role: playing as her, PLAYER is in her body and wears her coat.
+const herBody = (c) => G.herBody(c);
+const gearOf = (c) => (herBody(c) ? GEAR.partner : GEAR.player);
 /* A realistic body (assets.js manifest) is shaped differently from the procedural one the gear was built on:
  * a bigger knit jumper, a different skull. Once it's loaded and measured (people.js, measureFit), the coat is
  * widened to clear the knitwear, the hat moved and sized to sit on that head, the scarf to that collar, the
  * boots to those feet. */
 function fitGear(c) {
-  const m = c === PLAYER ? ADULT.player : ADULT.partner, u = m.userData, f = u.fit;
+  const m = herBody(c) ? ADULT.partner : ADULT.player, u = m.userData, f = u.fit;
   if (!f || u.gearFitted || !u.real) return null;
   u.gearFitted = true;
   const g = gearOf(c), k = u.k, out = {};
@@ -425,7 +427,7 @@ function fitKid(m) {
   // A body that was still loading when the game started (the loading screen gives up after 8 s): fitted the
   // moment it's measured, and dressed again if it should be.
   [PLAYER, PARTNER].forEach((c) => {
-    const key = c === PLAYER ? 'player' : 'partner'; if (G.GEAR_FIT[key]) return;
+    const key = herBody(c) ? 'partner' : 'player'; if (G.GEAR_FIT[key]) return;
     const t = setInterval(() => { const r = fitGear(c); if (r) { clearInterval(t); G.GEAR_FIT[key] = r; setDressed(c, !!c.dressed); } }, 400);
   });
   if (G.KIDS) { G.GEAR_FIT.kidPlayer = fitKid(G.KIDS.player); G.GEAR_FIT.kidPartner = fitKid(G.KIDS.partner); }
@@ -435,17 +437,18 @@ function fitKid(m) {
 function setDressed(c, on) {
   c.dressed = on;
   const g = gearOf(c);
-  g.parts.forEach((p) => { p.visible = on && !p.userData.replaced && !(c === PLAYER && L.hatGiven && g.hatParts.includes(p)); });   // the snowman has his hat
-  if (G.HOOK_COATS) G.HOOK_COATS[c === PLAYER ? 0 : 1].visible = !on;
-  BOOTS[c === PLAYER ? 0 : 1].visible = !on;
+  const him = !herBody(c);
+  g.parts.forEach((p) => { p.visible = on && !p.userData.replaced && !(him && L.hatGiven && g.hatParts.includes(p)); });   // the snowman has his hat
+  if (G.HOOK_COATS) G.HOOK_COATS[him ? 0 : 1].visible = !on;
+  BOOTS[him ? 0 : 1].visible = !on;
   // A realistic body's own jumper would poke through the coat: it goes under it, out of sight.
-  const mu = (c === PLAYER ? ADULT.player : ADULT.partner).userData;
+  const mu = (him ? ADULT.player : ADULT.partner).userData;
   (mu.realTop || []).forEach((o) => { o.visible = !on; });
   // Hair that would poke through the knitted hat (her bun and its loose strands) goes under it while it's on.
-  const hatOn = on && !(c === PLAYER && L.hatGiven);
+  const hatOn = on && !(him && L.hatGiven);
   (mu.realBun || []).forEach((o) => { const H = o.userData.hairPos; if (!H) return; const P = o.geometry.attributes.position; P.array.set(hatOn ? H.alt : H.orig); P.needsUpdate = true; });
   const RG = mu.realGear;
-  if (RG) Object.keys(RG).forEach((kind) => RG[kind].forEach((o) => { o.visible = on && !(kind === 'hat' && c === PLAYER && L.hatGiven); }));
+  if (RG) Object.keys(RG).forEach((kind) => RG[kind].forEach((o) => { o.visible = on && !(kind === 'hat' && him && L.hatGiven); }));
   // A realistic body with its own long coat wears that instead of the built-on one (hat, scarf, boots stay).
   if (mu.realCoat && mu.realCoat.length) {
     mu.realCoat.forEach((o) => { o.visible = on; });
@@ -510,7 +513,7 @@ function updateCold(dt) {
     const snowing = outside(c) && STATE.snow > 0.25;
     c.snowAcc = clamp((c.snowAcc || 0) + dt * (snowing ? STATE.snow * 0.012 * (c.speed > 0.3 ? 0.6 : 1) : G.inside(c.x, c.z) ? -0.03 : -0.004), 0, 1);
     const g = gearOf(c), show = c.snowAcc > 0.06;
-    g.snow.forEach((s, i) => { const onHat = i === g.snow.length - 1; s.visible = show && (!onHat || (c.dressed && !(c === PLAYER && L.hatGiven) && !(c.m.userData.realGear && c.m.userData.realGear.hat))); if (s.visible) { const b = s.userData.base, f = 0.35 + 0.65 * c.snowAcc, k = c.m.userData.k; s.scale.set(b[0] * k * f, b[1] * k * (0.4 + c.snowAcc), b[2] * k * f); if (s.userData.ys) s.position.y = s.userData.ys[c.dressed ? 0 : 1] * k; } });
+    g.snow.forEach((s, i) => { const onHat = i === g.snow.length - 1; s.visible = show && (!onHat || (c.dressed && !(!herBody(c) && L.hatGiven) && !(c.m.userData.realGear && c.m.userData.realGear.hat))); if (s.visible) { const b = s.userData.base, f = 0.35 + 0.65 * c.snowAcc, k = c.m.userData.k; s.scale.set(b[0] * k * f, b[1] * k * (0.4 + c.snowAcc), b[2] * k * f); if (s.userData.ys) s.position.y = s.userData.ys[c.dressed ? 0 : 1] * k; } });
   }
   if (frostEl) { const f = smooth(0.38, 1, PLAYER.cold) * 0.92; if (Math.abs((frostEl._o || 0) - f) > 0.004) { frostEl._o = f; frostEl.style.opacity = f.toFixed(3); } }
   // Her side of it.
@@ -621,7 +624,8 @@ function armful(m, n) {
   return g;
 }
 const ARMS = { player: armful(ADULT.player, 3), partner: armful(ADULT.partner, 2) };
-function setCarry(c, on) { c.carry = on; (c === PLAYER ? ARMS.player : ARMS.partner).visible = on; }
+const armsOf = (c) => (herBody(c) ? ARMS.partner : ARMS.player);
+function setCarry(c, on) { c.carry = on; armsOf(c).visible = on; }
 // Her feeding the fire: kneel at the hearth, a log on, sparks; a word if you're there to hear it.
 const STOKE = { at: -99, id: 'stoke', spot: { x: 8.05, z: -0.75 }, yaw: Math.PI, dur: [2.2, 2.6], look: { x: 8.0, y: 0.35, z: -1.8 },
   onArrive: (p) => { p.forcePose = 'warm'; },
@@ -683,7 +687,7 @@ function updateFire(dt) {
   BASKET.logs.forEach((lg, i) => { lg.visible = i < L.basket; });
   // Logs are heavy, and you can't sit down with an armful.
   PLAYER.speedMul = (PLAYER.carry ? 0.8 : 1) * (G.surfaceAt(PLAYER.x, PLAYER.z) === 'snow' ? 0.84 : 1) * (PLAYER.extraMul || 1);
-  if (PLAYER.carry) ARMS.player.visible = !(PLAYER.sit > 0.2);
+  if (PLAYER.carry) armsOf(PLAYER).visible = !(PLAYER.sit > 0.2);
   if (PARTNER.carry && (PARTNER.sit > 0.2 || PARTNER.hidden || PARTNER.lie)) setCarry(PARTNER, false);
 }
 

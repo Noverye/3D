@@ -231,6 +231,9 @@ inter('mRead', [G.NOOK.x, 0.6, G.NOOK.z + 0.6], 1.0, 'Read together', async () =
   back();
 }, () => evening() && !S.flags.eveRead && !PARTNER.hidden);
 findInter('mRead').prio = 1;
+// (these are scenes for two: playing as her, they play out with him, her lines hers, rather than as something she does alone)
+for (const id of ['mBranch', 'mTracks', 'mRead']) findInter(id).scene = () => true;
+findInter('kettle').scene = () => evening() && !S.flags.eveCocoa && !PARTNER.hidden;
 
 // Drawing in the frost on the kitchen window by the table.
 const FROST = (() => {
@@ -266,7 +269,7 @@ inter('mFrost', [13.0, 1.35, 4.0], 1.0, 'Draw in the frost', async () => {
   addScrap('frost', { heart: 'Two hearts in the frost on the kitchen window. (One lopsided, on purpose.)', snowman: 'A snowman in the frost on the kitchen window, with a very tall hat.', score: '“11–9” in the frost on the kitchen window. (“Recount.”)' }[kind]);
   back();
 }, () => evening() && !S.flags.eveFrost && !PARTNER.hidden);
-findInter('mFrost').prio = 1;
+findInter('mFrost').prio = 1; findInter('mFrost').scene = () => true;
 // Only the evening has the drawing. In the night, someone has wiped it.
 G.TICKERS.add(() => { if (FROST.m.visible && S.chapter !== 'evening' && S.chapter !== 'firstsnow') FROST.m.visible = false; });
 G.MOM = { drawFrost, FROST };   // (The First Snow draws in the frost again)

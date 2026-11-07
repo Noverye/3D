@@ -8,8 +8,9 @@ const { $, clamp, lerp, damp, rand, MAT } = G;
 /* Player settings, remembered per browser. */
 const SETTINGS = (G.SETTINGS = { volume: 0.8, muted: false, view: 'third', subs: 'm', keys: {}, motion: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'reduced' : 'full' });
 try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem('cbs.base.settings') || '{}')); } catch (e) { /* storage unavailable */ }
-// Playing as her is switched off for now (G.PARTNER_PLAY): everyone plays as him. Her route stays in the code.
-G.PARTNER_PLAY = false;
+// Playing as her (G.PARTNER_PLAY): chosen on the title screen. (It was switched off from build 75 to 150, while
+// control kept slipping back to him in free time.)
+G.PARTNER_PLAY = true;
 if (!G.PARTNER_PLAY) SETTINGS.playAs = 'player';
 const saveSettings = () => { try { localStorage.setItem('cbs.base.settings', JSON.stringify(SETTINGS)); } catch (e) { /* ignore */ } };
 G.saveSettings = saveSettings;
@@ -1123,7 +1124,8 @@ function partnerAI(dt, t) {
   if (p.mode === 'seated' || p.mode === 'lying') { p.speed = 0; p.lookAt = p.mode === 'seated' ? head(PLAYER) : null; return; }
   if (p.mode === 'stay') { p.speed = damp(p.speed, 0, 8, dt); p.yaw = angDamp(p.yaw, Math.atan2(PLAYER.x - p.x, PLAYER.z - p.z), 2, dt); p.lookAt = head(PLAYER); return; }
   if (p.task) { if (partnerTask(p, dt, t)) return; }
-  if (p.lead) { partnerLead(p, dt, t); return; }
+  // (playing as her, she is the one leading the way, and he follows you: the lead's place is yours to walk to)
+  if (p.lead && !STATE.asHer) { partnerLead(p, dt, t); return; }
   if (p.hold) { partnerHold(p, dt, t); return; }
   if (p.mode === 'follow') {
     const side = new THREE.Vector3(Math.cos(PLAYER.yaw), 0, -Math.sin(PLAYER.yaw));
@@ -1646,12 +1648,13 @@ function ambientBarks(dt) {
  * on screen, and you steer her while he follows. Scenes are told from his side, so a scene puts you back in his shoes
  * for its length, and the chapters that need a particular one (the night, Act IV as him; dawn and Elsewhere as her) decide. */
 const FREE_CH = /^(morning|walk|evening|ending_)/;
-G.canSwitch = () => STATE.started && !busy() && !PARTNER.script && !PLAYER.script && !PARTNER.lead && G.S && FREE_CH.test(G.S.chapter || '') && !PARTNER.hidden && !PARTNER.lie && !PLAYER.lie && (PARTNER.sit || 0) < 0.05 && (PLAYER.sit || 0) < 0.05 && !PARTNER.task && !PLAYER.carry && !STATE.dancing && !PLAYER.hugWith;
+G.canSwitch = () => STATE.started && !busy() && !PARTNER.script && !PLAYER.script && G.S && FREE_CH.test(G.S.chapter || '') && !PARTNER.hidden && !PARTNER.lie && !PLAYER.lie && (PARTNER.sit || 0) < 0.05 && (PLAYER.sit || 0) < 0.05 && !PARTNER.task && !PLAYER.carry && !STATE.dancing && !PLAYER.hugWith;
 function swapPlaces() {
   for (const k of ['x', 'z', 'y', 'yFloor', 'yaw', 'speed', 'phase']) { const v = PLAYER[k]; PLAYER[k] = PARTNER[k]; PARTNER[k] = v; }
   const m = PLAYER.m; PLAYER.m = PARTNER.m; PARTNER.m = m;
   const st = PLAYER.scarfTail; PLAYER.scarfTail = PARTNER.scarfTail; PARTNER.scarfTail = st;
-  const d = PLAYER.dressed; PLAYER.dressed = PARTNER.dressed; PARTNER.dressed = d;
+  // What they're wearing or holding goes with the body: a coat, an armful of logs, a mug, the snow on a hat.
+  for (const k of ['dressed', 'carry', 'holdPose', 'snowAcc', 'snowyT', 'cold']) { const v = PLAYER[k]; PLAYER[k] = PARTNER[k]; PARTNER[k] = v; }
   // Scripts stay with the role (the story's walkTo on PARTNER keeps going, now in the other body).
   for (const c of [PLAYER, PARTNER]) { c._hsp = null; c._ikOff = null; c.lookAt = null; c.nav = null; c._prevYaw = c.yaw; }
   G.setHold(false); if (!PARTNER.script) PARTNER.mode = 'follow';
@@ -1679,7 +1682,13 @@ const inInter = () => !!(G.S && G.S.inInter);
 function step(dt, t) {
   // A scene starting (or a chapter that isn't free time) puts you back as him; free time again, back to her.
   if (STATE.asHer && ((busy() && !inInter()) || !G.S || !FREE_CH.test(G.S.chapter || '') || PLAYER.lie || PARTNER.lie)) swapPlaces();
-  else if (!STATE.asHer && SETTINGS.playAs === 'partner' && !(G.NIGHT && G.NIGHT.swapped) && G.canSwitch() && (PARTNER.mode === 'follow' || PARTNER.mode === 'still') && Math.hypot(PARTNER.x - PLAYER.x, PARTNER.z - PLAYER.z) < 6) swapPlaces();
+  else if (!STATE.asHer && SETTINGS.playAs === 'partner' && !(G.NIGHT && G.NIGHT.swapped) && G.canSwitch() && (PARTNER.mode === 'follow' || PARTNER.mode === 'still') && Math.hypot(PARTNER.x - PLAYER.x, PARTNER.z - PLAYER.z) < 12) swapPlaces();
+  // Leading the way as her: where he would have followed her, she knows where she's going, and now and then says so.
+  if (STATE.asHer && PARTNER.lead && PARTNER.lead.herHint && !busy()) {
+    const L = PARTNER.lead, d = Math.hypot(PLAYER.x - L.x, PLAYER.z - L.z);
+    L.herT = (L.herT == null ? 1.2 : L.herT) - dt;
+    if (L.herT <= 0 && d > 3) { G.hint(L.herHint, 5); L.herT = 22; }
+  }
   updateDialogue(dt);
   let ix = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
   let iy = (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0);
@@ -1791,7 +1800,7 @@ function step(dt, t) {
       const surf = G.surfaceAt(e.x, e.z);
       const vol = c === PLAYER ? 1 : clamp(1.3 - Math.hypot(PARTNER.x - PLAYER.x, PARTNER.z - PLAYER.z) * 0.25, 0, 0.7);
       if (vol > 0.02) G.Audio.step(surf, vol * clamp(c.speed / 1.5, 0.5, 1.4));
-      if (!deck && surf !== 'ice' && G.addFootprint) G.addFootprint(e.x, e.z, e.yaw, e.leg, c === PLAYER ? 1.05 : 0.9);
+      if (!deck && surf !== 'ice' && G.addFootprint) G.addFootprint(e.x, e.z, e.yaw, e.leg, G.herBody(c) ? 0.9 : 1.05);
       // Walking briskly through fresh snow kicks a little powder off the toes.
       if (!deck && surf !== 'ice' && surf !== 'rug' && !G.inside(e.x, e.z) && c.speed > 0.7 && G.kickAt && Math.random() < 0.75) G.kickAt(e.x, G.floorAt(e.x, e.z), e.z, e.yaw, clamp((c.speed - 0.5) / 2, 0.3, 1.2));
       // Boots that were in the snow leave wet prints on the boards for a while after you come in.
@@ -1980,6 +1989,9 @@ function boot() {
   SNOW = snowSystem(4500); smokeSystem();
   PLAYER.m = G.makeHuman({ height: 1.84, skin: '#d9ab8e', outfit: 'hoodie', top: '#3f4146', legs: '#25272c', hair: '#1e140f', hairStyle: 'shaggy', socks: '#2f2b28', seed: 11 });
   PARTNER.m = G.makeHuman({ height: 1.6, fem: true, skin: '#e8bfa4', outfit: 'sweater', legs: '#2c2626', hair: '#5e3a26', hairStyle: 'bun', socks: '#e6dccd', eyes: '#4a3020', lips: '#c47a70', seed: 23 });
+  // Which body a role is in right now (playing as her swaps them): for whatever belongs to the person rather than
+  // the role, like a coat, an armful of logs or the size of a footprint.
+  G.HER_BODY = PARTNER.m; G.herBody = (c) => c.m === G.HER_BODY || !!(G.KIDS && c.m === G.KIDS.partner);
   placeChar(PLAYER, G.pathX(27) + 0.35, 27, Math.PI); placeChar(PARTNER, G.pathX(27) - 0.45, 26.6, Math.PI);
   PLAYER.hugPose = [-0.95, 0.25, -1.3, -0.7];   // he's taller: arms around her back rather than over her head
   // The two of them as children, for the prologue: bigger heads, bobble hats, one red scarf.

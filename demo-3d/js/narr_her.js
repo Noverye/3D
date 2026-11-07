@@ -243,3 +243,41 @@ window.CBS_CHOICE_HER_LEAD = {
 Object.assign(window.CBS_CHOICE_HER, { 'Just sit down next to her': 'Keep watching the snow', 'Hold out your little finger': 'Hold out your little finger first', 'Shake it': 'Hand it to him to shake', 'Come out': 'Hold out your hand to him' });
 /* When she's the one doing it (an interaction while playing as her), the options are simply hers. */
 window.CBS_CHOICE_HER_DO = { 'Leave her a snack on the counter': 'Leave him a snack on the counter', 'Steal a biscuit': 'Steal one of his biscuits', 'Close it': 'Close it', 'Higher': 'Higher', 'Lower': 'Lower', 'Look at the table': 'Look at the table', 'Read something together': 'Read something together', 'Just browse': 'Just browse', 'Play cards with {P}': 'Play cards with him' };
+
+// The scenes added since (build 151, when playing as her came back): the small moments on the walk and in the
+// evening, the power cut, and The First Snow. Told from her side: "you" is her, and he is "he".
+Object.assign(window.CBS_NARR_HER, {
+"(The whole branch lets go at once. She disappears, briefly, into a small private blizzard.)": "(The whole branch lets go at once. You disappear, briefly, into a small private blizzard.)",
+"(It goes down the back of your neck. All of it.)": "(It goes down the back of his neck. All of it.)",
+"(She is not even slightly sorry. She brushes the snow off your shoulders anyway, very gently, one shoulder at a time.)": "(You are not even slightly sorry. You brush the snow off his shoulders anyway, very gently, one shoulder at a time.)",
+"(You follow them to the edge of the trees. They stop at a fallen branch, go round it twice, and carry on, as if whoever made them had to think about it.)": "(The two of you follow them to the edge of the trees. They stop at a fallen branch, go round it twice, and carry on, as if whoever made them had to think about it.)",
+"(Milk in the little pan. She stands too close to the hob, and too close to you, on purpose.)": "(Milk in the little pan. You stand too close to the hob, and too close to him, on purpose.)",
+"(She watches you put in one. Then she reaches past you and puts in a second.)": "(You watch him put in one. Then you reach past him and put in a second.)",
+"(You let it go. She hums, and leans on you while it heats.)": "(He lets it go. You hum, and lean on him while it heats.)",
+"(She drinks hers far too soon, burns her tongue, and complains about it for ten minutes. After that she blows on every single mouthful for ages.)": "(You drink yours far too soon, burn your tongue, and complain about it for ten minutes. After that you blow on every single mouthful for ages.)",
+"(The window seat, the snow going past the glass behind you, and the book you’re both halfway through. She reads. She does all the voices.)": "(The window seat, the snow going past the glass behind you, and the book you’re both halfway through. You read. You do all the voices.)",
+"(You do it. It is, generously, a voice.)": "(He does it. It is, generously, a voice.)",
+"(You do it as badly as you possibly can. It goes somewhere unexpected.)": "(He does it as badly as he possibly can. It goes somewhere unexpected.)",
+"(Two chapters later her head is on your shoulder. She is pretending to read. She is reading ahead.)": "(Two chapters later your head is on his shoulder. You are pretending to read. You are reading ahead.)",
+"(She adds a second, smaller heart next to yours. It’s lopsided. She says that’s the point.)": "(You add a second, smaller heart next to his. It’s lopsided. You say that’s the point.)",
+"(She gives him a hat. A very tall hat. “It needed a hat. Obviously.”)": "(You give the snowman a hat. A very tall hat. “It needed a hat. Obviously.”)",
+"(She crosses it out and writes “recount” underneath, with a flourish.)": "(You cross it out and write “recount” underneath, with a flourish.)",
+"(You feel along the drawer: string, a corkscrew, the spare key, something that was once a biscuit. Candles. Matches.)": "(He feels along the drawer: string, a corkscrew, the spare key, something that was once a biscuit. Candles. Matches.)",
+"(Three small flames, and the fire, and her face lit gold from underneath. The storm can do what it likes.)": "(Three small flames, and the fire, and his face lit gold from underneath. The storm can do what it likes.)",
+"(She draws a heart in the frost, and then, next to it, a second, lopsided one. “It’s an ordinary amount of soppy. Don’t look at it like that.”)": "(You draw a heart in the frost, and then, next to it, a second, lopsided one. “It’s an ordinary amount of soppy. Don’t look at it like that.”)",
+"(Without saying anything, she draws two hearts in the frost. The second one lopsided. On purpose.)": "(Without saying anything, you draw two hearts in the frost. The second one lopsided. On purpose.)",
+"(She draws a snowman in the frost and gives him a very tall hat. “He came back. They always come back.”)": "(You draw a snowman in the frost and give him a very tall hat. “He came back. They always come back.”)",
+"(She writes “11–9” in the frost, looks at it, and crosses it out. “Recount. Always.”)": "(You write “11–9” in the frost, look at it, and cross it out. “Recount. Always.”)",
+"(You put in one. She reaches past you and puts in a second. It fell.)": "(He puts in one. You reach past him and put in a second. It fell.)",
+"(Later, she gets the scrapbook out, and you go through all of it together. Every page. Some of it you disagree about.)": "(Later, you get the scrapbook out, and the two of you go through all of it together. Every page. Some of it you disagree about.)",
+});
+Object.assign(window.CBS_CHOICE_HER, {
+'Get her to stand under it': 'Go and see what he’s grinning at', 'Walk under it yourself': 'Get him to stand under it',
+'“Why are we whispering?”': 'Let him ask: “Why are we whispering?”',
+'Throw one back': 'Let him throw one back', 'Surrender': 'Let him surrender', 'Charge her': 'Let him charge you',
+'“It fell?”': 'Let him ask: “It fell?”', 'Put in a third': 'Let him put in a third',
+'Do the voice': 'Let him do the voice', 'Do the voice, very badly': 'Let him do it, very badly', '“I’ve never done a voice in my life.”': 'Let him say: “I’ve never done a voice in my life.”',
+'Draw a heart': 'Let him draw a heart', 'Draw a snowman': 'Let him draw a snowman', 'Write the pinecone score': 'Let him write the pinecone score',
+'“I’ve got you.”': 'Let him say: “I’ve got you.”', '“Are you scared of the dark?”': 'Let him ask: “Are you scared of the dark?”', '“It’s only the storm.”': 'Let him say: “It’s only the storm.”',
+'“I did.”': 'Let him say: “I did.”', '“You did.”': 'Let him say: “You did.”', '“I don’t remember.”': 'Let him say: “I don’t remember.”',
+});

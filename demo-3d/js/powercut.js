@@ -9,7 +9,7 @@
  * ========================================================================= */
 (G.afterBuild = G.afterBuild || []).push(() => {
 const { PLAYER, PARTNER, STATE } = G;
-const A = G.SAPI, S = A.S, { N, P, choose, wait, inter, addBond, addScrap, fixed, V } = A;
+const A = G.SAPI, S = A.S, { N, P, choose, wait, inter, addBond, addScrap, fixed, V, findInter } = A;
 const dist = () => Math.hypot(PARTNER.x - PLAYER.x, PARTNER.z - PLAYER.z);
 
 /* ---------- candles ---------- */
@@ -84,7 +84,7 @@ inter('pcCandles', [11.45, 0.85, -1.55], 1.1, 'Find the candles', async () => {
   p.mode = 'follow'; G.setHold(true); p.holdTimer = null;
   PC.t = 0;
 }, () => PC.out && !CAND.lit && S.chapter === 'evening');
-A.findInter('pcCandles').prio = 2;
+A.findInter('pcCandles').prio = 2; A.findInter('pcCandles').scene = () => true;   // (a scene for two, played as her too)
 
 async function powerBack(quiet) {
   await stutter(2); lampsOn();
