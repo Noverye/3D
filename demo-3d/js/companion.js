@@ -102,6 +102,7 @@ function updateWindow(dt) {
   if (dist() > 8) return;
   const fx = Math.sin(PLAYER.yaw), fz = Math.cos(PLAYER.yaw);
   for (const w of G.WINDOWS) {
+    if (w.study) continue;
     w.inn.getWorldPosition(WIN.v);
     if (WIN.v.y > 2.2) continue;   // the gable windows are out of reach of anyone's view
     const dx = WIN.v.x - PLAYER.x, dz = WIN.v.z - PLAYER.z, d = Math.hypot(dx, dz);
@@ -308,6 +309,7 @@ function nearWindow() {
   if (!G.WINDOWS || !G.inside(PLAYER.x, PLAYER.z)) return null;
   const fx = Math.sin(PLAYER.yaw), fz = Math.cos(PLAYER.yaw);
   for (const w of G.WINDOWS) {
+    if (w.study) continue;
     w.inn.getWorldPosition(_nw); if (_nw.y > 2.2) continue;
     const dx = _nw.x - PLAYER.x, dz = _nw.z - PLAYER.z, d = Math.hypot(dx, dz);
     if (d < 1.4 && d > 0.2 && (dx * fx + dz * fz) / d > 0.7) return { x: _nw.x, z: _nw.z };

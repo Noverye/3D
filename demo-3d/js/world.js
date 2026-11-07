@@ -821,14 +821,14 @@ function wall(axis, c, a, b, holes, inner, top, mats) {
   });
   wallSeg(axis, c, p, b, -0.4, top, inner, mats);
 }
-function windowAt(axis, c, a, b, y0, y1, outward) {
-  const mid = (a + b) / 2, w = b - a, h = y1 - y0, fw = 0.07, d = WT + 0.06;
+function windowAt(axis, c, a, b, y0, y1, outward, fw = 0.07) {
+  const mid = (a + b) / 2, w = b - a, h = y1 - y0, d = WT + 0.06, mw = fw * 0.64;
   const T = MAT.trim;
   const put = (sx, sy, sz, x, y, z) => (axis === 'x' ? G.box(sx, sy, sz, T, x, y, z) : G.box(sz, sy, sx, T, z, y, x));
   // frame (x-aligned coordinates, swapped for z walls)
   put(w + fw * 2, fw, d, mid, y1 + fw / 2, c); put(w + fw * 2 + 0.1, fw, d + 0.12, mid, y0 - fw / 2, c);
   put(fw, h, d, a - fw / 2, (y0 + y1) / 2, c); put(fw, h, d, b + fw / 2, (y0 + y1) / 2, c);
-  put(0.045, h, d * 0.5, mid, (y0 + y1) / 2, c); put(w, 0.045, d * 0.5, mid, y0 + h * 0.55, c);
+  put(mw, h, d * 0.5, mid, (y0 + y1) / 2, c); put(w, mw, d * 0.5, mid, y0 + h * 0.55, c);
   // snow on the outside sill
   const sill = axis === 'x' ? G.box(w + 0.2, 0.06, 0.16, MAT.snow, mid, y0 - 0.005, c + outward * 0.18, { r: 0.025 }) : G.box(0.16, 0.06, w + 0.2, MAT.snow, c + outward * 0.18, y0 - 0.005, mid, { r: 0.025 });
   // glass: warm glow outward, dark night inward
@@ -865,18 +865,46 @@ function signTex() {
     c.fillStyle = '#3a3a48'; c.font = '19px "Comic Sans MS", cursive'; c.textAlign = 'center'; c.fillText('(this means you, Partner)', w / 2, h - 26);
   } });
 }
+// Inside the study window: a pair of curtains drawn across, almost meeting, and behind them the room, dark by day and
+// lamplit at night, so a line of warm light shows where they don't quite close. (The glass's own glow is the lamp's
+// light on it.) G.STUDY_LIGHT(n, d) is called with the night and the daylight as they change.
+function studyCurtain(x0, x1, y0, y1, zi) {
+  const w = x1 - x0 + 0.2, h = y1 - y0 + 0.2, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  const fab = G.std({ map: TX.knitCream, color: '#8f4a36', roughness: 1, emissive: '#ff9852', emissiveMap: TX.knitCream, emissiveIntensity: 0 });
+  const glowTex = G.canvasTex(0, (u, v) => { const r = Math.hypot(u - 0.62, (v - 0.4) * 1.2), k = Math.max(0, 1 - r * 1.6); const c = 70 + 185 * k * k; return [c, c * 0.72, c * 0.46]; }, { w: 64, h: 64 });
+  const room = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: glowTex, color: '#000000', fog: true }));
+  room.position.set(mx, my, zi - 0.12); world.add(room);
+  const gap = 0.018, pw = w / 2 - gap / 2 + 0.1;
+  for (const sd of [-1, 1]) {
+    const g = new THREE.PlaneGeometry(pw, h, 10, 4), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const u = p.getX(i) / pw + 0.5; p.setZ(i, Math.sin(u * Math.PI * 5 + sd) * 0.012); }
+    g.computeVertexNormals();
+    // (meeting off-centre, clear of the glazing bar)
+    const c = new THREE.Mesh(g, fab); c.position.set(mx + sd * (gap / 2 + pw / 2) + 0.1, my, zi - 0.045); c.receiveShadow = true; world.add(c);
+  }
+  const warm = new THREE.Color('#ffb070'), dim = new THREE.Color('#0c0907');
+  G.STUDY_LIGHT = (n, d) => { const k = 1 - d; fab.emissiveIntensity = 0.32 * k; room.material.color.copy(dim).lerp(warm, k); };
+}
 function buildAnnex() {
   const A = ANNEX, h0 = 2.55, h1 = 2.05, cx = (A.x0 + A.x1) / 2, cz = (A.z0 + A.z1) / 2;
   G.box(A.x1 - A.x0 + 0.3, 0.4, A.z1 - A.z0 + 0.3, MAT.stone, cx, -0.2, cz, { uv: [1, 0.3], cast: false });
   const L = G.logWall(MAT.logs.clone()); L.map = G.rep(TX.logs, 1 / 2.75, 1 / 2.75); L.bumpMap = G.rep(TX.logsB, 1 / 2.75, 1 / 2.75); G.MATS.push(L);
   // Side walls follow the roof line: tall against the cabin, lower at the far end.
   const sh = new THREE.Shape(); sh.moveTo(A.x0, -0.4); sh.lineTo(A.x1 + WT / 2, -0.4); sh.lineTo(A.x1 + WT / 2, h1); sh.lineTo(A.x0, h0); sh.closePath();
-  for (const z of [A.z0, A.z1]) { const m = G.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: WT, bevelEnabled: false }), L), world); m.position.z = z - WT / 2; G.CAMBLOCK.push(m); }
+  // A little window in the wall facing the yard, warm at night: somebody is always "just doing something" in here.
+  // (It was a cream rectangle stuck on the outside of the logs, glowing the same by day as by night.) Now it's a real
+  // window like the cabin's, framed and glazed, the old glass reflecting the yard by day, set into the wall with a
+  // curtain drawn across it inside, and a lamp behind the curtain at night.
+  const WX0 = cx - 0.05, WX1 = cx + 0.45, WY0 = 1.09, WY1 = 1.51;
+  for (const z of [A.z0, A.z1]) {
+    let s = sh;
+    if (z === A.z1) { s = sh.clone(); const hole = new THREE.Path(); hole.moveTo(WX0, WY0); hole.lineTo(WX1, WY0); hole.lineTo(WX1, WY1); hole.lineTo(WX0, WY1); hole.closePath(); s.holes.push(hole); }
+    const m = G.add(new THREE.Mesh(new THREE.ExtrudeGeometry(s, { depth: WT, bevelEnabled: false }), L), world); m.position.z = z - WT / 2; G.CAMBLOCK.push(m);
+  }
   G.CAMBLOCK.push(G.box(WT, h1 + 0.4, A.z1 - A.z0 + WT, L, A.x1, (h1 - 0.4) / 2, cz, { uv: [A.z1 - A.z0 + WT, h1 + 0.4] }));
-  // A little window, warm at night: somebody is always "just doing something" in here.
-  G.box(0.5, 0.42, 0.04, new THREE.MeshBasicMaterial({ color: '#ffbf7a' }), cx + 0.2, 1.3, A.z1 + WT / 2 + 0.005, { cast: false });
-  G.box(0.62, 0.06, 0.12, MAT.trim, cx + 0.2, 1.06, A.z1 + WT / 2 + 0.04); G.box(0.62, 0.06, 0.1, MAT.trim, cx + 0.2, 1.54, A.z1 + WT / 2 + 0.03);
-  G.box(0.6, 0.05, 0.14, MAT.snow, cx + 0.2, 1.1, A.z1 + WT / 2 + 0.06, { r: 0.02 });
+  windowAt('x', A.z1, WX0, WX1, WY0, WY1, 1, 0.05);   // (a slimmer frame: it's a small window)
+  G.WINDOWS[G.WINDOWS.length - 1].study = true;   // (not one to stand and look out of: it's in a room nobody goes into)
+  studyCurtain(WX0, WX1, WY0, WY1, A.z1 - WT / 2);
   // Shed roof falling away from the cabin, with snow.
   const run = A.x1 - A.x0 + 0.6, slope = Math.atan2(h0 - h1, run), len = Math.hypot(run, h0 - h1);
   const roof = G.box(len, 0.12, A.z1 - A.z0 + 0.7, MAT.shingle, cx + 0.15, (h0 + h1) / 2 + 0.12, cz, { uv: [1, 1] });

@@ -408,6 +408,7 @@ function updateLighting(t, dt, focus) {
   const env = d > 0.5 ? (camIn0 ? G.envRoom : G.envDay) : n > 0.5 ? G.envNight : G.envSunset; if (G.scene.environment !== env) G.scene.environment = env;
   for (const m of G.GLASS_OUT) { m.emissiveIntensity = lerp(0.5, 1.0, n) * (1 - d); m.color.copy(GLASS_WARM).lerp(DAY.glass, d); }
   MAT.glassOut.userData.U.uGDay.value = d;
+  if (G.STUDY_LIGHT) G.STUDY_LIGHT(n, d);
   G.glassLightKey = Math.round(d * 3) + '|' + Math.round((STATE.fogKs || 1) * 4);   // when this changes, the window reflections are redrawn
   const dark = 1 - d;   // outdoor lanterns and the porch lamp are off by day
   // Interior lights
