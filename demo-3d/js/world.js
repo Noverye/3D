@@ -43,10 +43,14 @@ G.terrainH = terrainH;
  * wall and round the chimney, then the west end, lower at the front and lowest against the porch, and dug away round
  * the porch steps where everyone comes and goes. Under the eaves, the snow that slid off the roof has left a ridge
  * along the drip line. (The snow used to meet the foundation stones in one straight hard line all the way round.) */
+// The chimney, outside the north wall: x its centre; the breast bW wide and bD deep up to yB, the shoulders up to yS,
+// the stack sW by sD up to yT.
+// (The stack stands out from the wall far enough for the roof's overhang, and its snow, to stop inside it.)
+const CHIM = { x: 8, bW: 1.6, bD: 1.0, yB: 1.85, yS: 2.25, sW: 0.9, sD: 0.8, yT: 6.05 };
 const BANK_R = [   // [x0, z0, x1, z1, height at the wall]: the outer faces of the walls (−1: by which side it is)
   [CAB.x0 - 0.11, CAB.z0 - 0.11, CAB.x1 + 0.11, CAB.z1 + 0.11, -1],
   [ANNEX.x0 - 0.1, ANNEX.z0 - 0.11, ANNEX.x1 + 0.11, ANNEX.z1 + 0.11, 0.34],
-  [7.475, CAB.z0 - 0.875, 8.525, CAB.z0 - 0.11, 0.52],   // the chimney breast
+  [CHIM.x - CHIM.bW / 2, CAB.z0 - 0.11 - CHIM.bD, CHIM.x + CHIM.bW / 2, CAB.z0 - 0.11, 0.52],   // the chimney breast
   [PORCH.x0, PORCH.z0, PORCH.x1, PORCH.z1, 0.17],
 ];
 function bankH(x, z) {
@@ -1111,10 +1115,49 @@ G.buildCabin = () => {
   // Ridge cap snow.
   const rc = G.cyl(0.2, 0.2, rw - 0.05, MAT.snow, rcx, CAB.ridge + 0.12, CAB.ridgeZ, { seg: 12 }); rc.rotation.z = Math.PI / 2; rc.scale.set(0.8, 1, 1);
   // Chimney (stone, outside the north wall) with smoke.
-  G.box(1.05, 6.5, 0.75, MAT.stone, 8, 2.85, z0 - 0.5, { uv: [1, 4], cam: true });
-  G.box(1.2, 0.16, 0.9, MAT.stone, 8, 6.15, z0 - 0.5);
-  G.box(1.25, 0.14, 0.95, MAT.snow, 8, 6.28, z0 - 0.5, { r: 0.06 });
-  G.CHIMNEY = new THREE.Vector3(8, 6.4, z0 - 0.5);
+  // A fieldstone chimney: a broad breast round the firebox, shoulders sloping in to the narrower stack with snow lying
+  // on them, the stack blackened with soot toward its top, and on it a stone crown with a clay pot, the snow on the
+  // crown melted back from the warm flue. (It was one tall plain box of small grey stones with a slab of snow on top,
+  // and the smoke came out of the snow.)
+  {
+    const C = CHIM, ZW = z0 - 0.11, FT = 1.2;
+    const fieldM = G.std({ map: TX.field, bumpMap: TX.fieldB, bumpScale: 0.035, roughness: 0.92, env: 0.25, vertexColors: true });
+    // UVs from world position, by which way each face looks, so the stones are one size on every face and run on from
+    // one part to the next
+    const planar = (g, ox, oy, oz) => { const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv;
+      for (let i = 0; i < P.count; i++) { const x = P.getX(i) + ox, y = P.getY(i) + oy, z = P.getZ(i) + oz, nx = Math.abs(N.getX(i)), ny = Math.abs(N.getY(i)), nz = Math.abs(N.getZ(i));
+        if (ny > nx && ny > nz) U.setXY(i, x / FT, z / FT); else if (nx > nz) U.setXY(i, z / FT, y / FT); else U.setXY(i, x / FT, y / FT); } };
+    const soot = (g, oy) => { const P = g.attributes.position, c = []; for (let i = 0; i < P.count; i++) { const k = 1 - 0.6 * G.smooth(C.yT - 1.0, C.yT + 0.05, P.getY(i) + oy); c.push(k, k * 0.98, k * 0.96); } g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); };
+    const part = (g, x, y, z) => { planar(g, x, y, z); soot(g, y); const m = new THREE.Mesh(g, fieldM); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; world.add(m); G.CAMBLOCK.push(m); return m; };
+    part(new THREE.BoxGeometry(C.bW, C.yB + 0.4, C.bD), C.x, (C.yB - 0.4) / 2, ZW - C.bD / 2);   // the breast
+    { // the shoulders: drawn in at the top to the stack's width, and back toward the wall to its depth
+      const g = new THREE.BoxGeometry(C.bW, C.yS - C.yB, C.bD), P = g.attributes.position;
+      for (let i = 0; i < P.count; i++) if (P.getY(i) > 0) { P.setX(i, P.getX(i) * C.sW / C.bW); P.setZ(i, C.bD / 2 - (C.bD / 2 - P.getZ(i)) * C.sD / C.bD); }
+      g.computeVertexNormals(); part(g, C.x, (C.yB + C.yS) / 2, ZW - C.bD / 2);
+      // snow lying on the two sloping shoulders, and a little on the front one
+      const run = (C.bW - C.sW) / 2, rise = C.yS - C.yB, ang = Math.atan2(rise, run), L = Math.hypot(run, rise);
+      for (const sx of [-1, 1]) {
+        const sn = G.box(L * 0.8, 0.07, (C.bD + C.sD) / 2 - 0.06, MAT.snow, C.x + sx * (C.sW / 2 + run / 2 + (rise / L) * 0.03), (C.yB + C.yS) / 2 + (run / L) * 0.03, ZW - (C.bD + C.sD) / 4 + 0.02, { r: 0.03 });
+        sn.rotation.z = -sx * ang;
+      }
+      const fr = (C.bD - C.sD), fa = Math.atan2(rise, fr);
+      const FL = Math.hypot(fr, rise), sf = G.box(C.sW + 0.2, 0.05, FL * 0.7, MAT.snow, C.x, (C.yB + C.yS) / 2 + (fr / FL) * 0.025, ZW - C.sD - fr * 0.5 - (rise / FL) * 0.025, { r: 0.02 });
+      sf.rotation.x = -fa;
+    }
+    part(new THREE.BoxGeometry(C.sW, C.yT - C.yS, C.sD, 1, 12, 1), C.x, (C.yS + C.yT) / 2, ZW - C.sD / 2);   // the stack
+    // the crown, a stone slab overhanging the stack, sooty; the clay pot on it, its mouth black
+    const cz = ZW - C.sD / 2, crownM = G.std({ map: TX.field, color: '#57534f', roughness: 0.95, env: 0.2 });
+    G.box(C.sW + 0.14, 0.1, C.sD + 0.14, crownM, C.x, C.yT + 0.05, cz);
+    const potM = G.std({ color: '#6a4030', roughness: 0.85, env: 0.25 }), rimM = G.std({ color: '#2e231e', roughness: 0.95, env: 0.15 }), sootM = G.shared({ color: '#0e0b09', roughness: 1 });
+    G.cyl(0.13, 0.16, 0.36, potM, C.x, C.yT + 0.1 + 0.18, cz, { seg: 14 });
+    G.cyl(0.148, 0.148, 0.05, rimM, C.x, C.yT + 0.1 + 0.33, cz, { seg: 14 });   // the rim, black with soot
+    G.cyl(0.11, 0.11, 0.012, sootM, C.x, C.yT + 0.1 + 0.36, cz, { seg: 14 });   // its mouth
+    // snow on the crown round the pot, melted back from it
+    const cw = C.sW + 0.12, cd = C.sD + 0.12, hole = 0.27;
+    for (const sz of [-1, 1]) G.box(cw, 0.06, cd / 2 - hole, MAT.snow, C.x, C.yT + 0.12, cz + sz * (hole + (cd / 2 - hole) / 2), { r: 0.025 });
+    for (const sx of [-1, 1]) G.box(cw / 2 - hole, 0.06, hole * 2, MAT.snow, C.x + sx * (hole + (cw / 2 - hole) / 2), C.yT + 0.12, cz, { r: 0.025 });
+    G.CHIMNEY = new THREE.Vector3(C.x, C.yT + 0.1 + 0.4, cz);
+  }
   // Porch: deck, posts, railing, roof, steps.
   const deckMat = MAT.wood.clone(); deckMat.map = G.rep(TX.floor, 3, 1.2); deckMat.color.set('#a07a58'); G.MATS.push(deckMat);
   G.box(PORCH.x1 - PORCH.x0, 0.36, PORCH.z1 - PORCH.z0, deckMat, (PORCH.x0 + PORCH.x1) / 2, -0.18, (PORCH.z0 + PORCH.z1) / 2);

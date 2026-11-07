@@ -248,6 +248,34 @@ G.buildTextures = () => {
     const t = 0.65 + id * 0.35 + fbm(u * 25, v * 25, 3) * 0.12;
     return [138 * t, 128 * t, 116 * t];
   });
+  // Fieldstone (the chimney): rounded stones of every size and colour, grey and brown and bluish, laid in thick
+  // recessed mortar. Seamless, one tile to 1.2 m, six stones across it and eight up, each its own shape. TX.fieldB is
+  // its height, for the bump map: each stone domed, the mortar sunk between them.
+  {
+    const NX = 6, NY = 8, pts = [], cache = [];
+    for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) pts.push([(i + 0.5 + (G.hash1(i * 17.3 + j * 5.1 + 0.3) - 0.5) * 0.75) / NX, (j + 0.5 + (G.hash1(i * 3.9 + j * 11.7 + 2.1) - 0.5) * 0.7) / NY, G.hash1(i * 7.7 + j * 1.3 + 4.4)]);
+    const near = (u, v) => {   // the nearest two stone centres (wrapping round the tile), and the nearest one's id
+      let b = 9, s2 = 9, id = 0; const ci = Math.floor(u * NX), cj = Math.floor(v * NY);
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const I = ci + di, J = cj + dj, p = pts[(((J % NY) + NY) % NY) * NX + (((I % NX) + NX) % NX)];
+        const d = Math.hypot((u - p[0] - Math.floor(I / NX)) * NX, (v - p[1] - Math.floor(J / NY)) * NY * 0.8);
+        if (d < b) { s2 = b; b = d; id = p[2]; } else if (d < s2) s2 = d;
+      }
+      return [b, s2, id];
+    };
+    const PAL = [[150, 144, 134], [164, 152, 134], [138, 122, 104], [128, 130, 132], [176, 168, 154], [146, 126, 104], [118, 114, 108], [156, 150, 142]];
+    TX.field = canvasTex(512, (u, v, x, y) => {
+      const [b, s2, id] = near(u, v), e = s2 - b, mw = 0.1 + 0.05 * G.fbm(u * 30, v * 30, 2);
+      const h = G.smooth(mw, mw + 0.32, e), sp = G.fbm(u * 60 + id * 9, v * 60, 2);
+      cache.push(e < mw ? -1 : h);
+      if (e < mw) { const k = 0.4 + 0.1 * sp + 0.14 * (1 - e / mw); return [128 * k, 122 * k, 112 * k]; }   // deep joints, in shadow
+      const c = PAL[Math.floor(id * PAL.length)], k = (0.74 + 0.26 * h) * (0.9 + 0.2 * sp);
+      const lich = G.smooth(0.45, 0.6, G.fbm(u * 14 + id * 3, v * 14, 3)) * (id > 0.7 ? 0.35 : 0);   // a little pale lichen on some
+      return [c[0] * k * (1 - lich) + 170 * lich, c[1] * k * (1 - lich) + 172 * lich, c[2] * k * (1 - lich) + 140 * lich];
+    });
+    let n = 0;
+    TX.fieldB = canvasTex(512, (u, v) => { const h = cache[n++]; const g = h < 0 ? 40 : 95 + 150 * h + G.fbm(u * 80, v * 80, 2) * 12; return [g, g, g]; }, { srgb: false });
+  }
   // Knit: cable pattern.
   const knit = (base, cable) => canvasTex(256, (u, v) => {
     const x = u * 16, y = v * 32;
