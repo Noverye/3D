@@ -192,6 +192,26 @@ G.buildTextures = () => {
     const t = (0.78 + shade * 0.22) * (0.85 + grain);
     return [128 * t, 82 * t, 52 * t];
   });
+  // A log's sawn end, weathered (the cabin's corners): pale end grain in growth rings round a pith a little off centre,
+  // the rings wavering, the late wood of each ring darker; checks (drying cracks) running in from the rim; a band of
+  // sapwood and a thin rim of grey-brown bark. Drawn on the disc inscribed in the tile, as a CircleGeometry maps it.
+  TX.logEnd = canvasTex(128, (u, v, x, y) => {
+    const dx = u - 0.47, dy = v - 0.53, a = Math.atan2(dy, dx), r = Math.hypot(u - 0.5, v - 0.5) * 2;
+    const rp = Math.hypot(dx, dy) * 2 * (1 + G.fbm(Math.cos(a) * 1.4 + 3.1, Math.sin(a) * 1.4 + 0.7, 2) * 0.1);
+    const ring = (rp * 13) % 1, late = G.smooth(0.62, 0.9, ring) * (1 - G.smooth(0.9, 1.0, ring));
+    let t = (0.92 - late * 0.2 + G.fbm(u * 24, v * 24, 2) * 0.08) * (1 - G.smooth(0.0, 0.08, 0.08 - rp) * 0.25);
+    let c = [194 * t, 160 * t, 118 * t];
+    const g = 0.3 + G.fbm(u * 5 + 2, v * 5, 2) * 0.25;   // weathered toward grey
+    c = c.map((k, i) => k * (1 - g) + [150, 142, 132][i] * t * g);
+    for (let i = 0; i < 4; i++) {   // checks, from the rim inward
+      const ca = G.hash1(i * 3.7 + 1.3) * Math.PI * 2, len = 0.35 + G.hash1(i * 5.1) * 0.4;
+      let da = (((a - ca) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2); da = Math.min(da, Math.PI * 2 - da);
+      if (r > 1 - len && da * r < 0.006 + 0.02 * (r - (1 - len))) { c = c.map((k) => k * 0.4); break; }
+    }
+    if (r > 0.82) c = c.map((k) => k * 0.82);                                    // sapwood
+    if (r > 0.93) c = [74 + G.hash1(x * 3.3 + y * 7.1) * 20, 60, 50];          // bark
+    return c;
+  });
   TX.logsB = canvasTex(256, (u, v) => { const g = 128 + G.fbm(u * 60, v * 300, 2) * 60 + G.fbm(u * 8, v * 90, 2) * 30; return [g, g, g]; }, { srgb: false });
   // Floor: wide oak planks.
   // Oak floorboards, darker and browner than the pine walls so the room has a floor under it: nine boards to the

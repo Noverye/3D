@@ -800,7 +800,8 @@ function wallSeg(axis, c, a, b, y0, y1, inner, mats) {
     const n = axis === 'x' ? N.getZ(i) : N.getX(i);
     if (Math.abs(n) > 0.5) {
       const along = (axis === 'x' ? P.getX(i) : P.getZ(i)) + mid;
-      uv.setXY(i, (n > 0 === (axis === 'x') ? along : -along) / 2.75, (P.getY(i) + ym) / 2.75);
+      // (the end walls' logs sit half a log higher than the front and back walls', as they do where notched logs cross)
+      uv.setXY(i, (n > 0 === (axis === 'x') ? along : -along) / 2.75, (P.getY(i) + ym + (axis === 'z' ? 2.75 / 14 : 0)) / 2.75);
     } else uv.setXY(i, uv.getX(i) * len / 2.75, uv.getY(i) * h / 2.75);
   }
   const m = G.add(new THREE.Mesh(geo, mats || wallMats(inner)), world);
@@ -1019,21 +1020,45 @@ G.buildCabin = () => {
   G.FRONT_DOOR = { leaf, openAngle: -1.75, amt: 0, want: 0, x: 6.5, z: z1 };
   G.box(0.94, 2.08, 0.06, MAT.darkWood, 0.47, 1.04, 0, { parent: leaf });
   G.sph(0.03, MAT.metal, 0.85, 1.0, 0.05, [1, 1, 1], leaf);
-  // Corner log ends: crossing logs stacked at each corner.
-  const logEnd = G.std({ map: TX.bark, color: '#b08860', roughness: 0.9 });
-  for (const [cx, cz] of [[-0.11, z0 - 0.11], [x1 + 0.11, z0 - 0.11], [-0.11, z1 + 0.11], [x1 + 0.11, z1 + 0.11]]) {
-    for (let i = 0; i < 7; i++) {
-      const y = -0.2 + 0.39 * i + 0.2, alongX = i % 2 === 0;
-      const m = G.cyl(0.16, 0.16, 0.75, MAT.logs, cx, y, cz, { seg: 10 });
-      if (alongX) m.rotation.z = Math.PI / 2; else m.rotation.x = Math.PI / 2;
-      const e = G.cyl(0.155, 0.155, 0.02, logEnd, alongX ? cx + Math.sign(cx - 5) * 0.37 : cx, y, alongX ? cz : cz + Math.sign(cz - zc) * 0.37, { seg: 10 });
-      if (alongX) e.rotation.z = Math.PI / 2; else e.rotation.x = Math.PI / 2;
+  // The corners: where the walls meet, each wall's logs run on past the other's and stop, crossing, stacked alternately
+  // (the end walls' logs half a log higher), so each face of a corner is a column of sawn ends between the sides of the
+  // logs going the other way. Each log its own girth, length and tone, its end slightly chamfered and sawn, the end
+  // grain pale and weathered (TX.logEnd). (They were a few thin cylinders with the wall's stripes wrapped round them
+  // like rings, and dark discs on their ends that looked like holes.)
+  {
+    const rr = G.seeded(77), sides = [], ends = [], up = new THREE.Vector3(0, 1, 0);
+    const sideM = G.std({ map: TX.logs, bumpMap: TX.logsB, bumpScale: 0.006, roughness: 0.85, env: 0.4, vertexColors: true });
+    const endM = G.std({ map: TX.logEnd, color: '#d2cbc2', roughness: 0.92, env: 0.25, vertexColors: true });
+    const ROW = 2.75 / 7;
+    for (const [X, Z] of [[0, z0], [x1, z0], [0, z1], [x1, z1]]) {
+      const ox = X < 5 ? -1 : 1, oz = Z < zc ? -1 : 1;
+      for (const alongX of [true, false]) {
+        for (let k = 0; k < 8; k++) {
+          const y = alongX ? ROW * (k + 0.5) : ROW * k;
+          if (y < 0.15 || y > eave - 0.1) continue;
+          const r = 0.175 + rr() * 0.02, out = 0.11 + 0.24 + rr() * 0.1, len = out + 0.06, ch = 0.022;
+          const tone = new THREE.Color(1, 1, 1).multiplyScalar(0.86 + rr() * 0.26);
+          // local +y runs from just inside the corner out past the far face
+          const pts = [new THREE.Vector2(r, 0), new THREE.Vector2(r, len - ch), new THREE.Vector2(r * 0.93, len)];
+          const g = new THREE.LatheGeometry(pts, 14), P = g.attributes.position, U = g.attributes.uv, row = Math.floor(rr() * 7);
+          // the wood's grain along the log (one row of TX.logs, mirrored round it so there's no seam), not round it
+          for (let i = 0; i < P.count; i++) { const ang = Math.atan2(P.getX(i), P.getZ(i)); U.setXY(i, P.getY(i) / 2.75 + row * 0.37, (row + 0.3 + 0.4 * Math.abs(ang / Math.PI)) / 7); }
+          const cap = new THREE.CircleGeometry(r * 0.93, 14); cap.rotateZ(rr() * 6.28); cap.rotateX(-Math.PI / 2); cap.translate(0, len, 0);
+          const M = new THREE.Matrix4().makeTranslation(alongX ? X - ox * 0.06 : X, y, alongX ? Z : Z - oz * 0.06)
+            .multiply(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(up, new THREE.Vector3(alongX ? ox : 0, 0, alongX ? 0 : oz))))
+            .multiply(new THREE.Matrix4().makeRotationY(rr() * 6.28));
+          sides.push({ geo: g, mat: M, uv: true, color: tone });
+          ends.push({ geo: cap, mat: M, uv: true, color: tone.clone().multiplyScalar(0.95 + rr() * 0.1) });
+        }
+      }
     }
+    for (const [parts, m] of [[sides, sideM], [ends, endM]]) { const mesh = new THREE.Mesh(G.merge(parts), m); mesh.castShadow = true; mesh.receiveShadow = true; world.add(mesh); }
   }
   // Gable ends (east and west).
   const gableShape = new THREE.Shape();
   gableShape.moveTo(z0 - 0.11, eave); gableShape.lineTo(z1 + 0.11, eave); gableShape.lineTo(CAB.ridgeZ, CAB.ridge + 0.02); gableShape.closePath();
   const gMat = G.logWall(MAT.logs.clone()); gMat.map = G.rep(TX.logs, 1 / 2.75, 1 / 2.75); gMat.bumpMap = G.rep(TX.logsB, 1 / 2.75, 1 / 2.75); G.MATS.push(gMat);
+  gMat.map.offset.y = 1 / 14;   // (in line with the end walls under them)
   for (const x of [-0.11, x1 + 0.11]) {
     const g = new THREE.ExtrudeGeometry(gableShape, { depth: WT, bevelEnabled: false });
     const m = G.add(new THREE.Mesh(g, gMat), world);
