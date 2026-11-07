@@ -1166,21 +1166,56 @@ G.buildCabin = () => {
     G.box(PORCH.stepX1 - PORCH.stepX0, 0.12, 0.36, deckMat, (PORCH.stepX0 + PORCH.stepX1) / 2, y - 0.06 - 0.0, z);
     G.box(PORCH.stepX1 - PORCH.stepX0 - 0.1, 0.05, 0.2, MAT.snow, (PORCH.stepX0 + PORCH.stepX1) / 2 + (i - 1) * 0.15, y + 0.02, z - 0.05, { r: 0.02 });
   }
-  const posts = [3.5, 5.8, 7.2, 9.3, 11.3];
-  for (const x of posts) { G.box(0.18, 2.45, 0.18, MAT.darkWood, x, 1.22, PORCH.z1 - 0.12, { coll: true, cam: true }); }  // cam: keeps the lens from parking behind a post
-  const railMat = MAT.darkWood;
-  const railSeg = (a, b, z) => {
-    G.box(b - a, 0.08, 0.1, railMat, (a + b) / 2, 0.95, z);
-    G.box(b - a, 0.07, 0.14, MAT.snow, (a + b) / 2, 1.02, z, { r: 0.03 });
-    G.box(b - a, 0.06, 0.08, railMat, (a + b) / 2, 0.12, z);
-    for (let x = a + 0.12; x < b - 0.06; x += 0.16) G.box(0.035, 0.8, 0.035, railMat, x, 0.53, z, { cast: false });
-    G.COLL.push({ x0: a, z0: z - 0.1, x1: b, z1: z + 0.1 });
-  };
-  railSeg(3.5, 5.8, PORCH.z1 - 0.12); railSeg(7.2, 11.3, PORCH.z1 - 0.12);
-  // side rails
-  G.box(0.1, 0.08, PORCH.z1 - PORCH.z0, railMat, PORCH.x0 + 0.08, 0.95, (PORCH.z0 + PORCH.z1) / 2);
-  G.box(0.1, 0.08, PORCH.z1 - PORCH.z0, railMat, PORCH.x1 - 0.08, 0.95, (PORCH.z0 + PORCH.z1) / 2);
-  G.COLL.push({ x0: PORCH.x0 - 0.1, z0: PORCH.z0, x1: PORCH.x0 + 0.15, z1: PORCH.z1 }, { x0: PORCH.x1 - 0.15, z0: PORCH.z0, x1: PORCH.x1 + 0.1, z1: PORCH.z1 });
+  // The posts, beam and railing: peeled logs and poles like the cabin's own, not sawn boards. Round posts carry a log
+  // beam, each with knee braces up to it; the railing is a log top rail (with its line of snow) and a pole bottom rail,
+  // with rustic pole balusters between, each its own girth and standing a little out of true, along the front and down
+  // both ends. (They were square dark boards with a row of thin square sticks: a deck from a catalogue.)
+  const posts = [3.5, 5.8, 7.2, 9.3, 11.3], pz = PORCH.z1 - 0.12, BEAM_Y = 2.4;
+  {
+    const r = G.seeded(21), up = new THREE.Vector3(0, 1, 0), parts = [], ends = [];
+    const poleM = G.std({ map: TX.logs, bumpMap: TX.logsB, bumpScale: 0.004, roughness: 0.85, env: 0.35, vertexColors: true });
+    const endM = G.std({ map: TX.logEnd, color: '#c8c0b6', roughness: 0.92, env: 0.2, vertexColors: true });
+    // a pole from A to B, radius r0 at A and r1 at B, the grain running along it; cap: 1 a sawn end at A, 2 at B
+    const pole = (A, B, r0, r1 = r0, cap = 0, out = parts, seg = 10) => {
+      const a = new THREE.Vector3(...A), b = new THREE.Vector3(...B), d = b.clone().sub(a), len = d.length();
+      const g = new THREE.CylinderGeometry(r1, r0, len, seg, 1, true), P = g.attributes.position, U = g.attributes.uv, row = Math.floor(r() * 7), off = r();
+      for (let i = 0; i < P.count; i++) { const ang = Math.atan2(P.getX(i), P.getZ(i)); U.setXY(i, (P.getY(i) + len / 2) / 2.75 + off, (row + 0.3 + 0.4 * Math.abs(ang / Math.PI)) / 7); }
+      const M = new THREE.Matrix4().makeTranslation(...a.clone().add(b).multiplyScalar(0.5).toArray())
+        .multiply(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(up, d.clone().normalize())))
+        .multiply(new THREE.Matrix4().makeRotationY(r() * 6.28));
+      const col = new THREE.Color(1, 1, 1).multiplyScalar(0.74 + r() * 0.18);
+      out.push({ geo: g, mat: M, uv: true, color: col });
+      for (const [bit, rr, y, rx] of [[1, r0, -len / 2, Math.PI / 2], [2, r1, len / 2, -Math.PI / 2]]) if (cap & bit) {
+        const c = new THREE.CircleGeometry(rr * 0.96, seg); c.rotateZ(r() * 6.28); c.rotateX(rx); c.translate(0, y, 0); ends.push({ geo: c, mat: M, uv: true, color: col });
+      }
+    };
+    // the posts (each a mesh of its own: the camera keeps from parking behind one)
+    for (const x of posts) {
+      const one = []; pole([x, 0, pz], [x + (r() - 0.5) * 0.02, BEAM_Y, pz], 0.105, 0.095, 0, one, 12);
+      const m = new THREE.Mesh(G.merge(one), poleM); m.castShadow = m.receiveShadow = true; world.add(m); G.CAMBLOCK.push(m);
+      G.COLL.push({ x0: x - 0.11, z0: pz - 0.11, x1: x + 0.11, z1: pz + 0.11 });
+      // knee braces up to the beam (not out past the ends)
+      for (const sx of [-1, 1]) if (!(x === posts[0] && sx < 0) && !(x === posts[posts.length - 1] && sx > 0)) pole([x, BEAM_Y - 0.5, pz], [x + sx * 0.46, BEAM_Y - 0.04, pz], 0.045, 0.045);
+    }
+    pole([PORCH.x0 - 0.2, BEAM_Y, pz], [PORCH.x1 + 0.2, BEAM_Y, pz], 0.11, 0.115, 3, parts, 14);   // the beam
+    const rail = (A, B) => {   // A and B: [x, z] at each end
+      pole([A[0], 0.95, A[1]], [B[0], 0.95, B[1]], 0.055, 0.055);
+      pole([A[0], 0.14, A[1]], [B[0], 0.14, B[1]], 0.04, 0.04);
+      const L = Math.hypot(B[0] - A[0], B[1] - A[1]), n = Math.max(1, Math.round((L - 0.12) / 0.15));
+      for (let i = 1; i < n; i++) {
+        const t = i / n + (r() - 0.5) * 0.02, x = lerp(A[0], B[0], t), z = lerp(A[1], B[1], t), w = 0.021 + r() * 0.009;
+        pole([x, 0.12, z], [x + (r() - 0.5) * 0.025, 0.96, z + (r() - 0.5) * 0.02], w, w * 0.9);
+      }
+      const sn = G.box(L - 0.1, 0.06, 0.1, MAT.snow, (A[0] + B[0]) / 2, 1.02, (A[1] + B[1]) / 2, { r: 0.03 });
+      sn.rotation.y = -Math.atan2(B[1] - A[1], B[0] - A[0]);
+    };
+    rail([3.5, pz], [5.8, pz]); rail([7.2, pz], [9.3, pz]); rail([9.3, pz], [11.3, pz]);
+    G.COLL.push({ x0: 3.5, z0: pz - 0.1, x1: 5.8, z1: pz + 0.1 }, { x0: 7.2, z0: pz - 0.1, x1: 11.3, z1: pz + 0.1 });
+    // and down both ends, from the wall to the corner posts
+    rail([PORCH.x0 + 0.1, CAB.z1 + 0.13], [PORCH.x0 + 0.1, pz]); rail([PORCH.x1 - 0.1, CAB.z1 + 0.13], [PORCH.x1 - 0.1, pz]);
+    G.COLL.push({ x0: PORCH.x0 - 0.1, z0: PORCH.z0, x1: PORCH.x0 + 0.15, z1: PORCH.z1 }, { x0: PORCH.x1 - 0.15, z0: PORCH.z0, x1: PORCH.x1 + 0.1, z1: PORCH.z1 });
+    for (const [ps, m] of [[parts, poleM], [ends, endM]]) { const mesh = new THREE.Mesh(G.merge(ps), m); mesh.castShadow = true; mesh.receiveShadow = true; world.add(mesh); }
+  }
   // Porch roof (lean-to)
   const prRun = PORCH.z1 + 0.35 - PORCH.z0, prRise = 0.45, prSlope = Math.atan2(prRise, prRun), prLen = Math.hypot(prRun, prRise);
   const pr = G.box(PORCH.x1 - PORCH.x0 + 0.5, 0.12, prLen, MAT.shingle, (PORCH.x0 + PORCH.x1) / 2, 2.7 - prRise / 2, PORCH.z0 + prRun / 2, { uv: [4, 1] });
@@ -1188,7 +1223,6 @@ G.buildCabin = () => {
   { const pw = PORCH.x1 - PORCH.x0 + 0.5; roofSnow(pr, pw, prLen, 0.06, (a, d, y) => [a - pw / 2, y, d - prLen / 2], 4);
     for (const sx of [-1, 1]) G.box(0.035, 0.16, prLen + 0.035, MAT.trim, sx * (pw / 2 + 0.018), -0.03, 0.0175, { parent: pr });
     G.box(pw + 0.07, 0.15, 0.035, MAT.trim, 0, -0.03, prLen / 2 + 0.018, { parent: pr }); }
-  G.box(PORCH.x1 - PORCH.x0, 0.16, 0.14, MAT.darkWood, (PORCH.x0 + PORCH.x1) / 2, 2.38, PORCH.z1 - 0.12);
   const pc = G.add(new THREE.Mesh(new THREE.PlaneGeometry(PORCH.x1 - PORCH.x0, prLen), MAT.boards), world, false, true);
   pc.rotation.x = Math.PI / 2 + prSlope; pc.position.set((PORCH.x0 + PORCH.x1) / 2, 2.6 - prRise / 2 - 0.02, PORCH.z0 + prRun / 2);
   // String lights along the porch beam.

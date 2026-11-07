@@ -603,9 +603,13 @@ const BASKET = (() => {
 })();
 const WOODPILE = (() => {
   const W = G.world, g = new THREE.Group(); g.position.set(4.3, 0, 4.92); W.add(g);
+  // each log its own girth and a little out of line, its sawn end the cabin corners' weathered end grain (they were flat
+  // tan discs, which read as white spots from the yard)
+  const r = G.seeded(64), endM = G.std({ map: G.TX.logEnd, color: '#d6cdc2', roughness: 0.92, env: 0.2 });
   for (let row = 0; row < 4; row++) for (let i = 0; i < 6 - (row > 2 ? 2 : 0); i++) {
-    const lg = G.cyl(0.075, 0.075, 0.42, G.MAT.bark, -0.45 + i * 0.165 + (row % 2) * 0.08, 0.08 + row * 0.14, 0, { parent: g, seg: 9 }); lg.rotation.x = Math.PI / 2;
-    G.cyl(0.07, 0.07, 0.005, G.shared({ color: '#c49a6a', roughness: 0.9 }), lg.position.x, lg.position.y, 0.212, { parent: g, seg: 9 }).rotation.x = Math.PI / 2;
+    const rad = 0.066 + r() * 0.016, x = -0.45 + i * 0.165 + (row % 2) * 0.08 + (r() - 0.5) * 0.02, y = 0.08 + row * 0.14 + (r() - 0.5) * 0.015, dz = (r() - 0.5) * 0.05;
+    const lg = G.cyl(rad, rad, 0.42, G.MAT.bark, x, y, dz, { parent: g, seg: 9 }); lg.rotation.x = Math.PI / 2;
+    const e = new THREE.Mesh(new THREE.CircleGeometry(rad * 0.93, 9), endM); e.position.set(x, y, dz + 0.211); e.rotation.z = r() * 6.28; e.receiveShadow = true; g.add(e);
   }
   G.box(1.1, 0.05, 0.5, G.MAT.snow, -0.05, 0.6, 0, { parent: g, r: 0.02 });
   G.COLL.push({ x0: 3.72, z0: 4.65, x1: 4.88, z1: 5.18 });
