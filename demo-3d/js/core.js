@@ -335,6 +335,62 @@ G.buildTextures = () => {
     const st = 0.9 + (Math.sin((u * 9 + v * 60) * Math.PI) * 0.07 + (G.hash1(x * 3.7 + y * 11.3) - 0.5) * 0.16) * nd - nd * 0.08;
     const g = Math.max(0, Math.min(255, 255 * st)); return [g, g, g, a];
   }, { w: 64, h: 256 });
+  // A near spruce's bough, as one card seen from above (u across it, v from the trunk end, 0, to the tip, 1): a stem
+  // down the middle with side shoots leaving it every few centimetres, raked forward and curving toward the tip, each
+  // a bottle-brush of needles, with sky showing between them toward the edges. Raw data, not a canvas (a canvas
+  // premultiplies, and would lose the other channels wherever the needles are not): R the needles' brightness (each
+  // shoot lit along its crest, darker at its sides, each needle its own shade), G the paler new growth at the shoot
+  // tips, B how readily snow settles there (along the stem and the inner halves of the shoots, filling the gaps between
+  // them there, none out at the tips), A the needles.
+  TX.frond = (() => {
+    const W = 256, H = 512, D = new Uint8Array(W * H * 4), h1 = G.hash1;
+    const HW = 0.375, taper = (Y) => 1 - 0.4 * Y;   // the card's half-width at the base, in bough lengths, and its taper
+    const env = (Y) => (Y < 0.26 ? 0.6 + 0.4 * Math.sin((Y / 0.26) * Math.PI / 2) : Math.max(0.08, 1 - 0.92 * Math.pow((Y - 0.26) / 0.74, 1.3))) * HW * taper(Y) * 0.94;
+    const SA = Math.sin(0.95), CA = Math.cos(0.95), SP = 0.046, NS = 0.0072;
+    const shoots = [[], []];
+    for (let s = 0; s < 2; s++) for (let k = 0; ; k++) {
+      const y0 = 0.025 + k * SP + s * SP * 0.5 + (h1(k * 3.1 + s * 17) - 0.5) * SP * 0.4;
+      if (y0 > 0.93) break;
+      // each shoot its own angle, curve and length (a few stunted), so they don't line up like a fern's
+      const an = 0.95 + (h1(k * 9.1 + s * 5.9) - 0.5) * 0.32, sa = Math.sin(an), ca = Math.cos(an);
+      const len = (env(Math.min(1, y0 + 0.07)) / sa) * (0.72 + h1(k * 5.7 + s * 3.3) * 0.4) * (h1(k * 2.3 + s * 8.1) < 0.1 ? 0.55 : 1);
+      shoots[s].push({ y0, len, sa, ca, bend: 0.25 + h1(k * 4.4 + s * 1.7) * 0.4, r: 0.016 + len * 0.068, seed: k * 13.7 + s * 101 });
+    }
+    // needles raked forward along a shoot: (along, across) from its base -> covered?, and how it is lit
+    const brush = (al, pe, len, r, seed) => {
+      const t = al / len;
+      if (t < 0 || t > 1.1) return null;
+      const rr = r * (1 - 0.4 * Math.min(t, 1)) * (t > 1 ? 1 - (t - 1) / 0.1 : 1);
+      const ap = Math.abs(pe), q = (al - ap * 0.9) / NS, n = Math.floor(q), f = q - n;
+      if (ap > rr * (0.7 + h1(n * 7.31 + seed) * 0.5)) return null;
+      if (ap > rr * 0.42 && f > 0.6) return null;
+      return { sh: 0.6 + 0.42 * (1 - Math.min(1, ap / rr)) + (h1(n * 3.7 + seed * 1.3) - 0.5) * 0.2, tip: Math.max(0, Math.min(1, (t - 0.66) / 0.3)), d: ap / rr };
+    };
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const u = (x + 0.5) / W, Y = (y + 0.5) / H, s = u < 0.5 ? 0 : 1, X = Math.abs(u - 0.5) * 2 * HW * taper(Y);
+      let best = brush(Y + 0.3, X, 1.3, 0.024 * (1 - 0.5 * Y) + 0.012, 7 + s), snow = Math.max(0, 1 - X / (0.065 + 0.05 * (1 - Y)));
+      const L = shoots[s], k0 = Math.round((Y - X * (CA / SA) - 0.025 - s * SP * 0.5) / SP);
+      for (let k = k0 - 2; k <= k0 + 2; k++) {
+        const sh = L[k]; if (!sh) continue;
+        const dy = Y - sh.y0, al = X * sh.sa + dy * sh.ca, pe = -X * sh.ca + dy * sh.sa - sh.bend * al * al;
+        const b = brush(al, pe, sh.len, sh.r, sh.seed);
+        if (b && (!best || b.d < best.d)) best = b;
+        if (al > 0 && al < sh.len) snow = Math.max(snow, 0.85 * (1 - al / sh.len) * Math.max(0, 1 - Math.abs(pe) / (sh.r * 2.6)));
+      }
+      snow = Math.max(snow, 0.5 * Math.max(0, 1 - X / env(Y))) * (1 - 0.35 * Y);
+      const i = (y * W + x) * 4;
+      D[i] = best ? Math.round(255 * Math.sqrt(Math.min(1, best.sh / 1.2))) : 170;   // (the gaps: what the inner cones show)
+      D[i + 1] = best ? Math.round(255 * best.tip) : 0;
+      D[i + 2] = Math.round(255 * Math.min(1, snow));
+      D[i + 3] = best ? 255 : 0;
+    }
+    const t = new THREE.DataTexture(D, W, H, THREE.RGBAFormat);
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
+    t.anisotropy = G.renderer.capabilities.getMaxAnisotropy();
+    t.needsUpdate = true;
+    return t;
+  })();
   // Distant spruces: each tier's lower edge hangs in ragged tufts instead of a clean cone rim (u: one face of the
   // cone, three tufts to it; v: 0 at the rim, 1 at the tip).
   TX.skirt = canvasTex(0, (u, v, x) => {
@@ -768,7 +824,7 @@ G.sph = (r, mat, x, y, z, s = [1, 1, 1], parent, seg = 20) => {
 };
 /* Merge several geometries (each with a transform matrix and a flat colour) into one vertex-coloured geometry. */
 G.merge = (parts) => {
-  const P = [], N = [], C = [], U = [], anyUV = parts.some((p) => p.uv);
+  const P = [], N = [], C = [], U = [], S = [], anyUV = parts.some((p) => p.uv), anyS = parts.some((p) => p.snow);
   const v = new THREE.Vector3(), n = new THREE.Vector3(), nm = new THREE.Matrix3();
   for (const p of parts) {
     const g = p.geo.index ? p.geo.toNonIndexed() : p.geo;
@@ -782,6 +838,8 @@ G.merge = (parts) => {
       if (anyUV) { if (p.uv && uv) { const k = p.uv === true ? [1, 1] : p.uv; U.push(uv.getX(i) * k[0], uv.getY(i) * k[1]); } else U.push(0.5, 0.5); }
       const c = typeof p.color === 'function' ? p.color(v, n, i) : p.color;
       C.push(c.r, c.g, c.b);
+      // (p.snow: how much snow lies on a spruce bough here, and a seed for where: aSnow, read by the forest's shader)
+      if (anyS) { const sn = !p.snow ? [0, 0] : typeof p.snow === 'function' ? p.snow(v, n, i) : p.snow; S.push(sn[0], sn[1]); }
     }
   }
   const out = new THREE.BufferGeometry();
@@ -789,6 +847,7 @@ G.merge = (parts) => {
   out.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
   out.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
   if (anyUV) out.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+  if (anyS) out.setAttribute('aSnow', new THREE.Float32BufferAttribute(S, 2));
   return out;
 };
 G.mtx = (x, y, z, sx = 1, sy = 1, sz = 1, ry = 0, rx = 0, rz = 0) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz));

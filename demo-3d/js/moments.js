@@ -35,7 +35,7 @@ const PINE = (() => {
   // The tree itself is one of the forest's own spruces (ragged needled branches, snow in clumps); it used to be four
   // plain cones with a white cone on each, which stood out right beside the path.
   if (G.pineGeometry && G.PINE_MAT) {
-    const t = new THREE.Mesh(G.pineGeometry(77), G.PINE_MAT); t.scale.set(4.4, 3.0, 4.4); t.castShadow = true; t.receiveShadow = true; g.add(t);
+    const t = new THREE.Mesh(G.pineGeometry(77), G.PINE_MAT); t.scale.set(4.4, 3.0, 4.4); t.customDepthMaterial = G.PINE_DEPTH; t.castShadow = true; t.receiveShadow = true; g.add(t);
   } else {
     [[0.95, 1.1, 0.9], [0.75, 1.0, 1.55], [0.52, 0.85, 2.1], [0.3, 0.7, 2.55]].forEach(([r, h, yy]) => {
       const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 9), needle); c.position.y = yy; c.castShadow = true; g.add(c);
@@ -45,13 +45,13 @@ const PINE = (() => {
   // the low branch, reaching out over the path: a needled bough like the tree's own, a soft drift along its top
   const arm = new THREE.Group(); arm.position.set(0.15, 1.75, 0); arm.rotation.y = Math.atan2(G.pathX(z) - x, 0) - Math.PI / 2; g.add(arm);
   let br;
-  if (G.PINE_MAT) {
-    const bg = new THREE.CylinderGeometry(0.07, 0.3, 1.4, 4, 3, true); bg.scale(0.32, 1, 1);
-    const geo = G.merge([{ geo: bg, mat: new THREE.Matrix4(), uv: [4, 1], color: new THREE.Color('#2a4632') }]);
-    br = new THREE.Mesh(geo, G.PINE_MAT);
-  } else br = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.4, 7), needle);
-  br.rotation.z = -Math.PI / 2 + 0.12; br.position.x = 0.7; br.castShadow = true; arm.add(br);
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8), snow); cap.scale.set(0.62, 0.07, 0.15); cap.position.set(0.72, 0.12, 0); cap.rotation.z = -0.12; cap.castShadow = true; arm.add(cap);
+  if (G.PINE_MAT && G.frondGeo) {
+    // one of the forest's own boughs (its snow is the drift below, which falls when the branch is shaken)
+    const geo = G.merge([{ geo: G.frondGeo(1.45, 0.5, 0.05, 0.36, 0), mat: new THREE.Matrix4(), uv: true, color: new THREE.Color('#2a4632') }]);
+    br = new THREE.Mesh(geo, G.PINE_MAT); br.customDepthMaterial = G.PINE_DEPTH; br.rotation.z = -0.06;   // (bowed a little under its snow)
+  } else { br = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.4, 7), needle); br.rotation.z = -Math.PI / 2 + 0.12; br.position.x = 0.7; }
+  br.castShadow = true; arm.add(br);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8), snow); cap.scale.set(0.62, 0.07, 0.15); cap.position.set(0.72, G.PINE_MAT && G.frondGeo ? 0.0 : 0.12, 0); cap.rotation.z = -0.12; cap.castShadow = true; arm.add(cap);
   G.addCollider({ x0: x - 0.5, z0: z - 0.5, x1: x + 0.5, z1: z + 0.5 });
   const tip = () => arm.localToWorld(new THREE.Vector3(1.0, -0.1, 0));
   return { g, arm, cap, x, z, tip };

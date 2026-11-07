@@ -411,6 +411,28 @@ G.buildMountains = () => {
 };
 
 /* ---------------- forest ---------------- */
+// One near spruce bough: a card drawn with TX.frond, reaching out along +x from the trunk, arched across (its stem
+// highest, its side shoots drooping away from it) and sagging along its length, then lifting a little at the tip as a
+// spruce's do. u runs across it, v from the trunk end (0) to the tip (1). (They were flattened four-sided slabs, solid
+// green, and up close the trees looked folded from card.)
+function frondGeo(L, W, sag = 0.16, arch = 0.38, lift = 0.05, NX = 5) {
+  const NA = 3, pos = [], uv = [], idx = [];
+  for (let j = 0; j <= NA; j++) {
+    const t = j / NA, hw = W * (1 - 0.4 * t), y = (-sag * t * t + lift * Math.max(0, t - 0.6) * 2.5) * L;
+    for (let i = 0; i < NX; i++) {
+      const s = (i / (NX - 1)) * 2 - 1;
+      pos.push(t * L, y - Math.pow(Math.abs(s), 1.5) * arch * hw, s * hw);
+      uv.push((s + 1) / 2, t);
+    }
+  }
+  for (let j = 0; j < NA; j++) for (let i = 0; i < NX - 1; i++) { const a = j * NX + i, b = a + 1, c = a + NX, d = c + 1; idx.push(a, b, c, b, d, c); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+G.frondGeo = frondGeo;
 function pineGeometry(seed, lod = 0) {
   // lod 0: full detail for trees near the clearing; lod 1: the same spruce with fewer, simpler branches for distant
   // trees (they were stacked cones with white tips, and looked like toys next to the near ones).
@@ -419,7 +441,9 @@ function pineGeometry(seed, lod = 0) {
   const H = 1;   // unit height; instances scale it
   const green = (t) => new THREE.Color().setHSL(0.39 + r() * 0.03, 0.32, 0.1 + t * 0.06);
   const snow = new THREE.Color('#eef3f8');
-  parts.push({ geo: new THREE.CylinderGeometry(0.012, 0.028, 0.25, lod ? 4 : 6, 1, !!lod), mat: G.mtx(0, 0.12, 0), color: new THREE.Color('#3a2a20') });
+  // (near trees: the trunk and the inner cones take the bough texture's stem, which is a little brighter than the old one)
+  const solid = lod ? 1 : 0.78;
+  parts.push({ geo: new THREE.CylinderGeometry(0.012, 0.028, 0.25, lod ? 4 : 6, 1, !!lod), mat: G.mtx(0, 0.12, 0), color: new THREE.Color('#3a2a20').multiplyScalar(solid) });
   const tiers0 = 11 + Math.floor(r() * 4);
   const tiers = lod ? 8 : tiers0;
   for (let i = 0; i < tiers; i++) {
@@ -431,9 +455,33 @@ function pineGeometry(seed, lod = 0) {
     // A dark inner cone for body, then a ring of separate drooping branches round it, each its own length and angle,
     // so the outline is ragged like a spruce's; snow lies only on their upper faces. Distant trees get one ring of
     // fewer, three-sided branches, and a fuller inner cone so the gaps between them read as shadow, not sky.
-    const inner = base.clone().multiplyScalar(lod ? 0.62 : 0.55);
-    parts.push({ geo: new THREE.ConeGeometry(rad * (lod ? 0.72 : 0.62), h * (lod ? 1.6 : 1.25), lod ? 6 : 9, 1, true), mat: G.mtx(0, y, 0, 1, 1, 1, r() * 6), color: inner });
+    const inner = base.clone().multiplyScalar(lod ? 0.62 : 0.6);
+    // (near trees: needled all over like the boughs, never see-through: aSnow.y -1 tells the shader so)
+    parts.push({ geo: new THREE.ConeGeometry(rad * (lod ? 0.72 : 0.62), h * (lod ? 1.6 : 1.25), lod ? 6 : 9, 1, true), mat: G.mtx(0, y, 0, 1, 1, 1, r() * 6), color: inner, uv: lod ? undefined : [7, 1], snow: lod ? undefined : [0, -1] });
     const nb = lod ? Math.max(4, Math.round(4 + rad * 16)) : Math.max(6, Math.round(7 + rad * 30)), droop0 = lerp(0.55, 0.25, t);
+    if (!lod) {
+      // Near trees: two rings of boughs, the second shorter and a little higher, between the first. Each is a card of
+      // needled side shoots (TX.frond) at its own length, droop and roll; snow lies along some of them, more toward
+      // the outside of the tree, where the tier above doesn't shelter it, in clumps the shader finds from aSnow.
+      // A third, shorter ring hangs steeply over the inner cone, so what shows between the boughs is more boughs.
+      const n3 = Math.max(4, Math.round(nb * 0.7));
+      for (let b = 0; b < nb * 2 + n3; b++) {
+        const ring = b >= nb ? (b >= nb * 2 ? 2 : 1) : 0, bi = b - nb * ring;
+        const phi = ((bi + (ring === 1 ? 0.5 : ring ? 0.25 : 0)) / (ring === 2 ? n3 : nb)) * Math.PI * 2 + (r() - 0.5) * 0.4;
+        const L = rad * [1.0, 0.74, 0.6][ring] * (0.85 + r() * 0.3);
+        const W = L * 0.44 * (0.9 + r() * 0.2), d = droop0 + (r() - 0.5) * 0.2 + [0, -0.08, 0.45][ring];
+        const M = new THREE.Matrix4().makeTranslation(0, y + (r() - 0.5) * h * 0.4 + [0, h * 0.3, h * 0.45][ring], 0)
+          .multiply(new THREE.Matrix4().makeRotationY(phi))
+          .multiply(new THREE.Matrix4().makeRotationZ(-d))
+          .multiply(new THREE.Matrix4().makeRotationX((r() - 0.5) * 0.3));
+        const tone = base.clone().offsetHSL((r() - 0.5) * 0.02, 0, (r() - 0.5) * 0.03);
+        const sAmt = snowy && r() < 0.75 ? 0.45 + r() * 0.4 : 0, sSeed = r();
+        parts.push({ geo: frondGeo(L, W, 0.13 + r() * 0.07, 0.3 + r() * 0.14, 0.05, ring ? 3 : 5), mat: M, uv: true,
+          color: (v) => tone.clone().multiplyScalar(0.7 + Math.min(1, Math.hypot(v.x, v.z) / Math.max(1e-3, rad)) * 0.45),
+          snow: sAmt ? (v) => [sAmt * (0.3 + 0.7 * smooth(0.12, 0.6, Math.hypot(v.x, v.z) / Math.max(1e-3, rad))), sSeed] : null });
+      }
+      continue;
+    }
     for (let b = 0; b < (lod ? nb : nb * 2); b++) {
       const ring = b >= nb, bi = ring ? b - nb : b;   // two rings, the second shorter and a little higher, between the first
       const phi = ((bi + (ring ? 0.5 : 0)) / nb) * Math.PI * 2 + (r() - 0.5) * 0.4, L = rad * (ring ? 0.7 : lod ? 1.06 : 0.95) * (0.85 + r() * 0.3), w = L * (lod ? 0.7 : 0.42 + r() * 0.1), d = droop0 + (r() - 0.5) * 0.2 - (ring ? 0.08 : 0);
@@ -469,23 +517,63 @@ function pineGeometry(seed, lod = 0) {
 }
 G.buildForest = () => {
   const r = G.seeded(31);
-  const mat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5, map: G.TX.needles, alphaTest: 0.5 });
+  const mat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5, map: G.TX.frond, alphaTest: 0.5, side: THREE.DoubleSide });
   const farMat = G.std({ vertexColors: true, roughness: 0.9, env: 0.5, map: G.TX.needles, alphaTest: 0.5 });
   // Gentle sway in the wind: the crown moves more than the trunk, each tree on its own phase.
   G.SWAY = { uTime: { value: 0 }, uGust: { value: 0 } };
-  const sway = (mat, tag) => { mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uSwayT = G.SWAY.uTime; sh.uniforms.uGust = G.SWAY.uGust;
-    sh.vertexShader = 'uniform float uSwayT; uniform float uGust;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  const SWAY_V = `#include <begin_vertex>
       #ifdef USE_INSTANCING
         float ph = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.23;
         float bend = position.y * position.y * (0.004 + uGust * 0.012);
         transformed.x += sin(uSwayT * 1.1 + ph) * bend + bend * uGust * 0.6;
         transformed.z += cos(uSwayT * 0.83 + ph * 1.7) * bend * 0.6;
-      #endif`);
+      #endif`;
+  const sway = (mat, tag, frond) => { mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uSwayT = G.SWAY.uTime; sh.uniforms.uGust = G.SWAY.uGust;
+    sh.vertexShader = 'uniform float uSwayT; uniform float uGust;\n' + (frond ? 'attribute vec2 aSnow;\nvarying vec2 vFrS;\n' : '') +
+      sh.vertexShader.replace('#include <begin_vertex>', (frond ? 'vFrS = aSnow;\n' : '') + SWAY_V);
+    if (!frond || !sh.fragmentShader.includes('#include <color_fragment>')) return;
+    // The near boughs (TX.frond's channels): the needles' shading and paler tips; their coverage kept up in the
+    // distance (the mipmaps average the gaps in, and the alpha test would thin the boughs to nothing); snow in soft
+    // clumps where aSnow and the texture's B say it settles, filling the gaps there, white and lit as if facing up,
+    // and seen from underneath only where it overhangs the needles; and the undersides lit as undersides, darker,
+    // rather than as the tops turned over.
+    sh.fragmentShader = `varying vec2 vFrS;
+      float frH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float frN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(frH(i), frH(i + vec2(1.0, 0.0)), f.x), mix(frH(i + vec2(0.0, 1.0)), frH(i + vec2(1.0, 1.0)), f.x), f.y); }
+      ` + sh.fragmentShader
+      .replace('#include <map_fragment>', `
+        vec4 frT = texture2D(map, vUv);
+        vec2 frD = vUv * vec2(256.0, 512.0);
+        float frL = 0.5 * log2(max(max(dot(dFdx(frD), dFdx(frD)), dot(dFdy(frD), dFdy(frD))), 1e-8));
+        // (the inner cones: solid, but their lower rims ragged, not a clean line round the tree)
+        float frA = vFrS.y < -0.5 ? step(0.1 + 0.2 * frN(vec2(vUv.x * 6.0, 0.5)) + 0.12 * frH(vec2(floor(vUv.x * 30.0), 3.0)), vUv.y)
+          : min(1.0, frT.a * (1.0 + max(frL, 0.0) * 0.35));
+        diffuseColor.rgb *= frT.r * frT.r * 1.2 * mix(vec3(1.0), vec3(1.25, 1.32, 0.8), frT.g * 0.7);
+        diffuseColor.a *= frA;`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        float frSn = 0.0;
+        if (vFrS.x > 0.001) {
+          float fn = frN(vec2(vUv.x * 6.0, vUv.y * 16.0) + vFrS.y * 37.0) * 0.65 + frN(vec2(vUv.x * 15.0, vUv.y * 40.0) + vFrS.y * 11.0) * 0.35;
+          float fv = frT.b * 0.85 + (fn - 0.5) * 0.5, fth = 1.0 - vFrS.x;
+          frSn = smoothstep(fth, fth + 0.06, fv);
+          vec3 frC = vec3(0.86, 0.89, 0.94) * (0.72 + 0.28 * smoothstep(0.0, 0.22, fv - fth));
+          if (!gl_FrontFacing) { frSn *= 1.0 - smoothstep(0.3, 0.6, frA); frC *= 0.5; }
+          diffuseColor.rgb = mix(diffuseColor.rgb, frC, frSn);
+          diffuseColor.a = max(diffuseColor.a, frSn);
+        }`)
+      .replace('normal = normal * faceDirection;', 'if (!gl_FrontFacing) normal = normalize(normal - (viewMatrix * vec4(0.0, 0.6, 0.0, 0.0)).xyz);')
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        if (frSn > 0.0 && gl_FrontFacing) normal = normalize(mix(normal, (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz, frSn * 0.7));`);
   };
   mat.customProgramCacheKey = () => 'pine-sway' + tag; };
-  sway(mat, '-near'); sway(farMat, '-far');
-  G.PINE_MAT = mat; G.pineGeometry = pineGeometry;   // for the odd single spruce placed by hand (the walk's young pine)
+  sway(mat, '-near-frond', true); sway(farMat, '-far');
+  mat.extensions = { derivatives: true };
+  // their shadows: the needles' own outline (not the whole card), swaying with the tree
+  const nearDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: G.TX.frond, alphaTest: 0.5, side: THREE.DoubleSide });
+  sway(nearDepth, '-near-depth', false);
+  G.PINE_MAT = mat; G.PINE_DEPTH = nearDepth; G.pineGeometry = pineGeometry;   // for the odd single spruce placed by hand (the walk's young pine)
   // Trees within NEAR_R of the clearing get full detail and cast shadows; the rest are low-poly and shadowless.
   const NEAR_R = 34;
   const variants = [pineGeometry(3), pineGeometry(17), pineGeometry(42)];
@@ -512,15 +600,16 @@ G.buildForest = () => {
   }
   // A few big framing pines close to the cabin, as in the reference shots.
   for (const [x, z, s] of [[-3.6, 9, 15], [19.5, 9, 14], [-4.5, -2, 17], [20, -1, 16], [-0.5, 23, 12], [13.5, 24, 13], [-3, 16, 11]]) lists[0].push(G.mtx(x, terrainH(x, z) - 0.15, z, s, s, s, r() * 6));
-  const place = (geos, ls, shadows, M) => geos.forEach((g, i) => {
+  const place = (geos, ls, shadows, M, depth) => geos.forEach((g, i) => {
     if (!ls[i].length) return;
     const im = new THREE.InstancedMesh(g, M, ls[i].length);
+    if (depth) im.customDepthMaterial = depth;
     ls[i].forEach((m, k) => im.setMatrixAt(k, m));
     im.castShadow = shadows; im.receiveShadow = true;
     G.fitInstanceBounds(im);
     world.add(im);
   });
-  place(variants, lists, true, mat);
+  place(variants, lists, true, mat, nearDepth);
   place(farVariants, farLists, false, farMat);
   // Snow-covered shrubs and drifts.
   // Indexed sphere so vertex normals are shared and the drifts read as soft, rounded snow
