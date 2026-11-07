@@ -438,7 +438,7 @@ function updateLighting(t, dt, focus) {
   const spots = STATE.lightSpots || near;
   pathLights.forEach((l, i) => { const p = spots[i]; if (!p) { l.intensity = 0; return; } l.position.set(p.x, p.y, p.z); l.intensity = STATE.lightSpots ? (p.i || 4) : lerp(2.5, 4, n) * dark; if (p.color) l.color.set(p.color); else l.color.set('#ffa860'); });
   G.poolMat.opacity = lerp(0.5, 0.9, n) * dark;
-  if (G.PATH_GLASS) { const u = G.PATH_GLASS.userData; G.PATH_GLASS.color.copy(u.off).lerp(u.on, dark); }
+  for (const m of G.LIT_GLASS || []) m.color.copy(m.userData.off).lerp(m.userData.on, dark);   // lanterns' glass: lit at dusk, plain by day
   if (G.updateLanterns) G.updateLanterns(t, dt);
   Audio_ambience(focus, dt, fp);
 }

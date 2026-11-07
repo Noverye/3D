@@ -27,19 +27,15 @@ const W = G.world;
 (() => {
   const y = fy(STUMP.x, STUMP.z);
   G.cyl(0.32, 0.38, 0.5, G.MAT.bark, STUMP.x, y + 0.2, STUMP.z, { seg: 14 });
-  G.cyl(0.3, 0.3, 0.02, G.shared({ color: '#c49a6a', roughness: 0.9 }), STUMP.x, y + 0.455, STUMP.z, { seg: 14 });
+  { const top = new THREE.Mesh(new THREE.CircleGeometry(0.31, 14), G.std({ map: G.TX.logEnd, color: '#c8bfb4', roughness: 0.92 })); top.rotation.set(-Math.PI / 2, 0, 0.7); top.position.set(STUMP.x, y + 0.451, STUMP.z); top.receiveShadow = true; W.add(top); }   // its sawn top
   G.cyl(0.3, 0.33, 0.07, G.MAT.snow, STUMP.x, y + 0.49, STUMP.z, { seg: 14 });
   G.addCollider({ x0: STUMP.x - 0.38, z0: STUMP.z - 0.38, x1: STUMP.x + 0.38, z1: STUMP.z + 0.38 });
 })();
 // The bench on top of the hill.
 (() => {
+  // a split-log bench on pole legs, snow on its seat and along its back rail (it was dark boards and square sticks)
   const y = fy(HILLB.x, HILLB.z), g = new THREE.Group(); g.position.set(HILLB.x, y, HILLB.z); W.add(g);
-  const wood = G.MAT.darkWood;
-  G.box(1.5, 0.06, 0.42, wood, 0, 0.45, 0, { parent: g });
-  G.box(1.5, 0.3, 0.05, wood, 0, 0.72, -0.21, { parent: g });
-  for (const dx of [-0.65, 0.65]) { G.box(0.07, 0.46, 0.07, wood, dx, 0.22, 0.15, { parent: g }); G.box(0.07, 0.86, 0.07, wood, dx, 0.42, -0.2, { parent: g }); }
-  G.box(1.52, 0.05, 0.4, G.MAT.snow, 0.08, 0.5, 0.02, { parent: g, r: 0.02 }).scale.x = 0.55;
-  G.box(1.52, 0.05, 0.08, G.MAT.snow, 0, 0.9, -0.21, { parent: g, r: 0.02 });
+  G.logBench(g, { len: 1.5, depth: 0.42, seatY: 0.48, seed: 12, snow: true });
   G.addCollider({ x0: HILLB.x - 0.78, z0: HILLB.z - 0.26, x1: HILLB.x + 0.78, z1: HILLB.z + 0.24 });
   HILLB.seatY = y + 0.48;
 })();

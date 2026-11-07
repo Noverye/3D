@@ -653,7 +653,7 @@ G.buildForest = () => {
  * round it so there's no seam); cap 1 puts a sawn end (TX.logEnd) at A, 2 at B. build() makes them into two meshes,
  * the sides and the ends; mesh(parts, material) makes a mesh of some kept apart. tone: their shade [least, spread]
  * and tint. */
-function poleSet(seed, tone = [0.74, 0.18], tint = '#ffffff') {
+function poleSet(seed, tone = [0.74, 0.18], tint = '#ffffff', parent = world) {
   const r = G.seeded(seed), up = new THREE.Vector3(0, 1, 0), parts = [], ends = [], tc = new THREE.Color(tint);
   const sideM = G.std({ map: TX.logs, bumpMap: TX.logsB, bumpScale: 0.004, roughness: 0.85, env: 0.35, vertexColors: true });
   const endM = G.std({ map: TX.logEnd, color: '#c8c0b6', roughness: 0.92, env: 0.2, vertexColors: true });
@@ -670,9 +670,39 @@ function poleSet(seed, tone = [0.74, 0.18], tint = '#ffffff') {
       const c = new THREE.CircleGeometry(rr * 0.96, seg); c.rotateZ(r() * 6.28); c.rotateX(rx); c.translate(0, y, 0); ends.push({ geo: c, mat: M, uv: true, color: col });
     }
   };
-  const mesh = (ps, m) => { const x = new THREE.Mesh(G.merge(ps), m); x.castShadow = x.receiveShadow = true; world.add(x); return x; };
+  const mesh = (ps, m) => { const x = new THREE.Mesh(G.merge(ps), m); x.castShadow = x.receiveShadow = true; parent.add(x); return x; };
   return { r, pole, parts, ends, sideM, endM, mesh, build: () => { if (parts.length) mesh(parts, sideM); if (ends.length) mesh(ends, endM); } };
 }
+G.poleSet = poleSet;
+/* A rustic log bench, built into group g (its seat centred on x = 0, facing +z, the ground at y = 0): a split log for
+ * the seat, planed flat on top (its top at seatY) and round underneath; four splayed pole legs; two back posts leaning
+ * back a little, with a log rail across them and a thinner pole below it. len, depth: the seat's size. */
+G.logBench = (g, { len, depth, seatY, seed = 5, snow = false }) => {
+  const PS = poleSet(seed, [0.72, 0.2], '#ffffff', g), r = PS.r, hl = len / 2;
+  const seatM = G.std({ map: TX.logs, bumpMap: TX.logsB, bumpScale: 0.003, color: '#e2cdb0', roughness: 0.8, env: 0.3 });
+  G.box(len, 0.035, depth, seatM, 0, seatY - 0.0175, 0, { parent: g, uv: [len / 2.75, 0.05] });
+  { // the round underside of the split log
+    const R = depth / 2 * 0.96, c = new THREE.CylinderGeometry(R, R, len - 0.02, 14, 1, false, Math.PI / 2, Math.PI);
+    c.rotateZ(-Math.PI / 2); c.rotateX(-Math.PI / 2);
+    const m = new THREE.Mesh(c, PS.sideM); m.position.y = seatY - 0.035; m.scale.y = 0.5; m.castShadow = m.receiveShadow = true; g.add(m);
+    const P = c.attributes.position, U = c.attributes.uv, C = [];
+    for (let i = 0; i < P.count; i++) { U.setXY(i, P.getX(i) / 2.75, (3.3 + 0.4 * Math.abs(Math.atan2(P.getY(i), P.getZ(i)) / Math.PI)) / 7); C.push(0.82, 0.82, 0.82); }
+    c.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  }
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) PS.pole([sx * (hl - 0.16), seatY - 0.06, sz * (depth / 2 - 0.07)], [sx * (hl - 0.07), -0.05, sz * (depth / 2 + 0.03)], 0.038, 0.042);
+    PS.pole([sx * (hl - 0.12), -0.05, -depth / 2 + 0.02], [sx * (hl - 0.1), seatY + 0.5, -depth / 2 - 0.1], 0.042, 0.038, 2);
+  }
+  const zAt = (y) => -depth / 2 + 0.02 - 0.12 * ((y + 0.05) / (seatY + 0.55));   // the back posts' lean
+  const yT = seatY + 0.4, yL = seatY + 0.18;
+  PS.pole([-hl - 0.04, yT, zAt(yT)], [hl + 0.04, yT, zAt(yT)], 0.06, 0.058, 3);
+  PS.pole([-hl + 0.06, yL, zAt(yL)], [hl - 0.06, yL, zAt(yL)], 0.032, 0.03, 3);
+  PS.build();
+  if (snow) {
+    G.box(len * 0.55, 0.05, depth - 0.04, MAT.snow, 0.08, seatY + 0.02, 0.02, { parent: g, r: 0.02 });
+    G.box(len - 0.1, 0.045, 0.08, MAT.snow, 0, yT + 0.065, zAt(yT), { parent: g, r: 0.02 });
+  }
+};
 /* ---------------- path: fence and lanterns ---------------- */
 G.PATH_LIGHTS = [];
 G.buildPath = () => {
@@ -722,7 +752,7 @@ G.buildPath = () => {
   // Each lantern is a small iron one, glazed on four sides under a little pyramid roof with a ring on top and a cap of
   // snow, on a stub of log. Its glass glows at night; by day it's unlit glass. (They were stacked boxes, orange all day.)
   const lanternGlass = new THREE.MeshBasicMaterial({ color: '#ffc27a' });
-  lanternGlass.userData = { on: new THREE.Color('#ffc27a'), off: new THREE.Color('#4f5154') }; G.PATH_GLASS = lanternGlass;
+  lanternGlass.userData = { on: new THREE.Color('#ffc27a'), off: new THREE.Color('#4f5154') }; (G.LIT_GLASS = G.LIT_GLASS || []).push(lanternGlass);
   const iron = MAT.darkMetal, roofG = new THREE.ConeGeometry(0.15, 0.1, 4, 1); roofG.rotateY(Math.PI / 4);
   let side = -1;
   for (let z = 9.2; z <= PATH_END; z += 5.2) {
@@ -1270,15 +1300,24 @@ G.buildCabin = () => {
   G.PORCH_LAMP = new THREE.PointLight('#ffae5c', 5, 7, 2); G.PORCH_LAMP.position.set(7.35, 1.8, PORCH.z0 + 0.45); world.add(G.PORCH_LAMP);
   const pool = new THREE.Mesh(new THREE.PlaneGeometry(5, 5), G.poolMat); pool.rotation.x = -Math.PI / 2; pool.position.set(7.0, 0.012, 6.0); world.add(pool);
   // Porch bench facing the lake, with a plaid throw and a lantern beside it.
+  // (a log bench, like the one on the hill: it was three dark boards)
   const bx = 9.45, bz = 5.5;
-  G.box(1.7, 0.06, 0.48, MAT.darkWood, bx, 0.44, bz, { coll: true });
-  G.box(1.7, 0.42, 0.05, MAT.darkWood, bx, 0.74, bz - 0.24);
-  for (const dx of [-0.75, 0.75]) G.box(0.06, 0.44, 0.44, MAT.darkWood, bx + dx, 0.22, bz);
+  { const g = new THREE.Group(); g.position.set(bx, 0, bz); world.add(g); G.logBench(g, { len: 1.7, depth: 0.46, seatY: 0.47, seed: 31 }); }
+  G.COLL.push({ x0: bx - 0.85, z0: bz - 0.24, x1: bx + 0.85, z1: bz + 0.24 });
   const throwM = G.box(0.9, 0.05, 0.5, MAT.plaid, bx + 0.4, 0.49, bz + 0.02, { r: 0.02 }); throwM.rotation.y = 0.15;
   G.BENCH = { x: bx, z: bz, seatY: 0.47 };
-  const fl2 = new THREE.Group(); fl2.position.set(bx + 1.05, 0, bz + 0.1); world.add(fl2);
-  G.box(0.2, 0.3, 0.2, new THREE.MeshBasicMaterial({ color: '#ffbf72' }), 0, 0.2, 0, { parent: fl2, cast: false });
-  G.box(0.24, 0.04, 0.24, MAT.darkMetal, 0, 0.36, 0, { parent: fl2 }); G.box(0.24, 0.04, 0.24, MAT.darkMetal, 0, 0.04, 0, { parent: fl2 });
+  const fl2 = new THREE.Group(); fl2.position.set(bx + 1.05, 0, bz + 0.1); fl2.rotation.y = 0.3; world.add(fl2);
+  { // an iron lantern on the boards, lit at dusk (it was two plates with an orange box between)
+    const glass = new THREE.MeshBasicMaterial({ color: '#ffbf72' }); glass.userData = { on: new THREE.Color('#ffbf72'), off: new THREE.Color('#55575a') }; (G.LIT_GLASS = G.LIT_GLASS || []).push(glass);
+    const iron = MAT.darkMetal;
+    G.box(0.22, 0.03, 0.22, iron, 0, 0.015, 0, { parent: fl2 });
+    G.box(0.16, 0.24, 0.16, glass, 0, 0.15, 0, { parent: fl2, cast: false });
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) G.box(0.018, 0.26, 0.018, iron, sx * 0.085, 0.15, sz * 0.085, { parent: fl2 });
+    for (const sx of [-1, 1]) { G.box(0.175, 0.014, 0.014, iron, 0, 0.15, sx * 0.085, { parent: fl2, cast: false }); G.box(0.014, 0.014, 0.175, iron, sx * 0.085, 0.15, 0, { parent: fl2, cast: false }); }
+    G.box(0.2, 0.025, 0.2, iron, 0, 0.29, 0, { parent: fl2 });
+    const rf = new THREE.ConeGeometry(0.18, 0.12, 4); rf.rotateY(Math.PI / 4); const roof = new THREE.Mesh(rf, iron); roof.position.y = 0.36; roof.castShadow = true; fl2.add(roof);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 5, 10), iron); ring.position.y = 0.45; fl2.add(ring);
+  }
   G.cyl(0.06, 0.06, 0.08, MAT.candle, bx - 1.05, 0.04, bz + 0.15);
   G.BENCH_LAMP = new THREE.PointLight('#ffa850', 2.5, 4, 2); G.BENCH_LAMP.position.set(bx + 1.05, 0.4, bz + 0.1); world.add(G.BENCH_LAMP);
   G.INTER.push({ id: 'bench', pos: [bx, 0.5, bz + 0.4], r: 1.3, label: () => (G.STATE.porchDone ? 'Bench' : 'Watch the stars'), act: () => G.Story.porch() });
