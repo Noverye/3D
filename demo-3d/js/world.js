@@ -638,6 +638,7 @@ G.buildForest = () => {
     const x = CLEAR.x + Math.cos(a) * d, z = CLEAR.z + Math.sin(a) * d;
     if (rectDist(x, z, -1, CAB.z0 - 1, 18, 8.2) < 0.6) continue;   // clear of the cabin (and of its back wall, out at CAB.z0)
     if (z > 7 && z < PATH_END + 2 && Math.abs(x - pathX(z)) < 2.6) continue;
+    if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 1) continue;   // not out on the ice (they sat on it like white rocks)
     const s = 0.35 + r() * 0.9;
     drifts.push(G.mtx(x, terrainH(x, z) - 0.02, z, s * (1 + r()), s * 0.5, s * (1 + r()), r() * 6));
   }

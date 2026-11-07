@@ -23,12 +23,36 @@ const CIRCLE = { x: -3.6, z: 45.0, r: 2.3 };
 G.inCircle = (x, z) => S.flags.circleShown && Math.hypot(x - CIRCLE.x, z - CIRCLE.z) < CIRCLE.r;
 
 const W = G.world;
-// An old stump in the meadow, with a cap of snow.
+// An old stump in the meadow: the stump of a big spruce, sawn off long ago a little above the snow, its roots spreading
+// out into the drifts, its bark ridged and furrowed up its sides, the top weathered grey end grain with a soft cap of
+// snow lying across one side of it. (It was a plain cylinder of bark with a flat lid of snow.)
 (() => {
-  const y = fy(STUMP.x, STUMP.z);
-  G.cyl(0.32, 0.38, 0.5, G.MAT.bark, STUMP.x, y + 0.2, STUMP.z, { seg: 14 });
-  { const top = new THREE.Mesh(new THREE.CircleGeometry(0.31, 14), G.std({ map: G.TX.logEnd, color: '#c8bfb4', roughness: 0.92 })); top.rotation.set(-Math.PI / 2, 0, 0.7); top.position.set(STUMP.x, y + 0.451, STUMP.z); top.receiveShadow = true; W.add(top); }   // its sawn top
-  G.cyl(0.3, 0.33, 0.07, G.MAT.snow, STUMP.x, y + 0.49, STUMP.z, { seg: 14 });
+  const y = fy(STUMP.x, STUMP.z), g = new THREE.Group(); g.position.set(STUMP.x, y, STUMP.z); g.rotation.y = 0.6; W.add(g);
+  const NS = 28, NY = 9, R0 = 0.31, P = [], U = [], I = [];
+  const roots = (a) => Math.pow(Math.max(0, Math.cos(5 * a + 0.4 + 0.5 * Math.sin(2 * a))), 1.3) * (0.75 + 0.25 * Math.sin(a * 3.1));
+  const topY = (a) => 0.46 + 0.035 * Math.cos(a - 0.7) + 0.012 * Math.sin(a * 7);
+  const rad = (a, h) => (R0 + 0.012 * Math.sin(a * 11 + h * 4) + 0.008 * Math.sin(a * 23)) * (1 + 0.85 * roots(a) * Math.exp(-Math.max(0, h + 0.12) / 0.18) + 0.14 * Math.exp(-Math.max(0, h + 0.12) / 0.3));
+  for (let j = 0; j <= NY; j++) for (let i = 0; i <= NS; i++) {
+    const a = (i / NS) * Math.PI * 2, t = j / NY, h = -0.15 + t * (topY(a) + 0.15), r = rad(a, h);
+    P.push(Math.cos(a) * r, h, Math.sin(a) * r); U.push(h * 0.9, (i / NS) * 3);   // (u up the stump, v round it: TX.bark's furrows run up it)
+  }
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NS; i++) { const q = j * (NS + 1) + i; I.push(q, q + NS + 1, q + 1, q + 1, q + NS + 1, q + NS + 2); }
+  const body = new THREE.BufferGeometry(); body.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); body.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); body.setIndex(I); body.computeVertexNormals();
+  const bark = G.std({ map: G.rep(G.TX.bark, 1, 1), color: '#e2cfbd', roughness: 0.95, env: 0.2, side: THREE.DoubleSide });
+  const m = new THREE.Mesh(body, bark); m.castShadow = m.receiveShadow = true; g.add(m);
+  { // the sawn top, a little inside the bark
+    const tp = [0, topY(0.7) - 0.004, 0], tu = [0.5, 0.5], ti = [];
+    for (let i = 0; i <= NS; i++) { const a = (i / NS) * Math.PI * 2, r = rad(a, topY(a)) * 0.94; tp.push(Math.cos(a) * r, topY(a) - 0.004, Math.sin(a) * r); tu.push(0.5 + 0.48 * Math.cos(a), 0.5 + 0.48 * Math.sin(a)); }
+    for (let i = 1; i <= NS; i++) ti.push(0, i + 1, i);
+    const tg = new THREE.BufferGeometry(); tg.setAttribute('position', new THREE.Float32BufferAttribute(tp, 3)); tg.setAttribute('uv', new THREE.Float32BufferAttribute(tu, 2)); tg.setIndex(ti); tg.computeVertexNormals();
+    const top = new THREE.Mesh(tg, G.std({ map: G.TX.logEnd, color: '#b9b2a8', roughness: 0.95, env: 0.2 })); top.receiveShadow = true; g.add(top);
+  }
+  { // a cap of snow lying across part of the top, and a little drifted against the roots on the windward side
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), G.MAT.snow);
+    cap.scale.set(0.22, 0.075, 0.19); cap.position.set(-0.06, topY(Math.PI) - 0.015, 0.03); cap.rotation.z = 0.05; cap.castShadow = true; cap.receiveShadow = true; g.add(cap);
+    const drift = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2), G.MAT.snow);
+    drift.scale.set(0.42, 0.14, 0.3); drift.position.set(-0.32, -0.04, 0.05); drift.receiveShadow = true; g.add(drift);
+  }
   G.addCollider({ x0: STUMP.x - 0.38, z0: STUMP.z - 0.38, x1: STUMP.x + 0.38, z1: STUMP.z + 0.38 });
 })();
 // The bench on top of the hill.
@@ -193,16 +217,18 @@ async function meadow() {
   await Y('And the prize?', K());
   await P('Eternal glory. And the loser carries the winner’s gloves.', K());
   const mine = [], hers = [];
+  // (a cone that comes down on the stump itself stays on top of it, not inside it)
+  const landY = (x, z, off) => (off < 0.36 ? fy(STUMP.x, STUMP.z) + 0.5 : fy(x, z) + 0.03);
   for (let i = 0; i < 3; i++) {
     const [sc] = await G.UI.timing({ title: i ? 'Another pinecone' : 'Throw a pinecone', rounds: 1, zone: [0.6, 0.72], speed: 1 + i * 0.15, labels: ['Wide.', 'Close.', 'Right next to it!'] });
     PLAYER.forcePose = 'throw'; await wait(0.3); PLAYER.forcePose = null;
     const off = (1 - sc) * 1.7 + 0.08 + Math.random() * 0.1, a = Math.random() * Math.PI * 2, lx = STUMP.x + Math.cos(a) * off, lz = STUMP.z + Math.sin(a) * off;
-    await arc(CONES[i * 2], handOf(PLAYER), V(lx, fy(lx, lz) + 0.03, lz), 0.7, 1.2); G.puffAt(lx, fy(lx, lz) + 0.05, lz, 6);
+    await arc(CONES[i * 2], handOf(PLAYER), V(lx, landY(lx, lz, off), lz), 0.7, 1.2); G.puffAt(lx, landY(lx, lz, off) + 0.02, lz, 6);
     mine.push(off);
     // Her turn: a fair throw, mostly.
     p.forcePose = 'throw'; await wait(0.3); p.forcePose = null;
     const hoff = 0.2 + Math.random() * 1.1, b = Math.random() * Math.PI * 2, hx = STUMP.x + Math.cos(b) * hoff, hz = STUMP.z + Math.sin(b) * hoff;
-    await arc(CONES[i * 2 + 1], handOf(p), V(hx, fy(hx, hz) + 0.03, hz), 0.7, 1.1); G.puffAt(hx, fy(hx, hz) + 0.05, hz, 6);
+    await arc(CONES[i * 2 + 1], handOf(p), V(hx, landY(hx, hz, hoff), hz), 0.7, 1.1); G.puffAt(hx, landY(hx, hz, hoff) + 0.02, hz, 6);
     hers.push(hoff);
     G.bark(hoff < off ? pick(['Ha!', 'Closer. Obviously.', 'Watch and learn, {dear}.']) : pick(['Bother.', 'The wind took it.', 'That one was a practice throw.']), 1.8);
     await wait(0.8);
