@@ -275,6 +275,26 @@ G.buildTextures = () => {
     });
     let n = 0;
     TX.fieldB = canvasTex(512, (u, v) => { const h = cache[n++]; const g = h < 0 ? 40 : 95 + 150 * h + G.fbm(u * 80, v * 80, 2) * 12; return [g, g, g]; }, { srgb: false });
+    // The same stones indoors, out of the weather: no lichen, the colours deeper, and the joints pointed in pale lime
+    // mortar (their depth shows in the relief there, not painted dark).
+    const PALI = [[136, 130, 121], [150, 138, 120], [122, 109, 95], [116, 118, 120], [160, 151, 136], [134, 115, 95], [108, 104, 99], [143, 137, 128]];
+    TX.fieldIn = canvasTex(512, (u, v, x, y) => {
+      const [b, s2, id] = near(u, v), e = s2 - b, mw = 0.1 + 0.05 * G.fbm(u * 30, v * 30, 2), sp = G.fbm(u * 60 + id * 9, v * 60, 2);
+      if (e < mw) { const k = 0.74 + 0.12 * sp + 0.1 * G.fbm(u * 140, v * 140, 2); return [158 * k, 151 * k, 140 * k]; }
+      const h = G.smooth(mw, mw + 0.32, e), c = PALI[Math.floor(id * PALI.length)], k = (0.8 + 0.2 * h) * (0.88 + 0.24 * sp) * (G.hash1(x * 1.7 + y * 9.1) > 0.985 ? 1.18 : 1);
+      return [c[0] * k, c[1] * k, c[2] * k];
+    });
+    // ...and the height itself, softened a little, for the chimney breast indoors, whose stones stand out in relief: G.fieldH(u, v)
+    // at texture coordinates, 0 deep in a joint to 1 on the crown of a stone
+    const w = TX.field.image.width, h = TX.field.image.height, a = new Float32Array(w * h), b = new Float32Array(w * h), R = Math.max(1, Math.round((2 * w) / 512));
+    for (let i = 0; i < w * h; i++) a[i] = cache[i] < 0 ? 0 : 0.3 + 0.7 * G.smooth(0, 0.45, cache[i]);   // the faces flattish, rounding over at the edges
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let s = 0; for (let k = -R; k <= R; k++) s += a[y * w + ((x + k + w) % w)]; b[y * w + x] = s / (2 * R + 1); }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let s = 0; for (let k = -R; k <= R; k++) s += b[((y + k + h) % h) * w + x]; a[y * w + x] = s / (2 * R + 1); }
+    const at = (x, y) => a[(((y % h) + h) % h) * w + (((x % w) + w) % w)];
+    G.fieldH = (U, V) => {   // bilinear; v runs up, as the texture is flipped
+      const px = (((U % 1) + 1) % 1) * w - 0.5, py = (1 - (((V % 1) + 1) % 1)) * h - 0.5, x0 = Math.floor(px), y0 = Math.floor(py), tx = px - x0, ty = py - y0;
+      return (at(x0, y0) * (1 - tx) + at(x0 + 1, y0) * tx) * (1 - ty) + (at(x0, y0 + 1) * (1 - tx) + at(x0 + 1, y0 + 1) * tx) * ty;
+    };
   }
   // Knit: cable pattern.
   const knit = (base, cable) => canvasTex(256, (u, v) => {

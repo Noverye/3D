@@ -1294,10 +1294,29 @@ G.buildCabin = () => {
     const sag = Math.sin(((t * 4) % 1) * Math.PI) * 0.12;
     const b = new THREE.Mesh(bulbG, MAT.bulb); b.position.set(x, 2.27 - sag, PORCH.z1 - 0.07); world.add(b); G.STRING.push(b);
   }
-  // Hanging lantern by the door.
-  const lan = new THREE.Group(); lan.position.set(7.35, 1.85, PORCH.z0 + 0.25); world.add(lan);
-  G.box(0.03, 0.4, 0.03, MAT.darkMetal, 0, 0.32, -0.12, { parent: lan }); G.box(0.03, 0.03, 0.22, MAT.darkMetal, 0, 0.5, -0.03, { parent: lan });
-  G.box(0.2, 0.04, 0.2, MAT.darkMetal, 0, 0.14, 0.08, { parent: lan }); G.box(0.16, 0.22, 0.16, new THREE.MeshBasicMaterial({ color: '#ffc27a' }), 0, 0.01, 0.08, { parent: lan, cast: false }); G.box(0.2, 0.04, 0.2, MAT.darkMetal, 0, -0.12, 0.08, { parent: lan });
+  // The lantern by the door: an iron one like those along the path, hung from a wrought bracket on the logs, glazed on
+  // four sides under its little roof, lit at dusk and plain glass by day. (It was two plates with an orange box
+  // between them, lit all day, on a stick.)
+  {
+    const iron = MAT.darkMetal, wz = PORCH.z0 + 0.12, L = new THREE.Group(); L.position.set(7.35, 1.98, PORCH.z0 + 0.41); world.add(L);
+    const glass = new THREE.MeshBasicMaterial({ color: '#ffc27a' }); glass.userData = { on: new THREE.Color('#ffc27a'), off: new THREE.Color('#505255') }; (G.LIT_GLASS = G.LIT_GLASS || []).push(glass);
+    // the bracket: a plate on the wall, an arm out over the step, a brace under it with a curl of iron between
+    G.box(0.07, 0.22, 0.014, iron, 7.35, 2.2, wz);
+    G.box(0.018, 0.022, 0.33, iron, 7.35, 2.3, wz + 0.165);
+    const br = G.box(0.014, 0.014, 0.27, iron, 7.35, 2.2, wz + 0.1); br.rotation.x = -(Math.atan2(0.19, 0.2) - 0.05);
+    const curl = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.006, 5, 14, Math.PI * 1.5), iron); curl.rotation.y = Math.PI / 2; curl.position.set(7.35, 2.24, wz + 0.06); world.add(curl);
+    const hook = new THREE.Mesh(new THREE.TorusGeometry(0.018, 0.005, 5, 10), iron); hook.rotation.y = Math.PI / 2; hook.position.set(7.35, 2.27, PORCH.z0 + 0.41); world.add(hook);
+    // the lantern, hung from its ring
+    G.box(0.17, 0.025, 0.17, iron, 0, -0.12, 0, { parent: L });
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.05, 4), iron); fin.rotation.x = Math.PI; fin.position.y = -0.155; L.add(fin);
+    G.box(0.13, 0.2, 0.13, glass, 0, -0.005, 0, { parent: L, cast: false });
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) G.box(0.016, 0.22, 0.016, iron, sx * 0.07, -0.005, sz * 0.07, { parent: L });
+    for (const sx of [-1, 1]) { G.box(0.145, 0.012, 0.012, iron, 0, 0.0, sx * 0.07, { parent: L, cast: false }); G.box(0.012, 0.012, 0.145, iron, sx * 0.07, 0.0, 0, { parent: L, cast: false }); }
+    G.box(0.17, 0.02, 0.17, iron, 0, 0.11, 0, { parent: L });
+    const rg = new THREE.ConeGeometry(0.16, 0.11, 4, 1); rg.rotateY(Math.PI / 4); const roof = new THREE.Mesh(rg, iron); roof.position.y = 0.175; roof.castShadow = true; L.add(roof);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.006, 5, 10), iron); ring.position.y = 0.26; L.add(ring);
+    G.CAMBLOCK.push(roof);
+  }
   G.PORCH_LAMP = new THREE.PointLight('#ffae5c', 5, 7, 2); G.PORCH_LAMP.position.set(7.35, 1.8, PORCH.z0 + 0.45); world.add(G.PORCH_LAMP);
   const pool = new THREE.Mesh(new THREE.PlaneGeometry(5, 5), G.poolMat); pool.rotation.x = -Math.PI / 2; pool.position.set(7.0, 0.012, 6.0); world.add(pool);
   // Porch bench facing the lake, with a plaid throw and a lantern beside it.

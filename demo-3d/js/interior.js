@@ -248,17 +248,164 @@ function buildRooms() {
   /* ===== Living room ===== */
   const fx = 8.0;
   // The chimney breast, built round a real firebox 32 cm deep (it was a solid block with a black panel on its face,
-  // the logs on the hearth in front of it, so with the fire out it was a black rectangle). The stone is laid by its
-  // position, so the courses run on across the pieces.
-  const stoneUV = (m, du = 0.6, dv = 0.593) => { const g = m.geometry, P = g.attributes.position, N = g.attributes.normal, UVa = g.attributes.uv;
+  // the logs on the hearth in front of it, so with the fire out it was a black rectangle).
+  // It's fieldstone, like the chimney outside (build 145): rounded stones of every size and colour, grey and brown and
+  // bluish, standing out from deep joints, blackened with soot up over the opening, under a stone lintel. (It was a
+  // flat grey stone painted on the blocks, every stone outlined like a drawing.) The stone is laid by its position, so
+  // the courses run on across the pieces. Under the stones the breast is still four plain blocks: they keep the camera
+  // out and cast the shadows.
+  const FT = 1.2;   // the stone's tile, as on the chimney outside
+  const stoneUV = (m) => { const g = m.geometry, P = g.attributes.position, N = g.attributes.normal, UVa = g.attributes.uv;
     for (let i = 0; i < P.count; i++) { const x = P.getX(i) + m.position.x, y = P.getY(i) + m.position.y, z = P.getZ(i) + m.position.z, nx = Math.abs(N.getX(i)), ny = Math.abs(N.getY(i));
-      if (ny > 0.5) UVa.setXY(i, x * du, z * dv); else if (nx > 0.5) UVa.setXY(i, z * du, y * dv); else UVa.setXY(i, x * du, y * dv); } UVa.needsUpdate = true; };
+      if (ny > 0.5) UVa.setXY(i, x / FT, z / FT); else if (nx > 0.5) UVa.setXY(i, z / FT, y / FT); else UVa.setXY(i, x / FT, y / FT); } UVa.needsUpdate = true; };
   const FB = { x0: fx - 0.5, x1: fx + 0.5, top: 0.81, back: 0.34, face: 0.66 };
   G.COLL.push({ x0: fx - 1.0, z0: 0.04, x1: fx + 1.0, z1: 0.66 });
+  const blockM = G.std({ map: TX.fieldIn, color: '#8a8580', roughness: 0.95, env: 0.15 });
   for (const [x0, x1, y0, y1, z0, z1] of [[fx - 1, FB.x0, 0, FB.top, 0.04, 0.66], [FB.x1, fx + 1, 0, FB.top, 0.04, 0.66], [fx - 1, fx + 1, FB.top, 2.7, 0.04, 0.66], [FB.x0, FB.x1, 0, FB.top, 0.04, FB.back]])
-    stoneUV(box(x1 - x0, y1 - y0, z1 - z0, MAT.stone, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, { cam: true }));
-  box(2.25, 0.12, 0.44, MAT.darkWood, fx, 1.42, 0.62, { r: 0.02 });
-  box(1.7, 0.06, 0.6, MAT.stone, fx, 0.03, 0.98, { cast: false });
+    stoneUV(box(x1 - x0, y1 - y0, z1 - z0, blockM, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, { cam: true }));
+  {
+    const fieldM = G.std({ map: TX.fieldIn, bumpMap: TX.fieldB, bumpScale: 0.01, roughness: 0.9, env: 0.2, vertexColors: true });
+    const STEP = G.qName === 'Low' ? 0.03 : 0.015, RISE = 0.028, OFF = 0.01, TOP = 2.7;
+    const out = (U, V) => OFF + (G.fieldH(U, V) - 0.3) * RISE;   // how far the stone stands out of the block here
+    // soot: up the stone over the opening, where the smoke curls out before it draws, fading out under the mantel
+    const sootK = (x, y) => { const e = Math.hypot((x - fx) / 0.8, Math.max(0, y - FB.top + 0.06) / 0.72); return 1 - 0.8 * (y > FB.top - 0.14 ? 1 - G.smooth(0.2, 1.0, e) : 0); };
+    // a sheet of stone: at(i, j) gives [x, y, z, u, v] for each point of an (nu + 1) x (nv + 1) grid, i along the face
+    // and j up it, laid so the face looks out; keep(i, j) whether to keep that cell
+    const sheet = (nu, nv, at, keep) => {
+      const P = [], UV = [], C = [], I = [], t = [];
+      for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) { at(i, j, t); P.push(t[0] - fx, t[1], t[2] - 0.5); UV.push(t[3], t[4]); const k = sootK(t[0], t[1]); C.push(k, k * 0.985, k * 0.97); }
+      for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) if (!keep || keep(i, j)) { const p = j * (nu + 1) + i; I.push(p, p + 1, p + nu + 2, p, p + nu + 2, p + nu + 1); }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+      g.setIndex(I); g.computeVertexNormals();
+      const m = G.add(new THREE.Mesh(g, fieldM), null, false, true); m.position.set(fx, 0, 0.5);   // at the hearth, so it moves back with the hearth wall (G.ZM)
+      return m;
+    };
+    // the two front corners: the stone on the face and on the side meet there, rounded over it
+    const corner = (s, y, t) => { const x = fx + s, z = FB.face, d = OFF + ((G.fieldH(x / FT, y / FT) + G.fieldH(z / FT, y / FT)) / 2 - 0.3) * RISE; t[0] = x + Math.sign(s) * d; t[1] = y; t[2] = z + d; };
+    const NA = 4 * Math.round(2 / STEP / 4), NB = 10 * Math.round(TOP / STEP / 10), JT = (NB * FB.top) / TOP;   // the opening falls on the grid
+    // the face, the opening cut out of it
+    const faceAt = (i, j, t) => {
+      const x = fx - 1 + (2 * i) / NA, y = (TOP * j) / NB;
+      if (i === 0 || i === NA) corner(i ? 1 : -1, y, t); else { t[0] = x; t[1] = y; t[2] = FB.face + out(x / FT, y / FT); }
+      t[3] = x / FT; t[4] = y / FT;
+    };
+    sheet(NA, NB, faceAt, (i, j) => !(j < JT && i >= NA / 4 && i < (3 * NA) / 4));
+    // the sides, back to the wall
+    const NS = Math.max(2, Math.round((FB.face - 0.04) / STEP));
+    for (const s of [-1, 1]) sheet(NS, NB, (i, j, t) => {
+      const k = s < 0 ? i / NS : 1 - i / NS, z = 0.04 + (FB.face - 0.04) * k, y = (TOP * j) / NB;
+      if ((s < 0 && i === NS) || (s > 0 && i === 0)) corner(s, y, t); else { t[0] = fx + s * (1 + out(z / FT, y / FT)); t[1] = y; t[2] = z; }
+      t[3] = z / FT; t[4] = y / FT;
+    });
+    // the jambs: the stone turns in round each side of the opening and tucks behind the firebrick
+    for (const s of [-1, 1]) {
+      const xe = fx + s * 0.5;
+      sheet(1, JT, (i, j, t) => {
+        const y = (TOP * j) / NB, front = s < 0 ? i === 0 : i === 1;
+        t[0] = front ? xe : xe - s * 0.002; t[1] = y; t[2] = front ? FB.face + out(xe / FT, y / FT) : FB.face - 0.012;
+        t[3] = (xe - s * (front ? 0 : 0.03)) / FT; t[4] = y / FT;
+      });
+    }
+    // The lintel: one long stone dressed square across the opening, its arrises worn round, the tooling still on its
+    // face, sooted from underneath.
+    const dressed = G.canvasTex(512, (u, v, x, y) => {   // a grey granite, salt and pepper, the chisel's lines across it
+      const hs = G.hash1(x * 3.1 + y * 7.7), hs2 = G.hash1(x * 1.3 + y * 5.9 + 0.4);
+      let t = 0.8 + G.fbm(u * 6, v * 2, 3) * 0.14 + G.fbm(u * 50, v * 18, 2) * 0.07 + Math.sin(u * 900 + G.fbm(u * 8, v * 3, 2) * 4) * 0.025;
+      t *= hs > 0.9 ? 0.55 : hs2 > 0.94 ? 1.25 : 1;
+      return [128 * t, 125 * t, 120 * t];
+    }, { w: 512, h: 128 });
+    const LW = FB.x1 - FB.x0 + 0.28, LH = 0.2, LD = 0.1, LR = 0.012, ly0 = FB.top - 0.004;
+    const lg = new THREE.BoxGeometry(LW, LH, LD, 80, 12, 6), LP = lg.attributes.position, lc = [], v3 = new THREE.Vector3(), q3 = new THREE.Vector3();
+    for (let i = 0; i < LP.count; i++) {
+      v3.fromBufferAttribute(LP, i);
+      q3.set(G.clamp(v3.x, -LW / 2 + LR, LW / 2 - LR), G.clamp(v3.y, -LH / 2 + LR, LH / 2 - LR), G.clamp(v3.z, -LD / 2 + LR, LD / 2 - LR));
+      const dv = v3.clone().sub(q3); if (dv.lengthSq() > 1e-10) v3.copy(q3).addScaledVector(dv.normalize(), LR);   // round the arrises
+      const bump = (G.fbm(v3.x * 9 + 3, v3.y * 9 + v3.z * 7, 2) - 0.5) * 0.007 + (G.fbm(v3.x * 40, v3.y * 40 + v3.z * 30, 2) - 0.5) * 0.003; v3.addScaledVector(dv.lengthSq() > 1e-10 ? dv : q3.set(0, 0, 1), bump);
+      LP.setXYZ(i, v3.x, v3.y, v3.z);
+      const k = 1 - 0.72 * G.smooth(LH / 2 + 0.05, -LH / 2, v3.y) * (1 - G.smooth(0.15, 0.66, Math.abs(v3.x)));
+      lc.push(k, k * 0.98, k * 0.96);
+    }
+    lg.setAttribute('color', new THREE.Float32BufferAttribute(lc, 3)); lg.computeVertexNormals();
+    const lintel = new THREE.Mesh(lg, G.std({ map: dressed, bumpMap: dressed, bumpScale: 0.003, roughness: 0.85, env: 0.2, vertexColors: true }));
+    lintel.position.set(fx, ly0 + LH / 2, FB.face - LD / 2 + 0.042); G.add(lintel, null, true, true);
+  }
+  // The mantel: a beam hewn square with an adze, its face and underside dished from the strokes, its front edges
+  // chamfered by hand and checked along the grain, the sawn ends showing their rings. The top is planed flat for the
+  // things on it. (It was a plain dark board.)
+  {
+    const L = 2.3, H = 0.17, D = 0.44, chT = 0.016, chB = 0.022;
+    const hewn = G.canvasTex(0, (u, v, x, y) => {
+      const s = u * (L / 0.075) + G.fbm(u * 3, v * 2, 2) * 0.6, f = s - Math.floor(s);
+      const grain = G.fbm(u * 5, v * 46, 3) * 0.16 + G.fbm(u * 40, v * 160, 2) * 0.06;
+      let t = 0.78 + grain + (f - 0.5) * 0.05;
+      for (const [cv, u0, u1] of [[0.31, 0.08, 0.37], [0.64, 0.45, 0.88], [0.86, 0.15, 0.3]]) if (u > u0 && u < u1 && Math.abs(v - cv - Math.sin(u * 23) * 0.006) < 0.0045) t *= 0.35;   // checks
+      return [124 * t, 88 * t, 60 * t];
+    }, { w: 1024, h: 128 });
+    const endTex = G.canvasTex(0, null, { w: 220, h: 86, draw: (c, w, h) => {
+      c.fillStyle = '#a07a52'; c.fillRect(0, 0, w, h);
+      const cx = w * 0.54, cy = h * 0.42;
+      for (let r = 3; r < w; r += 3 + (r % 4)) { c.strokeStyle = r % 3 ? 'rgba(96,64,40,0.35)' : 'rgba(120,84,54,0.25)'; c.beginPath(); c.ellipse(cx, cy, r, r * 0.96, 0, 0, Math.PI * 2); c.stroke(); }
+      c.strokeStyle = 'rgba(40,26,16,0.7)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + 18, cy - 30); c.lineTo(cx + 24, 0); c.stroke();
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx - 40, cy + 22); c.stroke();
+      const g = c.createRadialGradient(cx, cy, 2, cx, cy, w * 0.7); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(50,32,20,0.35)'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+    } });
+    const g = new THREE.BoxGeometry(L, H, D, 184, 8, 12), P = g.attributes.position, N = g.attributes.normal;
+    for (let i = 0; i < P.count; i++) {
+      const x = P.getX(i), y = P.getY(i); let z = P.getZ(i);
+      const front = N.getZ(i) > 0.5, under = N.getY(i) < -0.5;
+      if (front || under) {   // the adze's strokes, each a shallow dish across the beam
+        const s = (x + L / 2) / 0.075 + Math.sin(y * 31 + z * 7) * 0.25, f = s - Math.floor(s), dish = 0.0045 * (1 - (2 * f - 1) ** 2) * (0.7 + 0.3 * Math.sin(Math.floor(s) * 2.3));
+        if (front) z -= dish; else P.setY(i, y + dish);
+      }
+      z = Math.min(z, D / 2 - chT * (0.8 + 0.4 * Math.sin(x * 2.3)) + (H / 2 - y), D / 2 - chB + (y + H / 2));   // the chamfers
+      P.setZ(i, z);
+    }
+    g.computeVertexNormals();
+    const sideM = G.std({ map: hewn, bumpMap: hewn, bumpScale: 0.0025, roughness: 0.72, env: 0.25 }), endM = G.std({ map: endTex, roughness: 0.85, env: 0.15 });
+    const beam = new THREE.Mesh(g, [endM, endM, sideM, sideM, sideM, sideM]); beam.position.set(fx, 1.48 - H / 2, 0.62); G.add(beam, null, true, true);
+  }
+  // The hearth: flagstones laid in dark mortar in front of the fire, each its own shape and colour, set a little
+  // unevenly, their edges worn round. (It was one thin slab of the painted stone.)
+  {
+    const r = G.seeded(1520), X0 = fx - 0.95, X1 = fx + 0.95, Z0 = 0.6, Z1 = 1.3, ZR = 0.97, TOPY = 0.06, BEV = 0.007, GAP = 0.009;
+    const j = (a) => (r() - 0.5) * a;
+    // the cuts across each row (x where it meets the edge, x where it meets the line between the rows)
+    const cutsB = [[X0, X0], ...[-0.55, 0.47].map((c) => [fx + c + j(0.05), fx + c + j(0.05)]), [X1, X1]];
+    const cutsF = [[X0, X0], ...[-0.36, 0.22].map((c) => [fx + c + j(0.05), fx + c + j(0.05)]), [X1, X1]];
+    // the line between the rows: through the ends of every cut, and a point between each
+    const xs = [...new Set([...cutsB, ...cutsF].map((c) => c[1]))].sort((a, b) => a - b);
+    const rowPts = []; xs.forEach((x, k) => { rowPts.push([x, ZR + j(0.05)]); if (k < xs.length - 1) rowPts.push([(x + xs[k + 1]) / 2 + j(0.06), ZR + j(0.05)]); });
+    const rowAt = (x) => rowPts.find((p) => Math.abs(p[0] - x) < 1e-9);
+    const between = (a, b) => rowPts.filter((p) => p[0] > a + 1e-9 && p[0] < b - 1e-9);
+    const polys = [];
+    for (let k = 0; k < cutsB.length - 1; k++) { const A = cutsB[k], B = cutsB[k + 1]; polys.push([[A[0], Z0], [B[0], Z0], rowAt(B[1]), ...between(A[1], B[1]).reverse(), rowAt(A[1])]); }
+    for (let k = 0; k < cutsF.length - 1; k++) { const A = cutsF[k], B = cutsF[k + 1]; polys.push([rowAt(A[1]), ...between(A[1], B[1]), rowAt(B[1]), [B[0], Z1], [A[0], Z1]]); }
+    // each drawn in from its neighbours by half the joint (and the bevel, which the extrusion adds back)
+    const inset = (pts, d) => {
+      let area = 0; pts.forEach((p, k) => { const q = pts[(k + 1) % pts.length]; area += p[0] * q[1] - q[0] * p[1]; });
+      const sg = area > 0 ? 1 : -1, nrm = (p, q) => { const ex = q[0] - p[0], ez = q[1] - p[1], l = Math.hypot(ex, ez) || 1; return [(-ez / l) * sg, (ex / l) * sg]; };
+      return pts.map((p, k) => { const a = pts[(k + pts.length - 1) % pts.length], b = pts[(k + 1) % pts.length], n0 = nrm(a, p), n1 = nrm(p, b), dt = 1 + n0[0] * n1[0] + n0[1] * n1[1];
+        return [p[0] + (d * (n0[0] + n1[0])) / dt, p[1] + (d * (n0[1] + n1[1])) / dt]; });
+    };
+    const flagTex = G.canvasTex(256, (u, v, x, y) => {
+      const t = 0.8 + G.fbm(u * 6, v * 6, 3) * 0.2 + G.fbm(u * 34, v * 34, 2) * 0.07 + Math.sin((v * 9 + G.fbm(u * 2, v * 2, 2) * 1.5) * Math.PI * 2) * 0.025 - (G.hash1(x * 5.3 + y * 1.7) > 0.975 ? 0.08 : 0);
+      const rust = G.smooth(0.62, 0.8, G.fbm(u * 4 + 7, v * 4, 3)) * 0.35;   // a little iron staining
+      return [180 * t * (1 + rust * 0.25), 176 * t * (1 - rust * 0.05), 170 * t * (1 - rust * 0.3)];
+    });
+    const PAL = ['#6e6964', '#5f5e5e', '#76695c', '#5a5d62', '#6d6458', '#66625c'];
+    const parts = polys.map((pts, k) => {
+      const ins = inset(pts, GAP / 2 + BEV), cx = ins.reduce((a, p) => a + p[0], 0) / ins.length, cz = ins.reduce((a, p) => a + p[1], 0) / ins.length;
+      const sh = new THREE.Shape(ins.map((p) => new THREE.Vector2(p[0] - cx, p[1] - cz)));
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.03, bevelEnabled: true, bevelThickness: BEV, bevelSize: BEV, bevelSegments: 2, curveSegments: 1 });
+      geo.rotateX(Math.PI / 2); geo.computeBoundingBox();
+      const c = new THREE.Color(PAL[k % PAL.length]).multiplyScalar(0.92 + r() * 0.14);
+      return { geo, mat: G.mtx(cx - fx, TOPY - geo.boundingBox.max.y + j(0.004), cz - 0.5, 1, 1, 1, 0, j(0.012), j(0.012)), color: c, uv: [2, 2] };   // each tipped a little about its middle
+    });
+    const flags = new THREE.Mesh(G.merge(parts), G.std({ map: flagTex, bumpMap: flagTex, bumpScale: 0.003, roughness: 0.82, env: 0.25, vertexColors: true }));
+    flags.position.set(fx, 0, 0.5); G.add(flags, null, false, true);
+    box(X1 - X0 - 0.02, 0.045, Z1 - Z0 - 0.02, G.std({ color: '#4a4541', roughness: 1, env: 0.1 }), fx, 0.0225, (Z0 + Z1) / 2 - 0.01, { cast: false });   // the mortar bed
+  }
   { // inside: splayed sides and a back of sooty firebrick, darker toward the top; a floor of ash; the soot above
     const brick = G.std({ map: TX.firebrick, bumpMap: TX.firebrick, bumpScale: 0.01, roughness: 0.95, env: 0.1, vertexColors: true });
     const wall = (pts, soot) => {   // a quad from 4 corners (bl, br, tr, tl), brick laid at 0.48 x 0.45 m, soot by height
@@ -284,10 +431,7 @@ function buildRooms() {
     roof.rotation.x = Math.PI / 2; roof.position.set(fx, FB.top - 0.001, (FB.back + FB.face) / 2); G.add(roof, null, false, false);
     const ash = new THREE.Mesh(new THREE.PlaneGeometry(1.0, FB.face - FB.back + 0.02), G.std({ map: G.rep(TX.ash, 2.5, 1), roughness: 1, env: 0.1 }));
     ash.rotation.x = -Math.PI / 2; ash.position.set(fx, 0.061, (FB.back + FB.face) / 2 + 0.01); G.add(ash, null, false, true);
-    // soot stained up the stone above the opening
-    const sootTex = G.canvasTex(0, null, { w: 128, h: 64, draw: (c, w, h) => { const g = c.createRadialGradient(w / 2, h, 4, w / 2, h, w * 0.55); g.addColorStop(0, 'rgba(10,8,7,0.85)'); g.addColorStop(0.6, 'rgba(10,8,7,0.35)'); g.addColorStop(1, 'rgba(10,8,7,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h); } });
-    const soot = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.42), new THREE.MeshStandardMaterial({ map: sootTex, transparent: true, depthWrite: false, roughness: 1, color: '#ffffff', polygonOffset: true, polygonOffsetFactor: -2 }));
-    soot.position.set(fx, FB.top + 0.2, FB.face + 0.002); G.add(soot, null, false, false);
+    // (the soot up the stone above the opening is in the stone itself, above)
     // a pair of iron firedogs for the logs to lie across
     const iron = G.std({ color: '#1b1918', roughness: 0.55, metalness: 0.6, env: 0.4 });
     for (const s of [-1, 1]) {
@@ -337,7 +481,7 @@ function buildRooms() {
   // Mantle things sit on the shelf in front of the stone (its face is at z = 0.66), not inside it.
   candle(fx - 0.85, 1.48, 0.74, 0.16, 0.03); candle(fx - 0.72, 1.48, 0.77, 0.11, 0.03); candle(fx + 0.82, 1.48, 0.76, 0.13, 0.03);
   G.MANTLE_LIGHT = new THREE.PointLight('#ffa850', 1.4, 3, 2); G.MANTLE_LIGHT.position.set(fx, 1.75, 0.8); W.add(G.MANTLE_LIGHT);
-  polaroid(fx - 0.3, 1.6, 0.675, 0, 'lake', -0.12); polaroid(fx + 0.05, 1.58, 0.675, 0, 'hill', 0.08);
+  polaroid(fx - 0.3, 1.6, 0.7, 0, 'lake', -0.12); polaroid(fx + 0.05, 1.58, 0.7, 0, 'hill', 0.08);   // leaning on the stones
   // The old snow globe: a tiny cabin and one pine on a snowy base, under glass.
   { const gx = fx + 0.5, gy = 1.56, gz = 0.75;
     cyl(0.06, 0.062, 0.012, MAT.snow, gx, gy - 0.031, gz, { seg: 24 });
