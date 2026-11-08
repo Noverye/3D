@@ -699,16 +699,43 @@ function noteTex(lines, o = {}) {
 G.noteTex = noteTex;
 function buildKitchen() {
   const W = G.world, K = (G.KITCHEN = {});
-  const paint = G.std({ map: TX.boards, color: '#8fa08a', roughness: 0.6, env: 0.3 });
   const block = G.std({ map: TX.floor, color: '#d8b48a', roughness: 0.5, env: 0.4 });
   const enamel = (c) => G.shared({ color: c, roughness: 0.25, env: 0.9 });
-  // Base cabinets along the north wall with a butcher-block top and a tiled splash.
+  // Base cabinets along the north wall, with a butcher-block top and a tiled splash: painted sage, with shaker doors
+  // (a frame round a flat panel) and drawers, brass knobs and cup pulls; a cream enamel range in the middle with its
+  // oven window and chrome rail; and a deep white farmhouse sink with a brass bridge tap. (They were a run of brown
+  // boards with lines drawn on for doors, a grey rectangle for an oven and a steel plate on the top for a sink.)
   const cx0 = 11.18, cx1 = 13.72, ccx = (cx0 + cx1) / 2, cw = cx1 - cx0;
-  box(cw, 0.84, 0.58, paint, ccx, 0.42, 0.4, { coll: true, r: 0.01 });
-  box(cw + 0.04, 0.12, 0.5, G.shared({ color: '#2e2620', roughness: 0.9 }), ccx, 0.05, 0.37, { cast: false });   // toe kick
-  for (let x = cx0 + 0.62; x < cx1 - 0.1; x += 0.63) box(0.012, 0.66, 0.01, G.shared({ color: '#55604f', roughness: 0.8 }), x, 0.5, 0.695, { cast: false });
-  for (let x = cx0 + 0.31; x < cx1; x += 0.63) box(0.1, 0.018, 0.02, MAT.metal, x, 0.74, 0.705);
-  box(cw + 0.06, 0.05, 0.64, block, ccx, 0.865, 0.41, { r: 0.01 });
+  const RX0 = 12.05, RX1 = 12.65, SX0 = 12.75, SX1 = 13.35, FZ = 0.69;   // the range, the sink, the cabinets' face
+  const brush = G.canvasTex(128, (u, v) => { const t = 0.93 + G.fbm(u * 2, v * 40, 2) * 0.06 + G.fbm(u * 24, v * 24, 2) * 0.03; return [236 * t, 236 * t, 236 * t]; });
+  const sage = G.std({ map: brush, color: '#8c9c86', roughness: 0.55, env: 0.3 }), sageIn = G.std({ map: brush, color: '#7c8c76', roughness: 0.6, env: 0.25 }), cream = enamel('#eee5d3'), chrome = G.shared({ color: '#e2e4e6', metalness: 1, roughness: 0.15, env: 1 });
+  const ceramic = G.shared({ color: '#f4f2ec', roughness: 0.12, env: 0.9 }), blackK = G.shared({ color: '#1a1716', roughness: 0.35, env: 0.6 });
+  // the carcasses: either side of the range, and lower under the sink
+  for (const [a, b, top] of [[cx0, RX0, 0.84], [RX1, SX0, 0.84], [SX0, SX1, 0.655], [SX1, cx1, 0.84]]) box(b - a, top - 0.1, 0.58, sage, (a + b) / 2, (top + 0.1) / 2, 0.4, { coll: true });
+  box(cw + 0.04, 0.1, 0.5, G.shared({ color: '#2e2620', roughness: 0.9 }), ccx, 0.05, 0.37, { cast: false });   // toe kick
+  const knob = (x, y, P = W, z0 = FZ) => { cyl(0.006, 0.009, 0.018, MAT.metal, x, y, z0 + 0.035, { seg: 8, parent: P }).rotation.x = Math.PI / 2; sph(0.014, MAT.metal, x, y, z0 + 0.047, [1, 1, 0.8], P, 12); };
+  const cup = (x, y, P = W, z0 = FZ) => {   // a brass cup pull, hood down
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.07, 14, 1, true, 0, Math.PI), MAT.metal);
+    c.rotation.z = Math.PI / 2; c.position.set(x, y, z0 + 0.03); c.scale.set(1, 1, 0.9); P.add(c);
+    box(0.09, 0.012, 0.02, MAT.metal, x, y + 0.012, z0 + 0.03, { cast: false, parent: P });
+  };
+  // a shaker front: a slab, a frame round it standing proud (P, z0: what it's on and where that face is, if not the run)
+  const front = (x0, x1, y0, y1, pull, P = W, z0 = FZ) => {
+    const w = x1 - x0 - 0.004, h = y1 - y0 - 0.004, x = (x0 + x1) / 2, y = (y0 + y1) / 2, f = Math.min(0.06, h * 0.22);
+    box(w, h, 0.018, sageIn, x, y, z0 + 0.009, { r: 0.003, parent: P });
+    for (const k of [-1, 1]) { box(f, h, 0.008, sage, x + (k * (w - f)) / 2, y, z0 + 0.022, { cast: false, parent: P }); box(w - 2 * f, f, 0.008, sage, x, y + (k * (h - f)) / 2, z0 + 0.022, { cast: false, parent: P }); }
+    if (pull === 'cup') cup(x, y + h * 0.12, P, z0); else if (pull !== undefined && pull !== null) knob(pull, y1 - 0.07, P, z0);
+  };
+  K.front = front;
+  // left of the range: a drawer over two doors
+  front(cx0, RX0, 0.66, 0.84, 'cup'); front(cx0, (cx0 + RX0) / 2, 0.1, 0.66, (cx0 + RX0) / 2 - 0.05); front((cx0 + RX0) / 2, RX0, 0.1, 0.66, (cx0 + RX0) / 2 + 0.05);
+  // between the range and the sink, a narrow pull-out; under the sink, two doors; right of it, a drawer over a door
+  front(RX1, SX0, 0.1, 0.84, RX1 + 0.05);
+  front(SX0, (SX0 + SX1) / 2, 0.1, 0.655, (SX0 + SX1) / 2 - 0.05); front((SX0 + SX1) / 2, SX1, 0.1, 0.655, (SX0 + SX1) / 2 + 0.05);
+  front(SX1, cx1, 0.66, 0.84, 'cup'); front(SX1, cx1, 0.1, 0.66, SX1 + 0.05);
+  // the worktops, butcher block, either side of the range and round the back of the sink
+  for (const [a, b] of [[cx0 - 0.03, RX0], [RX1, SX0], [SX1, cx1 + 0.03]]) box(b - a, 0.05, 0.64, block, (a + b) / 2, 0.865, 0.41, { r: 0.008 });
+  box(SX1 - SX0, 0.05, 0.08, block, (SX0 + SX1) / 2, 0.865, 0.13, { r: 0.006 });
   const splash = new THREE.Mesh(new THREE.PlaneGeometry(cw, 0.56), G.std({ map: G.rep(tileTex(), cw / 0.6, 1), roughness: 0.3, env: 0.7 }));
   splash.position.set(ccx, 1.17, 0.113); W.add(splash); splash.receiveShadow = true;
   // Open shelf with jars, mugs and a sprig of something green.
@@ -728,8 +755,22 @@ function buildKitchen() {
   const hdl = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.012, 6, 16, Math.PI), MAT.darkMetal); hdl.position.set(0, 0.2, 0); kg.add(hdl);
   K.kettleG = G.propify('kettle', kg);
   K.stove = { x: 12.35, z: 0.38 };
-  box(0.62, 0.02, 0.5, G.shared({ color: '#1e1c1c', roughness: 0.3, metalness: 0.4, env: 0.8 }), 12.35, 0.895, 0.39, { cast: false });
-  for (const [dx, dz, rr] of [[-0.15, -0.1, 0.08], [0.15, -0.1, 0.06], [-0.15, 0.12, 0.06], [0.15, 0.12, 0.09]]) cyl(rr, rr, 0.008, G.shared({ color: '#3a3330', roughness: 0.6, metalness: 0.5 }), 12.35 + dx, 0.905, 0.39 + dz, { seg: 20, cast: false });
+  // The range: cream enamel, its top with four burners under cast-iron grates, a back guard with a little clock,
+  // knobs along the front, the oven door with its window and chrome rail, and a drawer under.
+  box(RX1 - RX0 - 0.008, 0.87, 0.6, cream, 12.35, 0.455, 0.405, { r: 0.012, coll: true });
+  box(RX1 - RX0, 0.012, 0.6, cream, 12.35, 0.894, 0.4, { r: 0.004, cast: false });
+  const iron = G.shared({ color: '#2a2624', roughness: 0.55, metalness: 0.5, env: 0.5 });
+  for (const [dx, dz, rr] of [[-0.15, -0.1, 0.08], [0.15, -0.1, 0.06], [-0.15, 0.12, 0.06], [0.15, 0.12, 0.09]]) {
+    const bx = 12.35 + dx, bz = 0.39 + dz;
+    cyl(rr, rr, 0.008, G.shared({ color: '#3a3330', roughness: 0.6, metalness: 0.5 }), bx, 0.902, bz, { seg: 20, cast: false });
+    for (const ry of [0, Math.PI / 2]) box(2 * rr + 0.05, 0.008, 0.01, iron, bx, 0.908, bz, { cast: false }).rotation.y = ry + Math.PI / 4;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(rr + 0.025, 0.005, 4, 20), iron); ring.rotation.x = Math.PI / 2; ring.position.set(bx, 0.908, bz); W.add(ring);
+  }
+  box(RX1 - RX0, 0.13, 0.035, cream, 12.35, 0.96, 0.13, { r: 0.01 });   // the back guard
+  cyl(0.04, 0.04, 0.012, chrome, 12.35, 0.965, 0.152, { seg: 20 }).rotation.x = Math.PI / 2;
+  cyl(0.034, 0.034, 0.004, G.std({ map: G.canvasTex(0, null, { w: 64, h: 64, draw: (c, w, h) => { c.fillStyle = '#f6f1e4'; c.fillRect(0, 0, w, h); c.strokeStyle = '#2a2420'; c.lineWidth = 2;
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; c.beginPath(); c.moveTo(w / 2 + Math.cos(a) * 24, h / 2 + Math.sin(a) * 24); c.lineTo(w / 2 + Math.cos(a) * 29, h / 2 + Math.sin(a) * 29); c.stroke(); }
+    c.lineWidth = 3; c.beginPath(); c.moveTo(w / 2, h / 2); c.lineTo(w / 2 + 10, h / 2 - 12); c.moveTo(w / 2, h / 2); c.lineTo(w / 2 - 2, h / 2 - 20); c.stroke(); } }), roughness: 0.3 }), 12.35, 0.965, 0.16, { seg: 20, cast: false }).rotation.set(Math.PI / 2, Math.PI, 0);
   K.burner = new THREE.Mesh(new THREE.RingGeometry(0.05, 0.075, 24), new THREE.MeshBasicMaterial({ color: '#ff6a2a', transparent: true, opacity: 0 }));
   K.burner.rotation.x = -Math.PI / 2; K.burner.position.set(12.5, 0.911, 0.51); W.add(K.burner); K.burner.userData.dynamic = true;
   const pan = new THREE.Group(); pan.position.set(12.5, 0.91, 0.51); W.add(pan); pan.userData.dynamic = true;
@@ -737,20 +778,49 @@ function buildKitchen() {
   box(0.2, 0.018, 0.035, MAT.darkWood, 0.22, 0.03, 0.06, { parent: pan }).rotation.y = -0.3;
   K.pancakeInPan = cyl(0.09, 0.09, 0.012, G.shared({ color: '#e0b070', roughness: 0.7 }), 0, 0.04, 0, { parent: pan, seg: 20 });
   K.pancakeInPan.visible = false; K.pan = pan;
-  for (let i = 0; i < 4; i++) cyl(0.022, 0.022, 0.03, MAT.darkMetal, 12.12 + i * 0.15, 0.62, 0.7, { seg: 10 }).rotation.x = Math.PI / 2;   // oven knobs
-  box(0.52, 0.26, 0.012, G.shared({ color: '#141210', roughness: 0.1, env: 1 }), 12.35, 0.4, 0.697, { cast: false });   // oven window
+  for (let i = 0; i < 4; i++) {   // the knobs, black with chrome skirts
+    cyl(0.027, 0.027, 0.006, chrome, 12.12 + i * 0.15, 0.8, 0.708, { seg: 16, cast: false }).rotation.x = Math.PI / 2;
+    cyl(0.019, 0.022, 0.026, blackK, 12.12 + i * 0.15, 0.8, 0.722, { seg: 14 }).rotation.x = Math.PI / 2;
+  }
+  box(0.56, 0.56, 0.025, cream, 12.35, 0.445, 0.713, { r: 0.01 });   // the oven door
+  box(0.4, 0.2, 0.006, G.shared({ color: '#141210', roughness: 0.08, env: 1 }), 12.35, 0.46, 0.727, { cast: false });   // its window
+  for (const k of [-1, 1]) { box(0.42, 0.012, 0.008, chrome, 12.35, 0.46 + k * 0.106, 0.728, { cast: false }); box(0.012, 0.224, 0.008, chrome, 12.35 + k * 0.206, 0.46, 0.728, { cast: false }); }
+  cyl(0.011, 0.011, 0.5, chrome, 12.35, 0.67, 0.762, { seg: 12 }).rotation.z = Math.PI / 2;   // the rail
+  for (const k of [-1, 1]) cyl(0.008, 0.008, 0.04, chrome, 12.35 + k * 0.22, 0.67, 0.742, { seg: 8 }).rotation.x = Math.PI / 2;
+  box(0.56, 0.1, 0.02, cream, 12.35, 0.09, 0.711, { r: 0.008 }); box(0.16, 0.014, 0.014, chrome, 12.35, 0.115, 0.728, { r: 0.005 });   // the drawer under
+  // The sink: deep white fireclay, its apron front standing out of the cabinets, a brass bridge tap behind.
   K.sink = { x: 13.05, z: 0.38 };
-  box(0.5, 0.012, 0.38, G.shared({ color: '#9aa0a4', roughness: 0.2, metalness: 0.9, env: 1 }), 13.05, 0.892, 0.4, { cast: false });
-  const tap = cyl(0.014, 0.014, 0.3, MAT.metal, 13.05, 1.04, 0.2, { seg: 8 });
-  const tapA = cyl(0.012, 0.012, 0.16, MAT.metal, 13.05, 1.18, 0.27, { seg: 8 }); tapA.rotation.x = Math.PI / 2;
+  box(SX1 - SX0, 0.24, 0.04, ceramic, 13.05, 0.775, 0.7, { r: 0.012 });
+  box(SX1 - SX0, 0.24, 0.03, ceramic, 13.05, 0.775, 0.185, { r: 0.008 });
+  for (const k of [-1, 1]) box(0.03, 0.24, 0.52, ceramic, 13.05 + k * ((SX1 - SX0) / 2 - 0.015), 0.775, 0.44, { r: 0.008 });
+  box(SX1 - SX0 - 0.04, 0.03, 0.5, ceramic, 13.05, 0.67, 0.44, { cast: false });
+  cyl(0.03, 0.03, 0.004, G.shared({ color: '#1a1816', roughness: 0.6 }), 13.05, 0.686, 0.44, { seg: 16, cast: false });
+  const drain = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.004, 4, 16), chrome); drain.rotation.x = Math.PI / 2; drain.position.set(13.05, 0.688, 0.44); W.add(drain);
+  for (const k of [-1, 1]) {   // the pillars, each with a cross-head handle
+    cyl(0.013, 0.016, 0.07, MAT.metal, 13.05 + k * 0.08, 0.925, 0.13, { seg: 10 });
+    for (const a of [0, Math.PI / 2]) box(0.065, 0.01, 0.01, MAT.metal, 13.05 + k * 0.08, 0.968, 0.13, { r: 0.004 }).rotation.y = a + Math.PI / 4;
+    sph(0.012, ceramic, 13.05 + k * 0.08, 0.975, 0.13, [1, 1, 1], W, 10);
+  }
+  cyl(0.012, 0.012, 0.16, MAT.metal, 13.05, 0.945, 0.13, { seg: 10 }).rotation.z = Math.PI / 2;   // the bridge
+  cyl(0.012, 0.013, 0.12, MAT.metal, 13.05, 1.005, 0.13, { seg: 10 });
+  const tapSpout = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.011, 8, 18, Math.PI), MAT.metal); tapSpout.rotation.y = Math.PI / 2; tapSpout.position.set(13.05, 1.065, 0.22); W.add(tapSpout);
+  cyl(0.011, 0.009, 0.04, MAT.metal, 13.05, 1.045, 0.31, { seg: 10 });
   K.toaster = { x: 13.48, z: 0.36 };
   box(0.26, 0.17, 0.15, enamel('#e9e1d2'), 13.48, 0.975, 0.36, { r: 0.04, seg: 3 });
   for (const dz of [-0.03, 0.03]) box(0.18, 0.01, 0.018, G.shared({ color: '#141210', roughness: 0.6 }), 13.48, 1.062, 0.36 + dz, { cast: false });
   // Fridge in the corner, covered in magnets and one very important drawing.
   K.fridge = { x: 14.55, z: 0.45 };
-  box(0.74, 1.82, 0.68, enamel('#ece6da'), 14.55, 0.91, 0.43, { coll: true, cam: true, r: 0.05, seg: 3 });
-  box(0.025, 0.4, 0.03, MAT.metal, 14.25, 1.2, 0.785); box(0.025, 0.3, 0.03, MAT.metal, 14.25, 0.55, 0.785);
-  box(0.7, 0.01, 0.01, G.shared({ color: '#b8b0a2', roughness: 0.6 }), 14.55, 0.92, 0.772, { cast: false });
+  // Rounded like an old one, in the range's cream: two doors with a dark seam between, chrome lever handles on posts,
+  // a chrome badge, a grille at its foot. (Its handles were two brass sticks, the seam a pale line.)
+  box(0.74, 1.82, 0.68, cream, 14.55, 0.91, 0.43, { coll: true, cam: true, r: 0.08, seg: 4 });
+  box(0.7, 0.012, 0.012, G.shared({ color: '#2a2622', roughness: 0.8 }), 14.55, 0.92, 0.768, { cast: false });
+  for (const [y0, y1] of [[1.0, 1.45], [0.4, 0.75]]) {
+    cyl(0.013, 0.013, y1 - y0, chrome, 14.26, (y0 + y1) / 2, 0.81, { seg: 12 });
+    for (const y of [y0 + 0.02, y1 - 0.02]) cyl(0.009, 0.009, 0.05, chrome, 14.26, y, 0.787, { seg: 8 }).rotation.x = Math.PI / 2;
+  }
+  box(0.13, 0.03, 0.006, chrome, 14.55, 1.7, 0.772, { r: 0.004, cast: false });
+  box(0.56, 0.07, 0.01, G.shared({ color: '#2a2622', roughness: 0.8 }), 14.55, 0.07, 0.768, { cast: false });
+  for (let i = 0; i < 4; i++) box(0.54, 0.006, 0.006, chrome, 14.55, 0.048 + i * 0.015, 0.774, { cast: false });
   const drawing = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), G.std({ map: noteTex([{ t: '☃', size: 110 }, { t: 'us', size: 30, gap: 90 }], { bg: '#fdfbf4' }), roughness: 0.9 }));
   drawing.position.set(14.62, 1.35, 0.776); drawing.rotation.z = 0.06; W.add(drawing);
   for (const [x, y, c] of [[14.4, 1.6, '#c94a3a'], [14.75, 1.1, '#4a7ac9'], [14.48, 0.75, '#e0b040']]) sph(0.018, enamel(c), x, y, 0.785, [1, 1, 0.5], W, 10);
@@ -786,10 +856,13 @@ function buildKitchen() {
   for (const [x, z] of [[12.55, 2.98], [13.45, 3.0]]) { const g = new THREE.Group(); g.position.set(x, 0.765, z); g.visible = false; W.add(g); cyl(0.04, 0.036, 0.09, enamel('#efe7da'), 0, 0.045, 0, { parent: g, seg: 16 }); cyl(0.036, 0.036, 0.004, G.shared({ color: '#7a4a2a', roughness: 0.2 }), 0, 0.082, 0, { parent: g, seg: 14 }); K.mugs.push(g); }
   // Snack cupboard by the doorway, with its sign.
   K.cupboard = { x: 11.42, z: 4.12 };
-  box(0.6, 1.9, 0.42, paint, 11.42, 0.95, 4.26, { coll: true, cam: true, r: 0.01 });
-  box(0.012, 1.7, 0.01, G.shared({ color: '#55604f', roughness: 0.8 }), 11.42, 0.95, 4.045, { cast: false });
+  // sage like the run, two shaker doors and a brass knob each, under a little cornice
+  box(0.6, 1.9, 0.42, sage, 11.42, 0.95, 4.26, { coll: true, cam: true, r: 0.01 });
+  { const P = new THREE.Group(); P.position.set(11.42, 0, 4.05); P.rotation.y = Math.PI; W.add(P);
+    front(-0.29, 0, 0.08, 1.86, -0.05, P, 0); front(0, 0.29, 0.08, 1.86, 0.05, P, 0);
+    box(0.66, 0.04, 0.46, sage, 0, 1.92, -0.19, { parent: P, r: 0.006 }); }
   const note = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.17), G.std({ map: noteTex([{ t: 'Property', size: 30 }, { t: 'of me.', size: 30, gap: 44 }, { t: 'Not', size: 34, color: '#b8322a', gap: 56 }, { t: 'Partner’s.', size: 36, color: '#b8322a', gap: 46 }]), roughness: 0.9 }));
-  note.position.set(11.52, 1.3, 4.044); note.rotation.set(0, Math.PI, -0.05); W.add(note);
+  note.position.set(11.52, 1.3, 4.02); note.rotation.set(0, Math.PI, -0.05); W.add(note);
   // A little radio on the window sill (story.js switches it on and off).
   K.radio = G.propSlot('radio', 13.58, 0.88, 4.42, Math.PI, (g) => {
     box(0.26, 0.15, 0.1, enamel('#7c2f2a'), 0, 0.075, 0, { parent: g, r: 0.025, seg: 3 });

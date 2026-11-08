@@ -1115,8 +1115,54 @@ G.buildCabin = () => {
   const leaf = new THREE.Group(); leaf.position.set(6.04, 0, z1 - 0.08); leaf.rotation.y = 0; world.add(leaf);
   leaf.userData.dynamic = true;   // closed against the cold; swings open as someone comes near (game.js)
   G.FRONT_DOOR = { leaf, openAngle: -1.75, amt: 0, want: 0, x: 6.5, z: z1 };
-  G.box(0.94, 2.08, 0.06, MAT.darkWood, 0.47, 1.04, 0, { parent: leaf });
-  G.sph(0.03, MAT.metal, 0.85, 1.0, 0.05, [1, 1, 1], leaf);
+  // The door itself: planks painted barn red, ledged and braced on the inside, hung on black iron strap hinges with a
+  // thumb latch, and a wreath of evergreen, cones and berries outside under a red bow. (It was a dark slab with a
+  // brass ball for a knob.)
+  {
+    const grain = G.canvasTex(256, (u, v) => { const t = 0.86 + Math.sin(u * 300 + G.fbm(u * 4, v * 1.2, 3) * 20) * 0.04 + G.fbm(u * 30, v * 2, 2) * 0.07 + (G.fbm(u * 3, v * 0.5, 2) - 0.5) * 0.08; return [230 * t, 224 * t, 216 * t]; });
+    const red = G.std({ map: grain, color: '#8c3a2c', roughness: 0.6, env: 0.25 }), ironB = G.shared({ color: '#1d1b1a', roughness: 0.55, metalness: 0.6, env: 0.4 });
+    const L = (w, h, d, m, x, y, z, o = {}) => G.box(w, h, d, m, x, y, z, { parent: leaf, ...o });
+    L(0.93, 2.06, 0.012, G.shared({ color: '#2a1612', roughness: 1 }), 0.47, 1.04, 0, { cast: false });   // behind the joints
+    for (let i = 0; i < 6; i++) L(0.94 / 6 - 0.006, 2.08, 0.045, red, (0.94 / 6) * (i + 0.5), 1.04, 0, { r: 0.004, uv: [0.25, 1] });
+    // inside: three ledges and the braces between them, running up from the hinge side
+    const ly = [0.26, 1.04, 1.84];
+    for (const y of ly) L(0.84, 0.12, 0.022, red, 0.47, y, -0.0335, { r: 0.004 });
+    for (let k = 0; k < 2; k++) {
+      const x0 = 0.1, y0 = ly[k] + 0.07, x1 = 0.84, y1 = ly[k + 1] - 0.07, len = Math.hypot(x1 - x0, y1 - y0);
+      L(0.11, len, 0.022, red, (x0 + x1) / 2, (y0 + y1) / 2, -0.0335, { r: 0.004 }).rotation.z = -Math.atan2(x1 - x0, y1 - y0);
+    }
+    // outside: strap hinges with spear tips and nail heads
+    for (const y of [0.36, 1.72]) {
+      L(0.62, 0.036, 0.006, ironB, 0.31, y, 0.0255);
+      L(0.05, 0.05, 0.006, ironB, 0.63, y, 0.0255).rotation.z = Math.PI / 4;
+      for (const x of [0.08, 0.24, 0.4, 0.56]) G.sph(0.006, ironB, x, y, 0.029, [1, 1, 0.6], leaf, 6);
+    }
+    // the thumb latch: a grip on a backplate outside, the bar and a slide bolt inside
+    L(0.04, 0.3, 0.006, ironB, 0.84, 1.02, 0.0255, { r: 0.008 });
+    const grip = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.009, 6, 14, Math.PI), ironB); grip.rotation.set(0, Math.PI / 2, Math.PI / 2); grip.position.set(0.84, 1.0, 0.03); grip.scale.set(1, 1, 0.5); leaf.add(grip);
+    L(0.025, 0.012, 0.05, ironB, 0.84, 1.13, 0.05);   // the thumb press
+    L(0.24, 0.016, 0.008, ironB, 0.8, 1.13, -0.027); L(0.03, 0.06, 0.012, ironB, 0.68, 1.13, -0.029);
+    L(0.14, 0.03, 0.01, ironB, 0.82, 1.5, -0.028); G.sph(0.012, ironB, 0.79, 1.5, -0.04, [1, 1, 1], leaf, 8);
+    // the wreath
+    const needles = G.canvasTex(0, null, { w: 128, h: 64, draw: (c, w, h) => {
+      c.fillStyle = '#24391f'; c.fillRect(0, 0, w, h); const r = G.seeded(9);
+      for (let i = 0; i < 900; i++) { const x = r() * w, y = r() * h, a = r() * Math.PI, l = 3 + r() * 5; c.strokeStyle = ['#2f4a2a', '#3d5c34', '#1c2d18', '#4a6a3e'][Math.floor(r() * 4)]; c.lineWidth = 1; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke(); }
+    } });
+    const wg = new THREE.TorusGeometry(0.17, 0.05, 10, 40), WP = wg.attributes.position, WN = wg.attributes.normal;
+    for (let i = 0; i < WP.count; i++) { const d = 0.018 * (G.fbm(WP.getX(i) * 30 + 2, WP.getY(i) * 30 + WP.getZ(i) * 20, 2) - 0.3) + 0.01 * Math.sin(i * 7.3); WP.setXYZ(i, WP.getX(i) + WN.getX(i) * d, WP.getY(i) + WN.getY(i) * d, WP.getZ(i) + WN.getZ(i) * d); }
+    wg.computeVertexNormals();
+    const wr = new THREE.Group(); wr.position.set(0.47, 1.45, 0.075); wr.scale.set(1, 1, 0.55); leaf.add(wr);
+    const ring = new THREE.Mesh(wg, G.std({ map: needles, roughness: 0.9, env: 0.15 })); ring.castShadow = true; wr.add(ring);
+    const cone = G.std({ color: '#2e1e12', roughness: 1, env: 0.05 }), berry = G.std({ color: '#7a0f18', roughness: 0.35, env: 0.3 }), rr = G.seeded(31);
+    for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2 + 0.4, c = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.05, 7), cone); c.position.set(Math.cos(a) * 0.17, Math.sin(a) * 0.17, 0.05); c.rotation.z = a + Math.PI / 2 + (rr() - 0.5); wr.add(c); }
+    for (let i = 0; i < 16; i++) { const a = rr() * Math.PI * 2, d = 0.17 + (rr() - 0.5) * 0.06; G.sph(0.011, berry, Math.cos(a) * d, Math.sin(a) * d, 0.055 + rr() * 0.01, [1, 1, 1], wr, 8); }
+    const bowM = G.std({ color: '#6e1018', roughness: 0.6, env: 0.15 });
+    for (const k of [-1, 1]) {
+      const loop = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.012, 6, 14), bowM); loop.position.set(k * 0.04, 0.2, 0.06); loop.scale.set(1.2, 0.8, 0.5); loop.rotation.z = k * 0.3; wr.add(loop);
+      const tail = G.box(0.025, 0.11, 0.006, bowM, k * 0.025, 0.13, 0.065, { parent: wr }); tail.rotation.z = k * 0.35;
+    }
+    G.sph(0.016, bowM, 0, 0.2, 0.068, [1.2, 1, 0.8], wr, 10);
+  }
   // The corners: where the walls meet, each wall's logs run on past the other's and stop, crossing, stacked alternately
   // (the end walls' logs half a log higher), so each face of a corner is a column of sawn ends between the sides of the
   // logs going the other way. Each log its own girth, length and tone, its end slightly chamfered and sawn, the end
