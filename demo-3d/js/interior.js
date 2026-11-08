@@ -205,8 +205,41 @@ function buildRooms() {
   const W = G.world;
   /* ===== Bedroom ===== */
   const bx = 2.4;
-  box(1.8, 0.3, 2.15, MAT.darkWood, bx, 0.15, 1.2, { coll: true, r: 0.03 });
-  box(1.9, 1.2, 0.09, MAT.darkWood, bx, 0.6, 0.16, { r: 0.03 });
+  // The bed: a wooden frame stained like the wardrobe, on legs, its rails round the mattress, square posts with round
+  // caps, and a headboard upholstered in teal velvet, buttoned, puffed between the buttons. (It was a dark box with a
+  // dark slab standing behind it.)
+  {
+    const { V: wV, H: wH } = G.FURN('#7a5640');
+    G.COLL.push({ x0: bx - 0.9, z0: 0.125, x1: bx + 0.9, z1: 2.275 });
+    box(1.72, 0.04, 2.05, G.shared({ color: '#2a201a', roughness: 1 }), bx, 0.28, 1.21, { cast: false });   // the slats, under the mattress
+    for (const s of [-1, 1]) box(0.06, 0.2, 2.06, wH, bx + s * 0.88, 0.24, 1.2, { r: 0.008, uv: [3, 0.4] });   // side rails
+    box(1.84, 0.22, 0.06, wH, bx, 0.25, 2.25, { r: 0.008, uv: [3, 0.4] });   // foot rail
+    const cap = (x, y, z) => { cyl(0.05, 0.05, 0.02, wV, x, y + 0.01, z, { seg: 16 }); sph(0.042, wV, x, y + 0.035, z, [1, 0.7, 1], W, 14); };
+    for (const s of [-1, 1]) { box(0.08, 0.45, 0.08, wV, bx + s * 0.92, 0.225, 2.25, { r: 0.008, uv: [0.15, 0.8] }); cap(bx + s * 0.92, 0.45, 2.25); }   // foot posts
+    for (const s of [-1, 1]) { box(0.08, 1.24, 0.08, wV, bx + s * 0.92, 0.62, 0.165, { r: 0.008, uv: [0.15, 2] }); cap(bx + s * 0.92, 1.24, 0.165); }   // head posts
+    // the headboard's crest, rising a little in the middle, and its bottom rail
+    const sh = new THREE.Shape(); sh.moveTo(-0.88, 0); sh.lineTo(0.88, 0); sh.lineTo(0.88, 0.1); sh.quadraticCurveTo(0, 0.2, -0.88, 0.1); sh.lineTo(-0.88, 0);
+    const crest = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 2, curveSegments: 16 }), wH);
+    crest.position.set(bx, 1.06, 0.145); crest.castShadow = true; G.add(crest, W, true, true);
+    { const g = crest.geometry, P = g.attributes.position, UVa = g.attributes.uv; for (let i = 0; i < P.count; i++) UVa.setXY(i, P.getX(i) / 0.6, P.getY(i) / 0.6 + P.getZ(i)); }
+    box(1.76, 0.08, 0.05, wH, bx, 0.5, 0.165, { r: 0.006, uv: [3, 0.3] });
+    // the upholstered panel between: puffed between the buttons, drawn in at each
+    const PW = 1.76, PH = 0.52, PY = 0.54, bt = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < (r % 2 ? 4 : 5); c++) bt.push([-PW / 2 + 0.14 + (c + (r % 2 ? 0.5 : 0)) * ((PW - 0.28) / 4), 0.11 + r * ((PH - 0.22) / 2)]);
+    const pg = new THREE.PlaneGeometry(PW, PH, 88, 26), PP = pg.attributes.position;
+    for (let i = 0; i < PP.count; i++) {
+      const x = PP.getX(i), y = PP.getY(i) + PH / 2;
+      let dmin = 9; for (const [u, v] of bt) dmin = Math.min(dmin, Math.hypot(x - u, (y - v) * 1.15));
+      const edge = Math.min(1, (PW / 2 - Math.abs(x)) / 0.05, y / 0.04, (PH - y) / 0.04);
+      PP.setZ(i, 0.03 * (1 - Math.exp(-(dmin * dmin) / 0.006)) * Math.max(0, edge));
+    }
+    pg.computeVertexNormals();
+    const velvetTex = G.canvasTex(128, (u, v) => { const t = 0.9 + G.fbm(u * 40, v * 40, 2) * 0.1 + Math.sin(u * 300) * 0.01; return [235 * t, 235 * t, 235 * t]; });
+    const velvet = G.std({ map: G.rep(velvetTex, 6, 2), color: '#5f7a72', roughness: 0.85, env: 0.15 });
+    const panel = new THREE.Mesh(pg, velvet); panel.position.set(bx, PY + PH / 2, 0.15); panel.receiveShadow = panel.castShadow = true; G.add(panel, W, true, true);
+    box(PW, PH, 0.02, velvet, bx, PY + PH / 2, 0.14, { cast: false });   // its back
+    for (const [u, v] of bt) sph(0.012, G.shared({ color: '#46605a', roughness: 0.6 }), bx + u, PY + v, 0.152, [1, 1, 0.6], W, 8);
+  }
   box(1.7, 0.22, 2.0, MAT.linen, bx, 0.41, 1.22, { r: 0.09, seg: 4 });
   // pillows: plump in the middle, thinning to the seam (they were rounded blocks)
   const p1 = G.pillow(0.68, 0.2, 0.44, MAT.linen, bx - 0.44, 0.61, 0.48, { seed: 1 }); p1.rotation.set(-0.25, 0.04, 0.02);
@@ -224,7 +257,26 @@ function buildRooms() {
   sph(0.075, fluff, 0, 0.06, 0, [1, 1.05, 0.9], bun); sph(0.06, fluff, 0, 0.17, 0.02, [1, 0.95, 0.95], bun);
   for (const s of [-1, 1]) { sph(0.022, fluff, s * 0.025, 0.27, 0.0, [0.8, 2.4, 0.5], bun); sph(0.008, MAT.darkMetal, s * 0.022, 0.18, 0.07, [1, 1, 1], bun, 8); }
   // Nightstands and lamps.
-  for (const s of [-1, 1]) box(0.5, 0.56, 0.42, MAT.wood, bx + s * 1.28, 0.28, 0.38, { coll: true, r: 0.02 });
+  // Nightstands to match the bed: a top with a little overhang, a drawer with a brass knob, an open shelf under with
+  // books on it, on tapered legs. (They were plain boxes of the floorboards.)
+  {
+    const { V: wV, H: wH } = G.FURN('#7a5640'), r = G.seeded(155);
+    for (const s of [-1, 1]) {
+      const x = bx + s * 1.28, z = 0.38;
+      G.COLL.push({ x0: x - 0.25, z0: z - 0.21, x1: x + 0.25, z1: z + 0.21 });
+      box(0.54, 0.03, 0.45, wH, x, 0.545, z, { r: 0.01, uv: [0.9, 0.75] });
+      box(0.48, 0.21, 0.4, wV, x, 0.425, z, { r: 0.004, uv: [0.8, 0.35] });
+      box(0.44, 0.17, 0.016, wH, x, 0.425, z + 0.207, { r: 0.004, uv: [0.75, 0.3] });
+      sph(0.016, MAT.metal, x, 0.43, z + 0.225, [1, 1, 0.8], W, 12);
+      for (const [dx, dz] of [[-0.21, -0.17], [0.21, -0.17], [-0.21, 0.17], [0.21, 0.17]]) cyl(0.022, 0.015, 0.32, wV, x + dx, 0.16, z + dz, { seg: 10 });
+      box(0.44, 0.02, 0.36, wH, x, 0.1, z, { r: 0.004, uv: [0.75, 0.6] });   // the shelf
+      for (let k = 0; k < 3; k++) {   // books lying on it
+        const bw = 0.2 + r() * 0.06, bh = 0.025 + r() * 0.012;
+        const bk = box(bw, bh, 0.15 + r() * 0.04, G.shared({ color: ['#6b4a5a', '#3f5a6a', '#8a6a3a', '#5a6a4a'][Math.floor(r() * 4)], roughness: 0.7 }), x - 0.05 + (r() - 0.5) * 0.04, 0.11 + 0.012 + k * 0.032, z + 0.02, { r: 0.004 });
+        bk.rotation.y = (r() - 0.5) * 0.3;
+      }
+    }
+  }
   const lampL = tableLamp(bx - 1.28, 0.56, 0.36, 5), lampR = tableLamp(bx + 1.28, 0.56, 0.36, 5);
   candle(bx + 1.42, 0.56, 0.5, 0.08);
   G.INTER.push({ id: 'lampL', pos: [bx - 1.28, 0.8, 0.6], r: 1.0, label: 'Lamp', act: () => G.toggleLamp(lampL) });
@@ -241,14 +293,7 @@ function buildRooms() {
   // frame round a raised panel, a tall one over a short one), brass knobs and a keyhole, the hinges showing, and a
   // drawer under the doors. On top, an old leather suitcase and a hatbox. (It was a dark slab with a line down it.)
   {
-    const grain = (horiz) => G.canvasTex(256, (u, v) => {
-      const a = horiz ? v : u, b = horiz ? u : v;   // across the grain, along it
-      const t = 0.84 + Math.sin(a * 750 + G.fbm(a * 4, b * 1.2, 3) * 25) * 0.045 + G.fbm(a * 30, b * 1.5, 2) * 0.06 + (G.fbm(a * 3, b * 0.6, 3) - 0.5) * 0.12;
-      return [226 * t, 214 * t, 200 * t];
-    }, { w: 512, h: 512 });
-    const gV = grain(false), gH = grain(true);
-    const woodV = G.std({ map: gV, color: '#7a5640', roughness: 0.5, env: 0.35 }), woodH = G.std({ map: gH, color: '#7a5640', roughness: 0.5, env: 0.35 });
-    const panelM = G.std({ map: gV, color: '#86604a', roughness: 0.5, env: 0.35 });
+    const { V: woodV, H: woodH } = G.FURN('#7a5640'), panelM = G.FURN('#86604a').V;   // fine grain, no board seams (core.js)
     box(1.1, 1.91, 0.58, woodV, 4.3, 1.065, 0.42, { coll: true, cam: true });   // the carcass
     const W2 = new THREE.Group(); W2.position.set(4.3, 0, 0.71); W.add(W2);   // the front, at the carcass's face (so it moves back with the bedroom)
     const fb = (w, h, d, x, y, z, m, o = {}) => G.box(w, h, d, m, x, y, z, { parent: W2, uv: [Math.max(w, d) / 0.6, h / 0.6], ...o });
@@ -633,12 +678,56 @@ function buildRooms() {
     G.CLOCK = { h: hand(0.08, 0.012), m: hand(0.115, 0.008) };
   });
   G.INTER.push({ id: 'clock', pos: [5.4, 1.6, 1.5], r: 0.9, label: 'Clock', act: () => G.say(null, '(The clock is four minutes fast. It has been four minutes fast for as long as anyone can remember. Nobody fixes it.)') });
-  // Coats by the door.
-  box(0.6, 0.05, 0.08, MAT.darkWood, 5.5, 1.75, 4.45);
-  const coat = G.std({ map: TX.jersey, color: '#5c5f63', roughness: 1 });
-  // Kept separate (not batched): each one comes off its hook when it's being worn (life.js).
-  G.HOOK_COATS = [box(0.3, 0.75, 0.12, coat, 5.38, 1.35, 4.38, { r: 0.05 }), box(0.28, 0.7, 0.12, G.std({ map: TX.jersey, color: '#a8875e', roughness: 1 }), 5.65, 1.38, 4.38, { r: 0.05 })];
-  G.HOOK_COATS.forEach((m) => { m.userData.dynamic = true; });
+  // Coats by the door, hung by their loops from a Shaker peg rail: his charcoal wool, her camel one with a fur-trimmed
+  // hood, each with its sleeves hanging, buttons or toggles down the front and pocket flaps; a striped scarf over the
+  // end peg. (They were two flat panels on a shelf.)
+  {
+    const { V: wV, H: wH } = G.FURN('#7a5640'), RZ = 4.454;
+    box(0.9, 0.1, 0.022, wH, 5.66, 1.75, RZ, { r: 0.006, uv: [1.5, 0.2] });
+    for (const x of [5.38, 5.66, 5.94]) { const st = cyl(0.011, 0.015, 0.07, wV, x, 1.755, RZ - 0.045, { seg: 10 }); st.rotation.x = Math.PI / 2 - 0.15; sph(0.019, wV, x, 1.762, RZ - 0.082, [1, 1, 0.8], W, 12); }
+    const coat = (x, color, hers) => {
+      const g = new THREE.Group(); g.position.set(x, 0.87, 4.37); g.rotation.y = Math.PI; g.scale.set(1, 1.2, 1); W.add(g);   // its front to the room
+      const m = G.std({ map: TX.jersey, bumpMap: TX.jerseyB, bumpScale: 0.003, color, roughness: 1, env: 0.15 }), dark = G.std({ map: TX.jersey, color: new THREE.Color(color).multiplyScalar(0.7), roughness: 1, env: 0.1 });
+      // the body, hanging in folds that deepen toward the hem, flat at the back against the wall
+      const prof = [[0, 0.03], [0.135, 0.0], [0.142, 0.05], [0.132, 0.28], [0.125, 0.48], [0.12, 0.59], [0.104, 0.655], [0.07, 0.705], [0.048, 0.728], [0, 0.74]].map(([a, b]) => new THREE.Vector2(a, b));
+      const lg = new THREE.LatheGeometry(prof, 28), LP = lg.attributes.position;
+      for (let i = 0; i < LP.count; i++) {
+        const x0 = LP.getX(i), y = LP.getY(i), z0 = LP.getZ(i), th = Math.atan2(x0, z0), f = 1 + 0.06 * Math.sin(th * 7 + (hers ? 1 : 0)) * Math.pow(Math.max(0, 1 - y / 0.62), 1.4);
+        LP.setXYZ(i, x0 * f, y, z0 * f * (z0 > 0 ? 0.46 : 0.3));
+      }
+      lg.computeVertexNormals();
+      const body = new THREE.Mesh(lg, m); body.castShadow = body.receiveShadow = true; g.add(body);
+      const front = (y) => { let r = 0; for (let k = 0; k < prof.length - 1; k++) if (y >= prof[k].y && y <= prof[k + 1].y) r = prof[k].x + ((prof[k + 1].x - prof[k].x) * (y - prof[k].y)) / (prof[k + 1].y - prof[k].y || 1); return r * 0.46; };
+      // sleeves, hanging at its sides, with their cuffs
+      for (const s of [-1, 1]) {
+        const sl = cyl(0.04, 0.05, 0.54, m, s * 0.15, 0.37, 0.03, { parent: g, seg: 12 }); sl.rotation.z = s * 0.06; sl.scale.z = 0.8;
+        cyl(0.052, 0.052, 0.05, dark, s * 0.134, 0.11, 0.03, { parent: g, seg: 12 }).scale.z = 0.8;
+      }
+      // the hood, bunched at the back of the collar over the peg
+      sph(0.105, m, 0, 0.72, -0.02, [1, 0.72, 0.62], g, 16);
+      if (hers) {   // its fur trim
+        const fur = G.std({ map: TX.knitCream, bumpMap: TX.knitB, bumpScale: 0.006, color: '#e9dfcf', roughness: 1, env: 0.1 });
+        const tr = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.032, 8, 18), fur); tr.position.set(0, 0.745, 0.012); tr.rotation.x = -1.25; tr.scale.set(1, 1, 0.7); g.add(tr);
+        for (const y of [0.56, 0.44, 0.32]) { const t = cyl(0.008, 0.008, 0.06, G.shared({ color: '#c8a878', roughness: 0.6 }), 0, y, front(y) + 0.008, { parent: g, seg: 8 }); t.rotation.z = Math.PI / 2; }   // toggles
+      } else {
+        box(0.032, 0.6, 0.006, dark, 0, 0.33, front(0.33) + 0.002, { parent: g, cast: false });   // the placket
+        for (const y of [0.58, 0.46, 0.34, 0.22]) cyl(0.012, 0.012, 0.006, G.shared({ color: '#1e1c1a', roughness: 0.4, env: 0.4 }), 0, y, front(y) + 0.008, { parent: g, seg: 10 }).rotation.x = Math.PI / 2;
+      }
+      for (const s of [-1, 1]) { const fl = box(0.075, 0.028, 0.008, dark, s * 0.065, 0.2, front(0.2) * 0.88 + 0.003, { parent: g, r: 0.004 }); fl.rotation.y = s * 0.3; }   // pocket flaps
+      g.userData.dynamic = true;
+      return g;
+    };
+    // Kept separate (not batched): each one comes off its hook when it's being worn (life.js).
+    G.HOOK_COATS = [coat(5.38, '#5c5f63', false), coat(5.66, '#a8875e', true)];
+    // a spare scarf over the end peg, striped, its fringed ends hanging
+    const stripes = G.canvasTex(0, null, { w: 32, h: 128, draw: (c, w, h) => { const cols = ['#e8e0d0', '#5d7a5a', '#e8e0d0', '#b8463a']; for (let i = 0; i < 16; i++) { c.fillStyle = cols[i % 4]; c.fillRect(0, (i * h) / 16, w, h / 16); } } });
+    const scarfM = G.std({ map: stripes, bumpMap: TX.knitB, bumpScale: 0.003, roughness: 1, env: 0.1 });
+    const over = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.012, 6, 12, Math.PI), scarfM); over.rotation.y = Math.PI / 2; over.scale.set(1, 1, 4.5); over.position.set(5.94, 1.76, 4.38); W.add(over);
+    for (const [dz, len, ry] of [[-0.03, 0.62, 0.05], [0.03, 0.5, -0.08]]) {
+      const t = box(0.13, len, 0.012, scarfM, 5.94 + dz * 0.6, 1.76 - len / 2, 4.38 + dz, { r: 0.004 }); t.rotation.set(0, ry, dz * 1.5);
+      for (let k = 0; k < 6; k++) box(0.006, 0.05, 0.006, scarfM, 5.94 + dz * 0.6 - 0.055 + k * 0.022, 1.76 - len - 0.025, 4.38 + dz, { cast: false });   // its fringe
+    }
+  }
   buildKitchen();
 };
 

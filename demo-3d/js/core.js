@@ -1062,3 +1062,17 @@ G.mergeStatic = (root, skip = new Set()) => {
   // a piece of firewood: kind 'round' | 'half' | 'third' | 'quarter'
   G.wood = (kind, R, L, seed, roll, mats = G.WOOD_M) => { const m = new THREE.Mesh(G.woodGeo(kind, R, L, seed, roll), mats); m.castShadow = true; m.receiveShadow = true; return m; };
 }
+
+/* Furniture wood: fine grain, no board seams (TX.boards is for walls and floors), stained by the material's colour.
+ * G.grainTex(horiz): the grain runs up the texture (v), or across it (u) for rails. G.FURN(color): the pair of
+ * materials, vertical and horizontal grain, for one stain. */
+{
+  const cache = {};
+  G.grainTex = (horiz) => cache[horiz ? 'h' : 'v'] || (cache[horiz ? 'h' : 'v'] = G.canvasTex(512, (u, v) => {
+    const a = horiz ? v : u, b = horiz ? u : v;   // across the grain, along it
+    const t = 0.84 + Math.sin(a * 750 + G.fbm(a * 4, b * 1.2, 3) * 25) * 0.045 + G.fbm(a * 30, b * 1.5, 2) * 0.06 + (G.fbm(a * 3, b * 0.6, 3) - 0.5) * 0.12;
+    return [226 * t, 214 * t, 200 * t];
+  }));
+  const furn = {};
+  G.FURN = (color = '#7a5640') => furn[color] || (furn[color] = { V: G.std({ map: G.grainTex(false), color, roughness: 0.5, env: 0.35 }), H: G.std({ map: G.grainTex(true), color, roughness: 0.5, env: 0.35 }) });
+}
