@@ -611,13 +611,14 @@ const BASKET = (() => {
 const WOODPILE = (() => {
   const W = G.world, g = new THREE.Group(); g.position.set(4.3, 0, 4.92); W.add(g);
   // split firewood (G.wood), weathered grey at the ends: mostly halves and quarters with the odd round, each its own
-  // size, laid flat or on edge and a little out of line, so the pile's face is half-moons and wedges and rings. (They
+  // size, mostly laid bark up and flat side down, a little out of line, so the pile's face is half-moons and wedges and rings. (They
   // were all rounds, cylinders with an end grain disc on.)
   const r = G.seeded(64), KINDS = ['half', 'half', 'quarter', 'round', 'third', 'half', 'round', 'quarter'];
   for (let row = 0; row < 4; row++) for (let i = 0; i < 6 - (row > 2 ? 2 : 0); i++) {
     const k = KINDS[Math.floor(r() * KINDS.length)], rad = k === 'round' ? 0.064 + r() * 0.014 : 0.08 + r() * 0.014;
     const x = -0.45 + i * 0.165 + (row % 2) * 0.08 + (r() - 0.5) * 0.02, y = 0.08 + row * 0.14 + (r() - 0.5) * 0.015, dz = (r() - 0.5) * 0.05;
-    const lg = G.wood(k, rad, 0.42, 64 + row * 10 + i, Math.floor(r() * 4) * (Math.PI / 2) + (r() - 0.5) * 0.4, G.WOOD_OUT);   // laid flat side down, or on edge lg.position.set(x, y, dz); lg.rotation.x = Math.PI / 2; g.add(lg);
+    const lg = G.wood(k, rad, 0.42, 64 + row * 10 + i, (r() < 0.75 ? Math.PI / 2 : r() < 0.5 ? 0 : Math.PI) + (r() - 0.5) * 0.35, G.WOOD_OUT);   // mostly bark up, flat side down; some on edge
+    lg.position.set(x, y, dz); lg.rotation.x = Math.PI / 2; g.add(lg);
   }
   G.box(1.1, 0.05, 0.5, G.MAT.snow, -0.05, 0.6, 0, { parent: g, r: 0.02 });
   G.COLL.push({ x0: 3.72, z0: 4.65, x1: 4.88, z1: 5.18 });
