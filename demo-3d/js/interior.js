@@ -237,8 +237,59 @@ function buildRooms() {
   ['lake', 'snow', 'fire', 'hill', 'night', 'cake'].forEach((k, i) => polaroid(1.1 + i * 0.5, 1.62 - Math.sin((i + 0.5) / 6 * Math.PI) * 0.1, 0.125, 0, k, (i % 2 ? 1 : -1) * 0.06));
   G.INTER.push({ id: 'photos', pos: [2.4, 1.5, 1.4], r: 1.3, label: 'Photographs', act: () => G.say(null, '(Six polaroids on a string. The lake. The fire. The night you both got lost and didn’t mind.)') });
   // Wardrobe, rug, plant, laundry basket.
-  box(1.1, 2.1, 0.62, MAT.darkWood, 4.3, 1.05, 0.44, { coll: true, cam: true, r: 0.02 });
-  box(0.01, 1.9, 0.01, MAT.darkMetal, 4.3, 1.05, 0.755);
+  // The wardrobe: an old pine armoire, stained dark, on a plinth under a stepped cornice, with two panelled doors (a
+  // frame round a raised panel, a tall one over a short one), brass knobs and a keyhole, the hinges showing, and a
+  // drawer under the doors. On top, an old leather suitcase and a hatbox. (It was a dark slab with a line down it.)
+  {
+    const grain = (horiz) => G.canvasTex(256, (u, v) => {
+      const a = horiz ? v : u, b = horiz ? u : v;   // across the grain, along it
+      const t = 0.84 + Math.sin(a * 750 + G.fbm(a * 4, b * 1.2, 3) * 25) * 0.045 + G.fbm(a * 30, b * 1.5, 2) * 0.06 + (G.fbm(a * 3, b * 0.6, 3) - 0.5) * 0.12;
+      return [226 * t, 214 * t, 200 * t];
+    }, { w: 512, h: 512 });
+    const gV = grain(false), gH = grain(true);
+    const woodV = G.std({ map: gV, color: '#7a5640', roughness: 0.5, env: 0.35 }), woodH = G.std({ map: gH, color: '#7a5640', roughness: 0.5, env: 0.35 });
+    const panelM = G.std({ map: gV, color: '#86604a', roughness: 0.5, env: 0.35 });
+    box(1.1, 1.91, 0.58, woodV, 4.3, 1.065, 0.42, { coll: true, cam: true });   // the carcass
+    const W2 = new THREE.Group(); W2.position.set(4.3, 0, 0.71); W.add(W2);   // the front, at the carcass's face (so it moves back with the bedroom)
+    const fb = (w, h, d, x, y, z, m, o = {}) => G.box(w, h, d, m, x, y, z, { parent: W2, uv: [Math.max(w, d) / 0.6, h / 0.6], ...o });
+    // plinth and cornice
+    fb(1.16, 0.1, 0.64, 0, 0.05, -0.29, woodH); fb(1.18, 0.02, 0.66, 0, 0.11, -0.29, woodH, { r: 0.006 });
+    fb(1.16, 0.035, 0.63, 0, 2.037, -0.29, woodH); fb(1.2, 0.025, 0.67, 0, 2.067, -0.29, woodH, { r: 0.006 }); fb(1.24, 0.04, 0.7, 0, 2.1, -0.29, woodH, { r: 0.008 });
+    // the doors: each a frame round a tall panel and a short one
+    const DW = 0.528, DY0 = 0.355, DY1 = 1.985, DH = DY1 - DY0, DZ = 0.011;
+    for (const s of [-1, 1]) {
+      const cx = s * (DW / 2 + 0.003);
+      fb(DW, DH, 0.022, cx, (DY0 + DY1) / 2, DZ, woodV);
+      const st = 0.075, rT = 0.09, rM = 0.08, rB = 0.11, ym = DY0 + rB + (DH - rB - rT - rM) * 0.32 + rM / 2;   // stiles, top/middle/bottom rails
+      for (const k of [-1, 1]) fb(st, DH, 0.012, cx + k * (DW / 2 - st / 2), (DY0 + DY1) / 2, 0.028, woodV, { r: 0.003 });
+      for (const [yy, hh] of [[DY1 - rT / 2, rT], [ym, rM], [DY0 + rB / 2, rB]]) fb(DW - 2 * st, hh, 0.012, cx, yy, 0.028, woodH, { r: 0.003 });
+      // the raised panels, between them
+      const pw = DW - 2 * st - 0.012;
+      for (const [y0, y1] of [[ym + rM / 2, DY1 - rT], [DY0 + rB, ym - rM / 2]]) fb(pw, y1 - y0 - 0.012, 0.014, cx, (y0 + y1) / 2, 0.019, panelM, { r: 0.006, seg: 2 });   // its face 8 mm back from the frame's
+      // hinges at the outer edge
+      for (const hy of [DY0 + 0.2, DY1 - 0.2]) G.box(0.012, 0.075, 0.016, MAT.darkMetal, cx + s * (DW / 2 + 0.002), hy, 0.016, { parent: W2, cast: false });
+      // a brass knob on each, by the meeting stiles
+      const kx = cx - s * (DW / 2 - 0.038);
+      G.cyl(0.006, 0.008, 0.02, MAT.metal, kx, 1.13, 0.044, { parent: W2, seg: 8 }).rotation.x = Math.PI / 2;
+      G.sph(0.016, MAT.metal, kx, 1.13, 0.058, [1, 1, 0.85], W2, 12);
+    }
+    // a keyhole plate under the right knob
+    G.box(0.022, 0.042, 0.003, MAT.metal, 0.038, 1.06, 0.0355, { parent: W2, cast: false });
+    G.box(0.005, 0.014, 0.002, G.shared({ color: '#0c0a08', roughness: 1 }), 0.038, 1.058, 0.0375, { parent: W2, cast: false });
+    // the drawer under the doors, with two knobs
+    fb(1.06, 0.2, 0.024, 0, 0.228, 0.012, woodH, { r: 0.004 });
+    fb(0.98, 0.13, 0.008, 0, 0.228, 0.026, panelM, { r: 0.003 });
+    for (const s of [-1, 1]) G.sph(0.015, MAT.metal, s * 0.26, 0.228, 0.04, [1, 1, 0.85], W2, 12);
+    // On top: an old suitcase, tan leather with darker straps and a handle, and a round striped hatbox.
+    const leather = G.std({ color: '#8a5a34', roughness: 0.6, env: 0.3 }), strap = G.std({ color: '#4a2e1c', roughness: 0.55, env: 0.3 });
+    G.box(0.62, 0.17, 0.4, leather, -0.18, 2.205, -0.3, { parent: W2, r: 0.025 });
+    for (const sx of [-0.2, 0.16]) G.box(0.035, 0.178, 0.408, strap, -0.18 + sx, 2.205, -0.3, { parent: W2, r: 0.006 });
+    for (const sx of [-0.2, 0.16]) G.box(0.03, 0.03, 0.006, MAT.metal, -0.18 + sx, 2.21, -0.093, { parent: W2, cast: false });   // buckles
+    const hnd = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.01, 6, 14, Math.PI), strap); hnd.position.set(-0.18, 2.29, -0.3); W2.add(hnd);
+    const hat = G.cyl(0.15, 0.15, 0.2, G.std({ map: G.canvasTex(0, null, { w: 128, h: 32, draw: (c, w, h) => { c.fillStyle = '#d8cdb8'; c.fillRect(0, 0, w, h); c.fillStyle = '#7f9aa6'; for (let i = 0; i < w; i += 16) c.fillRect(i, 0, 7, h); } }), roughness: 0.85, env: 0.2 }), 0.28, 2.22, -0.32, { parent: W2, seg: 24 });
+    hat.rotation.y = 0.4;
+    G.cyl(0.155, 0.155, 0.045, G.std({ color: '#c9bfa9', roughness: 0.85 }), 0.28, 2.305, -0.32, { parent: W2, seg: 24 });   // its lid
+  }
   const rug = G.add(new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.6), MAT.rug), W, false, true); rug.rotation.x = -Math.PI / 2; rug.position.set(bx, 0.006, 3.2);
   plant(0.45, 3.6, 1.0);
   box(0.9, 0.42, 0.5, MAT.wood, 3.6, 0.21, 4.15, { coll: true, r: 0.02 });   // chest at the foot wall
@@ -442,15 +493,23 @@ function buildRooms() {
       box(0.12, 0.02, 0.026, iron, ax, 0.07, FB.face - 0.03);
     }
   }
-  // Logs that glow from underneath where they're burning (their own material: emissive with the fire).
-  // (a paler bark than the trees', and sawn ends showing their rings, so the logs read even with the fire out)
-  const logM = MAT.bark.clone(); logM.color.setRGB(1.45, 1.35, 1.25); logM.emissive = new THREE.Color('#ff4a10'); logM.emissiveIntensity = 0;
-  const ringTex = G.canvasTex(0, null, { w: 64, h: 64, draw: (c, w, h) => { const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); g.addColorStop(0, '#c9a77a'); g.addColorStop(0.78, '#b08a5e'); g.addColorStop(0.86, '#6a4a32'); g.addColorStop(1, '#3a2a1e'); c.fillStyle = g; c.fillRect(0, 0, w, h); c.strokeStyle = 'rgba(110,78,50,0.35)'; for (let r = 4; r < w * 0.38; r += 3 + (r % 5)) { c.beginPath(); c.arc(w / 2 + 1, h / 2, r, 0, Math.PI * 2); c.stroke(); } } });
-  const endM = G.std({ map: ringTex, roughness: 0.9, env: 0.2 }); endM.emissive = new THREE.Color('#ff4a10'); endM.emissiveIntensity = 0;
-  const log = (r0, r1, l, x, y, z, rz, ry) => { const m = cyl(r0, r1, l, logM, x, y, z); m.material = [logM, endM, endM]; m.rotation.z = rz; m.rotation.y = ry; return m; };
-  log(0.065, 0.065, 0.6, fx - 0.05, 0.165, 0.5, Math.PI / 2, 0.3);
-  log(0.06, 0.06, 0.55, fx + 0.05, 0.27, 0.49, Math.PI / 2, -0.4);
-  log(0.05, 0.055, 0.5, fx + 0.02, 0.2, 0.57, Math.PI / 2 - 0.35, 1.25);
+  // The logs on the firedogs: split firewood (G.wood), a half, a quarter and a small round, charred black underneath
+  // where the fire's been at them, glowing from underneath while it burns (their own materials, emissive with the
+  // fire). (They were bark cylinders, which with the fire out read as dark nothing with one pale disc.)
+  const logMs = G.WOOD_M.map((m) => { const c = m.clone(); c.vertexColors = true; c.emissive = new THREE.Color('#ff4a10'); c.emissiveIntensity = 0; return c; });
+  const charred = (m) => {   // black where the fire reaches: low down, in the middle, and underneath
+    m.updateMatrixWorld(true);
+    const g = (m.geometry = m.geometry.clone()), P = g.attributes.position, Nn = g.attributes.normal, C = g.attributes.color, v = new THREE.Vector3(), n = new THREE.Vector3(), nm = new THREE.Matrix3().getNormalMatrix(m.matrixWorld);
+    for (let i = 0; i < P.count; i++) {
+      v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld); n.fromBufferAttribute(Nn, i).applyMatrix3(nm).normalize();
+      const c = G.clamp(G.smooth(0.25, 0.11, v.y) + 0.45 * Math.max(0, -n.y), 0, 1) * (1 - 0.65 * G.smooth(0.16, 0.32, Math.abs(v.x - fx)));
+      C.setXYZ(i, 1 - 0.9 * c, 1 - 0.91 * c, 1 - 0.92 * c);
+    }
+  };
+  const log = (kind, R, l, x, y, z, rz, ry, seed, roll) => { const m = G.wood(kind, R, l, seed, roll, logMs); m.position.set(x, y, z); m.rotation.z = rz; m.rotation.y = ry; G.add(m, null, true, true); charred(m); return m; };
+  log('half', 0.075, 0.6, fx - 0.05, 0.19, 0.5, Math.PI / 2, 0.3, 3, Math.PI / 2 + 0.35);
+  log('quarter', 0.1, 0.55, fx + 0.05, 0.31, 0.49, Math.PI / 2, -0.4, 5, Math.PI / 2 - 0.2);
+  log('round', 0.052, 0.5, fx + 0.02, 0.2, 0.57, Math.PI / 2 - 0.35, 1.25, 7, 0);
   // A bed of coals under them: a low mound with a slowly crawling glow.
   const coalM = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uPower: { value: 1 } },
@@ -475,7 +534,7 @@ function buildRooms() {
   const core = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.26), flameMaterial('#ffd27a'));
   core.position.set(0, 0.11, 0.02); core.renderOrder = 8; fireG.add(core); firePlanes.push(core); FLAMES.push(core);
   const fireLight = new THREE.PointLight('#ff8a3a', 0, 10, 2); fireLight.position.set(fx, 0.5, 1.35); W.add(fireLight);
-  G.FIRE = { planes: firePlanes, light: fireLight, on: true, power: 9, level: 1, coals: coalM, logM, lightAt: fireLight.position.clone() };
+  G.FIRE = { planes: firePlanes, light: fireLight, on: true, power: 9, level: 1, coals: coalM, logM: logMs[0], logMs, lightAt: fireLight.position.clone() };
   G.INTER.push({ id: 'fire', pos: [fx, 0.6, 1.25], r: 1.3, label: () => (G.FIRE.on ? 'Fireplace' : 'Light the fire'), act: () => { G.FIRE.on = !G.FIRE.on; if (G.FIRE.on) G.say('partner', 'The fire person, at work. My hero, {toHim}.'); } });
   // Mantle: candles, frames, a snow globe, a sprig of pine.
   // Mantle things sit on the shelf in front of the stone (its face is at z = 0.66), not inside it.

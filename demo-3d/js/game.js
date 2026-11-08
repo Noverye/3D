@@ -423,7 +423,7 @@ function updateLighting(t, dt, focus) {
   // The light moves a little as the flames do, so shadows in the room breathe and dance.
   if (F.lightAt) F.light.position.set(F.lightAt.x + Math.sin(t * 5.3) * 0.04 + Math.sin(t * 11.7) * 0.02, F.lightAt.y + Math.sin(t * 7.1) * 0.03, F.lightAt.z + Math.sin(t * 4.1) * 0.02);
   if (F.coals) { F.coals.uniforms.uTime.value = t; F.coals.uniforms.uPower.value = Math.max(0.15 * (F.level || 0), fp) * (0.85 + (fl - 0.82) * 1.5); }
-  if (F.logM) F.logM.emissiveIntensity = 0.12 * fp * fl;
+  for (const m of F.logMs || [F.logM]) if (m) m.emissiveIntensity = 0.12 * fp * fl;
   F.planes.forEach((p, i) => { p.visible = fp > 0.02; p.material.uniforms.uPower.value = fp; p.lookAt(G.camera.position.x, p.getWorldPosition(tmpV).y, G.camera.position.z); });
   G.CAKE.light.intensity = damp(G.CAKE.light.intensity, G.CAKE.lit ? 1.4 * fl : 0, 10, dt);
   G.CAKE.flames.forEach((f) => { f.visible = G.CAKE.lit; });

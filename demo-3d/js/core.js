@@ -981,3 +981,84 @@ G.mergeStatic = (root, skip = new Set()) => {
   }
   return { merged: victims.length, meshes: made };
 };
+
+/* =====================================================================
+ * Firewood, as it's cut for the fire: a round, or a half, a third or a quarter split from a bigger one. The bark
+ * outside, the pale split faces inside, the sawn ends showing their rings round the pith (so a split piece's rings
+ * centre on its corner). G.woodGeo(kind, R, L, seed, roll): a geometry along y, centred on its middle, in three groups
+ * (bark, split, ends) for G.WOOD_M (or G.WOOD_OUT, weathered on the porch); white in its colours, to char.
+ * (They were bark cylinders, which by day in the hearth read as dark nothing with one pale disc.)
+ * ===================================================================== */
+{
+  const TX = G.TX;
+  TX.woodBark = G.canvasTex(128, (u, v) => {   // furrows down its length (v)
+    const f = Math.abs(Math.sin(u * Math.PI * 7 + G.fbm(u * 6, v * 1.5, 2) * 3)), t = 0.5 + 0.32 * Math.pow(f, 0.6) + G.fbm(u * 24, v * 6, 3) * 0.25;
+    return [92 * t, 76 * t, 62 * t];
+  });
+  TX.woodSplit = G.canvasTex(128, (u, v) => {   // the grain down its length, torn fibres, darker toward the heart
+    const t = 0.8 + Math.sin(u * 90 + G.fbm(u * 5, v * 1.2, 2) * 9) * 0.05 + G.fbm(u * 50, v * 3, 2) * 0.12 + G.fbm(u * 6, v * 0.8, 2) * 0.1, heart = 1 - 0.18 * G.smooth(0.35, 0.0, u);
+    return [214 * t * heart, 176 * t * heart * heart, 124 * t * heart * heart];
+  });
+  TX.woodEnd = G.canvasTex(0, null, { w: 96, h: 96, draw: (c, w, h) => {
+    const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); g.addColorStop(0, '#b8875a'); g.addColorStop(0.18, '#cfa577'); g.addColorStop(0.8, '#d2ad80'); g.addColorStop(0.86, '#7a5a3e'); g.addColorStop(0.9, '#4a3626'); g.addColorStop(1, '#3a2a1e');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    for (let r = 3, k = 0; r < w * 0.42; r += 2.2 + ((k * 7) % 5) * 0.6, k++) { c.strokeStyle = k % 3 ? 'rgba(120,84,52,0.32)' : 'rgba(96,64,40,0.45)'; c.lineWidth = k % 4 ? 1 : 1.6; c.beginPath(); c.ellipse(w / 2 + 0.6, h / 2, r, r * 0.97, 0, 0, Math.PI * 2); c.stroke(); }
+    c.strokeStyle = 'rgba(60,40,26,0.55)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(w / 2, h / 2); c.lineTo(w * 0.7, h * 0.18); c.stroke(); c.beginPath(); c.moveTo(w / 2, h / 2); c.lineTo(w * 0.26, h * 0.72); c.stroke();   // drying checks
+  } });
+  G.WOOD_M = [G.std({ map: TX.woodBark, bumpMap: TX.woodBark, bumpScale: 0.004, roughness: 1, env: 0.15 }), G.std({ map: TX.woodSplit, roughness: 0.85, env: 0.2 }), G.std({ map: TX.woodEnd, roughness: 0.9, env: 0.2 })];
+  G.WOOD_OUT = [G.WOOD_M[0], G.std({ map: TX.woodSplit, color: '#d4ccc2', roughness: 0.9, env: 0.2 }), G.std({ map: TX.woodEnd, color: '#d6cdc2', roughness: 0.92, env: 0.2 })];
+  const cache = new Map();
+  G.woodGeo = (kind = 'round', R = 0.06, L = 0.42, seed = 1, roll = 0) => {
+    const key = [kind, R.toFixed(3), L.toFixed(3), seed, roll.toFixed(2)].join('|');
+    if (cache.has(key)) return cache.get(key);
+    const r = G.seeded(seed * 7919 + 13), th = { half: Math.PI, third: (Math.PI * 2) / 3, quarter: Math.PI / 2 }[kind] || Math.PI * 2, split = th < 6;
+    // the outline round its end, in x, z, with the pith at 0: [x, z, on the bark?, distance round the bark]
+    const O = [], na = Math.max(4, Math.round(th / 0.45)), a0 = -th / 2 + (r() - 0.5) * 0.5, ph = r() * 6.28;
+    const rad = (a) => R * (1 + 0.04 * Math.sin(a * 5 + ph) + 0.025 * Math.sin(a * 11 + ph * 2.3));
+    for (let k = 0; k < (split ? na + 1 : na); k++) { const a = a0 + (th * k) / na; O.push([Math.cos(a) * rad(a), Math.sin(a) * rad(a), 1, a * R]); }
+    if (split) {   // in along the split to the pith, a little ragged, and out again
+      const e = O[O.length - 1], s = O[0], rag = () => (r() - 0.5) * R * 0.1;
+      for (const t of [0.66, 0.33]) O.push([e[0] * t + rag(), e[1] * t + rag(), 0, 0]);
+      O.push([0, 0, 0, 0]);
+      for (const t of [0.33, 0.66]) O.push([s[0] * t + rag(), s[1] * t + rag(), 0, 0]);
+    }
+    let cx = 0, cz = 0; O.forEach((p) => { cx += p[0]; cz += p[1]; }); cx /= O.length; cz /= O.length;
+    const NY = 4, swell = (y) => 1 + 0.035 * Math.sin((y / L) * 5.5 + ph) - 0.03 * Math.pow(Math.abs((2 * y) / L), 6);   // a little irregular, and rounded off at the saw cuts
+    const G3 = [[], [], []].map(() => ({ P: [], N: [], U: [] }));
+    const put = (gi, x, y, z, nx, ny, nz, u, v) => { const b = G3[gi]; b.P.push(x - cx, y, z - cz); b.N.push(nx, ny, nz); b.U.push(u, v); };
+    // the sides: bark round the outside, the split faces in to the pith
+    for (let k = 0; k < O.length; k++) {
+      const p = O[k], q = O[(k + 1) % O.length], bark = p[2] && q[2], gi = bark ? 0 : 1;
+      const ex = q[0] - p[0], ez = q[1] - p[1], el = Math.hypot(ex, ez) || 1, fn = [ez / el, -ex / el];   // the face's outward normal (the outline runs anticlockwise)
+      for (let j = 0; j < NY; j++) {
+        const y0 = -L / 2 + (L * j) / NY, y1 = -L / 2 + (L * (j + 1)) / NY, s0 = swell(y0), s1 = swell(y1);
+        const vtx = (pt, y, s) => {
+          const n = bark ? [pt[0] / (Math.hypot(pt[0], pt[1]) || 1), pt[1] / (Math.hypot(pt[0], pt[1]) || 1)] : fn;
+          const u = bark ? pt[3] / 0.2 : Math.hypot(pt[0], pt[1]) / 0.12 + (k % 2) * 0.37;
+          return [pt[0] * s, y, pt[1] * s, n[0], 0, n[1], u, y / 0.36 + seed * 0.13];
+        };
+        const a = vtx(p, y0, s0), b = vtx(q, y0, s0), c = vtx(q, y1, s1), d = vtx(p, y1, s1);
+        for (const t of [a, c, b, a, d, c]) put(gi, ...t);
+      }
+    }
+    // the sawn ends
+    const cont = O.map((p) => new THREE.Vector2(p[0], p[1])), tris = THREE.ShapeUtils.triangulateShape(cont, []);
+    for (const sy of [-1, 1]) {
+      const y = (sy * L) / 2, s = swell(y);
+      for (const [i0, i1, i2] of tris) {
+        let t = [i0, i1, i2]; const A = O[i0], B = O[i1], C = O[i2], cr = (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]);
+        if ((cr > 0) === sy > 0) t = [i0, i2, i1];   // facing out of the end
+        for (const i of t) { const p = O[i]; put(2, p[0] * s, y, p[1] * s, 0, sy, 0, (p[0] / (2.2 * R)) * sy + 0.5, p[1] / (2.2 * R) + 0.5); }
+      }
+    }
+    const P = [], N = [], U = [], g = new THREE.BufferGeometry();
+    G3.forEach((b, gi) => { g.addGroup(P.length / 3, b.P.length / 3, gi); P.push(...b.P); N.push(...b.N); U.push(...b.U); });
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(P.length).fill(1), 3));
+    if (roll) g.rotateY(roll);
+    g.computeBoundingSphere(); cache.set(key, g);
+    return g;
+  };
+  // a piece of firewood: kind 'round' | 'half' | 'third' | 'quarter'
+  G.wood = (kind, R, L, seed, roll, mats = G.WOOD_M) => { const m = new THREE.Mesh(G.woodGeo(kind, R, L, seed, roll), mats); m.castShadow = true; m.receiveShadow = true; return m; };
+}

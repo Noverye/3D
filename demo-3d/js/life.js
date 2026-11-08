@@ -594,25 +594,30 @@ const F = G.FIRE;
 F.fuel = F.on ? 1 : 0;
 L.basket = L.basket == null ? 4 : L.basket;
 const BASKET = (() => {
-  const W = G.world, g = new THREE.Group(); g.position.set(9.42, 0, 0.92); g.userData.dynamic = true; W.add(g);
+  // beside the hearth, in the corner by the bookshelves (it had been left out in the room by the coffee table, 2.5 m
+  // from the fire, since the room was made deeper)
+  const W = G.world, g = new THREE.Group(); g.position.set(6.7, 0, -1.55); g.userData.dynamic = true; W.add(g);
   const wick = G.std({ map: G.rep(G.TX.knitCream, 3, 1), color: '#9a7a50', roughness: 1 });
   G.cyl(0.24, 0.2, 0.32, wick, 0, 0.16, 0, { parent: g, seg: 22, open: true });
   G.cyl(0.2, 0.2, 0.02, wick, 0, 0.01, 0, { parent: g, seg: 22 });
   const rim = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.016, 8, 26), wick); rim.rotation.x = Math.PI / 2; rim.position.y = 0.32; g.add(rim);
   const logs = [];
-  for (let i = 0; i < 5; i++) { const lg = G.cyl(0.05 + (i % 2) * 0.008, 0.055, 0.42, G.MAT.bark, -0.1 + (i % 3) * 0.1, 0.2 + Math.floor(i / 3) * 0.1, (i % 2 ? 0.05 : -0.05), { parent: g, seg: 9 }); lg.rotation.set(Math.PI / 2 + (i - 2) * 0.12, 0, Math.PI / 2 + (i % 2 ? 0.2 : -0.15)); logs.push(lg); }
-  G.COLL.push({ x0: 9.17, z0: 0.67, x1: 9.67, z1: 1.17 });
+  // split firewood, as on the fire (G.wood): halves and quarters and the odd round, pale where they were split
+  const KINDS = ['half', 'quarter', 'round', 'third', 'half'];
+  for (let i = 0; i < 5; i++) { const k = KINDS[i], lg = G.wood(k, k === 'round' ? 0.055 : 0.075, 0.42, 20 + i, i * 1.3 + 0.4); lg.position.set(-0.1 + (i % 3) * 0.1, 0.2 + Math.floor(i / 3) * 0.1, i % 2 ? 0.05 : -0.05); lg.rotation.set(Math.PI / 2 + (i - 2) * 0.12, 0, Math.PI / 2 + (i % 2 ? 0.2 : -0.15)); g.add(lg); logs.push(lg); }
+  G.COLL.push({ x0: 6.45, z0: -1.8, x1: 6.95, z1: -1.3 });
   return { g, logs };
 })();
 const WOODPILE = (() => {
   const W = G.world, g = new THREE.Group(); g.position.set(4.3, 0, 4.92); W.add(g);
-  // each log its own girth and a little out of line, its sawn end the cabin corners' weathered end grain (they were flat
-  // tan discs, which read as white spots from the yard)
-  const r = G.seeded(64), endM = G.std({ map: G.TX.logEnd, color: '#d6cdc2', roughness: 0.92, env: 0.2 });
+  // split firewood (G.wood), weathered grey at the ends: mostly halves and quarters with the odd round, each its own
+  // size, laid flat or on edge and a little out of line, so the pile's face is half-moons and wedges and rings. (They
+  // were all rounds, cylinders with an end grain disc on.)
+  const r = G.seeded(64), KINDS = ['half', 'half', 'quarter', 'round', 'third', 'half', 'round', 'quarter'];
   for (let row = 0; row < 4; row++) for (let i = 0; i < 6 - (row > 2 ? 2 : 0); i++) {
-    const rad = 0.066 + r() * 0.016, x = -0.45 + i * 0.165 + (row % 2) * 0.08 + (r() - 0.5) * 0.02, y = 0.08 + row * 0.14 + (r() - 0.5) * 0.015, dz = (r() - 0.5) * 0.05;
-    const lg = G.cyl(rad, rad, 0.42, G.MAT.bark, x, y, dz, { parent: g, seg: 9 }); lg.rotation.x = Math.PI / 2;
-    const e = new THREE.Mesh(new THREE.CircleGeometry(rad * 0.93, 9), endM); e.position.set(x, y, dz + 0.211); e.rotation.z = r() * 6.28; e.receiveShadow = true; g.add(e);
+    const k = KINDS[Math.floor(r() * KINDS.length)], rad = k === 'round' ? 0.064 + r() * 0.014 : 0.08 + r() * 0.014;
+    const x = -0.45 + i * 0.165 + (row % 2) * 0.08 + (r() - 0.5) * 0.02, y = 0.08 + row * 0.14 + (r() - 0.5) * 0.015, dz = (r() - 0.5) * 0.05;
+    const lg = G.wood(k, rad, 0.42, 64 + row * 10 + i, Math.floor(r() * 4) * (Math.PI / 2) + (r() - 0.5) * 0.4, G.WOOD_OUT);   // laid flat side down, or on edge lg.position.set(x, y, dz); lg.rotation.x = Math.PI / 2; g.add(lg);
   }
   G.box(1.1, 0.05, 0.5, G.MAT.snow, -0.05, 0.6, 0, { parent: g, r: 0.02 });
   G.COLL.push({ x0: 3.72, z0: 4.65, x1: 4.88, z1: 5.18 });
@@ -620,7 +625,7 @@ const WOODPILE = (() => {
 })();
 function armful(m, n) {
   const u = m.userData, k = u.k, g = new THREE.Group(); g.position.set(0, -0.2 * k, 0.19 * k); g.visible = false; g.userData.warm = true; u.chest.add(g);   // resting on the forearms
-  for (let i = 0; i < n; i++) { const lg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.42, 9), G.MAT.bark); lg.rotation.z = Math.PI / 2 + (i - 1) * 0.08; lg.position.set((i - 1) * 0.02, (i % 2) * 0.07 - 0.02, (i % 2) * -0.035); lg.castShadow = true; lg.userData.warm = true; lg.userData.gear = true; g.add(lg); }   // gear: not hidden with the built-in body when the real one loads
+  for (let i = 0; i < n; i++) { const lg = new THREE.Mesh(G.woodGeo(['half', 'quarter', 'round'][i % 3], i % 3 === 2 ? 0.052 : 0.07, 0.42, 40 + i, i * 2.1 + 0.5), G.WOOD_M); lg.rotation.z = Math.PI / 2 + (i - 1) * 0.08; lg.position.set((i - 1) * 0.02, (i % 2) * 0.07 - 0.02, (i % 2) * -0.035); lg.castShadow = true; lg.userData.warm = true; lg.userData.gear = true; g.add(lg); }   // gear: not hidden with the built-in body when the real one loads
   return g;
 }
 const ARMS = { player: armful(ADULT.player, 3), partner: armful(ADULT.partner, 2) };
@@ -649,7 +654,7 @@ A.rewire('fire', async () => {
   }
   await pokeAct();
 });
-A.inter('basket', [9.42, 0.4, -1.15], 0.8, () => (PLAYER.carry ? 'Fill the log basket' : 'Log basket'), async () => {
+A.inter('basket', [6.7, 0.4, -1.2], 0.8, () => (PLAYER.carry ? 'Fill the log basket' : 'Log basket'), async () => {
   if (PLAYER.carry) {
     const helped = PARTNER.carry; setCarry(PLAYER, false); if (helped) setCarry(PARTNER, false);
     L.basket = Math.min(5, L.basket + (helped ? 5 : 3)); G.Audio.poke();
