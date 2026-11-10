@@ -1076,3 +1076,35 @@ G.mergeStatic = (root, skip = new Set()) => {
   const furn = {};
   G.FURN = (color = '#7a5640') => furn[color] || (furn[color] = { V: G.std({ map: G.grainTex(false), color, roughness: 0.5, env: 0.35 }), H: G.std({ map: G.grainTex(true), color, roughness: 0.5, env: 0.35 }) });
 }
+
+/* ===== Turned wood, pleated lamp shades, books lying flat (build 156) =====
+ * G.lathe(prof, mat, x, y, z, o): a turned part from [r, y] pairs, bottom to top (a lathe's faces point outward when
+ * its profile climbs), placed at x, y, z. The grain texture runs up it.
+ * G.shadeGeo(rt, rb, h, pleats, depth): an open drum, knife-pleated: the radius folds in and out round it.
+ * G.bookFlat(w, t, d, color, x, y, z, ry, parent): a book lying on its side: boards top and bottom, the spine on -x,
+ * the page block between them showing on the other three edges. y is its underside. */
+G.lathe = (prof, mat, x, y, z, o = {}) => {
+  const g = new THREE.LatheGeometry(prof.map(([r, h]) => new THREE.Vector2(Math.max(r, 0.0002), h)), o.seg || 16);
+  const m = G.add(new THREE.Mesh(g, mat), o.parent, o.cast !== false, true);
+  m.position.set(x, y, z);
+  return m;
+};
+G.shadeGeo = (rt, rb, h, pleats = 36, depth = 0.006) => {
+  const g = new THREE.CylinderGeometry(rt, rb, h, pleats * 4, 4, true), P = g.attributes.position;
+  for (let i = 0; i < P.count; i++) {
+    const x = P.getX(i), z = P.getZ(i), r = Math.hypot(x, z) || 1, f = ((Math.atan2(z, x) / (2 * Math.PI)) * pleats + pleats) % 1;
+    const tri = Math.abs(f * 2 - 1), r2 = r + depth * (tri - 0.5) * (r / rb);
+    P.setXYZ(i, (x / r) * r2, P.getY(i), (z / r) * r2);
+  }
+  g.computeVertexNormals();
+  return g;
+};
+G.bookFlat = (w, t, d, color, x, y, z, ry = 0, parent) => {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; (parent || G.world).add(g);
+  const cov = G.shared({ color, roughness: 0.75 }), pages = G.shared({ color: '#e8dfca', roughness: 0.95 }), b = 0.0028;
+  G.box(w, b, d, cov, 0, b / 2, 0, { parent: g });
+  G.box(w, b, d, cov, 0, t - b / 2, 0, { parent: g });
+  G.box(0.004, t, d, cov, -w / 2 + 0.002, t / 2, 0, { parent: g, r: 0.0015 });
+  G.box(w - 0.007, t - 2 * b, d - 0.006, pages, -0.0015, t / 2, 0, { parent: g, cast: false });
+  return g;
+};

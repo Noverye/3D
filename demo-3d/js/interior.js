@@ -36,12 +36,29 @@ function candle(x, y, z, h = 0.1, r = 0.035, parent) {
   return f;
 }
 G.candle = candle;
+/* Lamps. The table lamps: a glazed ginger jar on a brass foot, under a brass cap, a stem up to the fitting, and a
+ * knife-pleated linen shade with a braid round both rims. (A cream cylinder under a plain drum.) The floor lamps: a
+ * standard lamp in brass, a stepped, domed foot, a column with turned collars, a harp rising inside the shade to a
+ * finial on top, a pull chain hanging under the rim. (A black pole on a disc.) */
+function lampShade(g, rt, rb, h, y, pleats) {
+  const mat = G.std({ color: '#f1dcb2', roughness: 0.9, emissive: '#ffb060', emissiveIntensity: 1, side: THREE.DoubleSide });
+  const shade = G.add(new THREE.Mesh(G.shadeGeo(rt, rb, h, pleats, rb * 0.07), mat), g, false, true);
+  shade.position.y = y;
+  const braid = G.shared({ color: '#c4a06a', roughness: 0.8 });
+  for (const [r, yy] of [[rt, y + h / 2], [rb, y - h / 2]]) {
+    const t = new THREE.Mesh(new THREE.TorusGeometry(r + rb * 0.036, 0.0035, 5, pleats * 2), braid); t.rotation.x = Math.PI / 2; t.position.y = yy; g.add(t);
+  }
+  return shade;
+}
 function tableLamp(x, y, z, power = 5) {
   const g = new THREE.Group(); g.position.set(x, y, z); G.world.add(g);
-  cyl(0.06, 0.08, 0.16, MAT.ceramic, 0, 0.08, 0, { parent: g, seg: 16 });
-  cyl(0.012, 0.012, 0.16, MAT.metal, 0, 0.24, 0, { parent: g, seg: 8 });
-  const shadeMat = G.std({ color: '#f1dcb2', roughness: 0.9, emissive: '#ffb060', emissiveIntensity: 1, side: THREE.DoubleSide });
-  const shade = cyl(0.1, 0.15, 0.18, shadeMat, 0, 0.38, 0, { parent: g, open: true, cast: false });
+  const glaze = G.shared({ color: '#2f5a56', roughness: 0.22, env: 0.55 });
+  G.lathe([[0, 0], [0.056, 0], [0.058, 0.005], [0.052, 0.012], [0.046, 0.015]], MAT.metal, 0, 0, 0, { parent: g, seg: 28 });   // the foot
+  G.lathe([[0.04, 0.012], [0.056, 0.03], [0.071, 0.058], [0.079, 0.09], [0.078, 0.116], [0.069, 0.14], [0.052, 0.157], [0.037, 0.165], [0.034, 0.174]], glaze, 0, 0, 0, { parent: g, seg: 32 });   // the jar
+  G.lathe([[0.037, 0.171], [0.041, 0.175], [0.038, 0.184], [0.02, 0.192], [0.012, 0.197], [0.008, 0.2]], MAT.metal, 0, 0, 0, { parent: g, seg: 28 });   // its cap
+  cyl(0.007, 0.007, 0.1, MAT.metal, 0, 0.248, 0, { parent: g, seg: 8 });
+  G.lathe([[0.012, 0.29], [0.017, 0.296], [0.017, 0.326], [0.013, 0.334], [0.009, 0.338]], MAT.metal, 0, 0, 0, { parent: g, seg: 16 });   // the socket
+  const shade = lampShade(g, 0.1, 0.15, 0.18, 0.38, 30);
   const light = new THREE.PointLight('#ffb062', 0, 6, 2); light.position.set(0, 0.34, 0); g.add(light);
   const L = { g, light, shade, on: true, power, flick: 1 };
   LAMPS.push(L);
@@ -49,10 +66,19 @@ function tableLamp(x, y, z, power = 5) {
 }
 function floorLamp(x, z) {
   const g = new THREE.Group(); g.position.set(x, 0, z); G.world.add(g);
-  cyl(0.15, 0.17, 0.03, MAT.darkMetal, 0, 0.015, 0, { parent: g });
-  cyl(0.014, 0.014, 1.45, MAT.darkMetal, 0, 0.74, 0, { parent: g, seg: 8 });
-  const shadeMat = G.std({ color: '#f1dcb2', roughness: 0.9, emissive: '#ffb060', emissiveIntensity: 1, side: THREE.DoubleSide });
-  const shade = cyl(0.16, 0.23, 0.3, shadeMat, 0, 1.55, 0, { parent: g, open: true, cast: false });
+  const brass = MAT.metal;
+  G.lathe([[0, 0], [0.165, 0], [0.168, 0.008], [0.162, 0.018], [0.14, 0.026], [0.13, 0.034], [0.1, 0.044], [0.066, 0.056], [0.045, 0.07], [0.034, 0.09], [0.03, 0.104]], brass, 0, 0, 0, { parent: g, seg: 40 });   // the foot
+  G.lathe([[0.03, 0.1], [0.022, 0.12], [0.016, 0.14], [0.0135, 0.16], [0.0135, 0.6], [0.019, 0.615], [0.025, 0.635], [0.025, 0.655], [0.019, 0.675], [0.0135, 0.69],
+    [0.0135, 1.3], [0.018, 1.32], [0.022, 1.345], [0.018, 1.365], [0.012, 1.375]], brass, 0, 0, 0, { parent: g, seg: 16 });   // the column, with its collars
+  G.lathe([[0.012, 1.37], [0.02, 1.38], [0.02, 1.44], [0.015, 1.45], [0.009, 1.455]], brass, 0, 0, 0, { parent: g, seg: 16 });   // the socket
+  for (const s of [-1, 1]) {   // the harp, two wires from under the socket bowing out and meeting over the bulb
+    const c = new THREE.CatmullRomCurve3([new THREE.Vector3(0.016 * s, 1.385, 0), new THREE.Vector3(0.05 * s, 1.47, 0), new THREE.Vector3(0.06 * s, 1.58, 0), new THREE.Vector3(0.03 * s, 1.68, 0), new THREE.Vector3(0, 1.705, 0)]);
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(c, 24, 0.0028, 5, false), brass));
+  }
+  G.lathe([[0.012, 1.705], [0.016, 1.712], [0.006, 1.72], [0.004, 1.73], [0.013, 1.742], [0.015, 1.755], [0.01, 1.77], [0.002, 1.778]], brass, 0, 0, 0, { parent: g, seg: 16 });   // the finial
+  for (let i = 0; i < 14; i++) sph(0.0024, brass, 0.022, 1.405 - i * 0.0058, 0.008, [1, 1, 1], g, 6);   // the pull chain
+  cyl(0.004, 0.006, 0.016, brass, 0.022, 1.32, 0.008, { parent: g, seg: 10 });   // its acorn
+  const shade = lampShade(g, 0.15, 0.24, 0.3, 1.56, 40);
   const light = new THREE.PointLight('#ffb062', 0, 8, 2); light.position.set(0, 1.5, 0); g.add(light);
   G.CAMBLOCK.push(shade);   // keep the camera from ending up inside the shade
   const L = { g, light, shade, on: true, power: 9, flick: 1 };
@@ -172,10 +198,29 @@ function buildHomely() {
   sph(0.11, G.std({ map: TX.knitCream, color: '#b8322a', roughness: 1 }), 4.6, 0.32, z1 - 0.42, [1, 0.6, 1]);
   // plants: the bedroom corner and the kitchen
   plant(0.45, z0 + 0.5, 1.1); plant(14.55, 1.4, 0.8);
-  // a bench at the foot of the bed with a folded blanket, and a stack of books by the bed
-  box(1.3, 0.42, 0.4, MAT.wood, 2.4, 0.21, 0.45, { coll: true, r: 0.02 });
-  box(0.8, 0.12, 0.34, MAT.plaid, 2.2, 0.48, 0.45, { r: 0.04 });
-  for (let i = 0; i < 4; i++) box(0.22, 0.045, 0.16, G.shared({ color: ['#5e4870', '#9a5a36', '#2d4659', '#d4c6a8'][i], roughness: 0.8 }), 0.75, 0.025 + i * 0.045, -2.0, { r: 0.004 }).rotation.y = i * 0.25;
+  // A bench at the foot of the bed, to go with it: the bed's wood, turned legs joined by an H stretcher, a rail round
+  // under a cushion in the headboard's teal velvet; on it the plaid blanket, folded, one end let fall over the end of
+  // the bench. (A box of floorboards with a block of plaid on it.) And a stack of books on the floor by the bed.
+  {
+    const { V: wV, H: wH } = G.FURN('#7a5640'), bg = new THREE.Group(); bg.position.set(2.4, 0, 0.45); W.add(bg);
+    G.COLL.push({ x0: 1.75, z0: 0.25, x1: 3.05, z1: 0.65 });
+    const leg = [[0.022, 0], [0.026, 0.015], [0.02, 0.04], [0.019, 0.1], [0.026, 0.125], [0.026, 0.14], [0.02, 0.16], [0.023, 0.22], [0.027, 0.25], [0.027, 0.27]];
+    for (const [lx, lz] of [[-0.58, -0.15], [0.58, -0.15], [-0.58, 0.15], [0.58, 0.15]]) {
+      G.lathe(leg, wV, lx, 0, lz, { parent: bg, seg: 12 });
+      G.box(0.055, 0.1, 0.055, wV, lx, 0.315, lz, { parent: bg, r: 0.006, uv: [0.1, 0.2] });   // the square block at its top
+    }
+    for (const s of [-1, 1]) G.box(1.1, 0.07, 0.025, wH, 0, 0.32, s * 0.15, { parent: bg, r: 0.005, uv: [1.8, 0.12] });   // the rails
+    for (const s of [-1, 1]) G.box(0.025, 0.07, 0.25, wH, s * 0.58, 0.32, 0, { parent: bg, r: 0.005, uv: [0.4, 0.12] });
+    for (const s of [-1, 1]) { const t = cyl(0.011, 0.011, 0.28, wV, s * 0.58, 0.115, 0, { parent: bg, seg: 8 }); t.rotation.x = Math.PI / 2; }   // the stretchers
+    { const t = cyl(0.012, 0.012, 1.16, wV, 0, 0.115, 0, { parent: bg, seg: 8 }); t.rotation.z = Math.PI / 2; }
+    const velvet = G.std({ map: G.rep(G.canvasTex(128, (u, v) => { const t = 0.9 + G.fbm(u * 40, v * 40, 2) * 0.1 + Math.sin(u * 300) * 0.01; return [235 * t, 235 * t, 235 * t]; }), 4, 1.5), color: '#5f7a72', roughness: 0.85, env: 0.15 });
+    G.puff(1.24, 0.08, 0.38, velvet, 0, 0.395, 0, { parent: bg, n: 7, top: 0.18, side: 0.05, seed: 3, uvM: 0.6 });
+    for (const s of [-1, 1]) G.puff(1.25, 0.012, 0.025, G.shared({ color: '#4c635c', roughness: 0.8 }), 0, 0.363, s * 0.19, { parent: bg, n: 3, top: 0, side: 0, seed: 1 });   // the piping
+    G.puff(0.52, 0.075, 0.34, MAT.plaid, -0.3, 0.478, 0.0, { parent: bg, n: 8, top: 0.12, side: 0.08, seed: 5 });   // the blanket, folded
+    G.puff(0.5, 0.03, 0.33, MAT.plaid, -0.29, 0.53, 0.005, { parent: bg, n: 4, top: 0.25, side: 0.04, seed: 6 }).rotation.y = 0.03;   // its top fold, soft
+    drapeOver(bg, MAT.plaid, [[-0.08, 0.438], [0.2, 0.44], [0.45, 0.436], [0.6, 0.43], [0.645, 0.41], [0.668, 0.35], [0.672, 0.25], [0.668, 0.16]], -0.16, 0.15);
+  }
+  [['#5e4870', 0.24, 0.034], ['#9a5a36', 0.22, 0.03], ['#2d4659', 0.25, 0.04], ['#d4c6a8', 0.2, 0.026]].reduce((y, [c, w, t], i) => { G.bookFlat(w, t, w * 0.7, c, 0.75, y, -2.0, i * 0.25 - 0.3); return y + t; }, 0);
   // a throw over the sofa back and a knitted pouffe
   const pf = cyl(0.3, 0.3, 0.36, G.std({ map: TX.knitCream, color: '#c0a07a', roughness: 1 }), 9.55, 0.18, 2.0, { seg: 20 }); G.COLL.push({ x0: 9.25, z0: 1.7, x1: 9.85, z1: 2.3 });
   // (the kitchen's pendant is built with the kitchen; a second, copper one hung here too, just under it, so the table
@@ -337,9 +382,42 @@ function buildRooms() {
   }
   const rug = G.add(new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.6), MAT.rug), W, false, true); rug.rotation.x = -Math.PI / 2; rug.position.set(bx, 0.006, 3.2);
   plant(0.45, 3.6, 1.0);
-  box(0.9, 0.42, 0.5, MAT.wood, 3.6, 0.21, 4.15, { coll: true, r: 0.02 });   // chest at the foot wall
-  box(0.6, 0.05, 0.45, MAT.plaid, 3.5, 0.45, 4.15, { r: 0.02 });
-  for (let i = 0; i < 4; i++) box(0.22, 0.05 + i * 0.002, 0.16, G.shared({ color: ['#6b3a2e', '#2e4a5a', '#c9b48a', '#3a5a40'][i], roughness: 0.8 }), 3.85, 0.48 + i * 0.05, 4.1);
+  // A blanket chest against the front wall, painted a faded blue-grey: a lid with a moulded edge, two raised panels in
+  // its front, a base moulding on bracket feet, iron drop handles at the ends and a brass escutcheon; a cream knitted
+  // throw folded on it, and books. (A box of floorboards with plaid on it.)
+  {
+    const cg = new THREE.Group(); cg.position.set(3.6, 0, 4.15); cg.rotation.y = Math.PI; W.add(cg);   // its front faces into the room (local +z)
+    G.COLL.push({ x0: 3.13, z0: 3.89, x1: 4.07, z1: 4.41 });
+    const paint = { V: G.std({ map: G.grainTex(false), color: '#5f7480', roughness: 0.72, env: 0.25 }), H: G.std({ map: G.grainTex(true), color: '#5f7480', roughness: 0.72, env: 0.25 }) };
+    const iron = G.shared({ color: '#2a2724', roughness: 0.55, metalness: 0.7 });
+    const cb = (w, h, d, m, x, y, z, o = {}) => G.box(w, h, d, m, x, y, z, { parent: cg, uv: [Math.max(w, d) / 0.6, h / 0.6], ...o });
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {   // bracket feet: each two boards meeting at the corner, cut in a curve
+      const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(0.03, 0); sh.quadraticCurveTo(0.04, 0.05, 0.11, 0.055); sh.lineTo(0.11, 0.085); sh.lineTo(0, 0.085); sh.lineTo(0, 0);
+      const fg = new THREE.ExtrudeGeometry(sh, { depth: 0.022, bevelEnabled: false, curveSegments: 8 });
+      const a = G.add(new THREE.Mesh(fg, paint.H), cg, true, true); a.position.set(sx * 0.465, 0, sz * 0.245 - (sz > 0 ? 0.022 : 0)); a.scale.x = -sx;   // along the front/back
+      const b = G.add(new THREE.Mesh(fg, paint.H), cg, true, true); b.rotation.y = Math.PI / 2; b.position.set(sx * 0.465 - (sx > 0 ? 0.022 : 0), 0, sz * 0.245); b.scale.x = sz;   // along the end
+    }
+    cb(0.93, 0.045, 0.49, paint.H, 0, 0.1075, 0, { r: 0.012 });   // the base moulding
+    cb(0.88, 0.3, 0.45, paint.V, 0, 0.28, 0, { r: 0.004 });         // the carcass
+    cb(0.92, 0.035, 0.5, paint.H, 0, 0.4475, 0, { r: 0.012 });       // the lid
+    cb(0.9, 0.018, 0.47, paint.H, 0, 0.424, 0, { r: 0.006 });        // its moulding
+    for (const s of [-1, 1]) {   // the raised panels, and their frames
+      cb(0.33, 0.17, 0.012, paint.V, s * 0.205, 0.27, 0.229, { r: 0.006 });
+      cb(0.37, 0.018, 0.008, paint.H, s * 0.205, 0.365, 0.227, { r: 0.003 }); cb(0.37, 0.018, 0.008, paint.H, s * 0.205, 0.175, 0.227, { r: 0.003 });
+      for (const e of [-1, 1]) cb(0.018, 0.208, 0.008, paint.V, s * 0.205 + e * 0.176, 0.27, 0.227, { r: 0.003 });
+      // a drop handle at each end: a plate and a bail hanging from it
+      cb(0.006, 0.05, 0.11, iron, s * 0.443, 0.35, 0, { r: 0.002 });
+      const bail = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.006, 6, 16, Math.PI), iron); bail.rotation.set(0, Math.PI / 2, Math.PI); bail.position.set(s * 0.452, 0.355, 0); cg.add(bail);
+    }
+    const esc = new THREE.Shape(); esc.absarc(0, 0, 0.014, 0, Math.PI * 2, false);
+    const kh = new THREE.Path(); kh.absarc(0, 0.003, 0.0035, 0, Math.PI * 2, true); esc.holes.push(kh);
+    const em = G.add(new THREE.Mesh(new THREE.ExtrudeGeometry(esc, { depth: 0.002, bevelEnabled: false, curveSegments: 16 }), MAT.metal), cg, false, true); em.position.set(0, 0.395, 0.2255); em.scale.y = 1.3;
+    G.box(0.0045, 0.009, 0.0025, G.shared({ color: '#111', roughness: 1 }), 0, 0.3885, 0.2262, { parent: cg, cast: false });   // the keyhole's slot
+    G.box(0.012, 0.012, 0.0005, G.shared({ color: '#111', roughness: 1 }), 0, 0.399, 0.2253, { parent: cg, cast: false });   // dark behind its round
+    G.puff(0.46, 0.07, 0.38, MAT.knitCream, 0.12, 0.5, 0.0, { parent: cg, n: 8, top: 0.1, side: 0.08, seed: 9 });   // the throw, folded
+    G.puff(0.44, 0.03, 0.37, MAT.knitCream, 0.13, 0.548, 0.005, { parent: cg, n: 4, top: 0.25, side: 0.05, seed: 10 }).rotation.y = -0.04;
+    [['#6b3a2e', 0.23, 0.035], ['#2e4a5a', 0.21, 0.03], ['#c9b48a', 0.24, 0.042], ['#3a5a40', 0.19, 0.026]].reduce((y, [c, w, t], i) => { G.bookFlat(w, t, w * 0.72, c, -0.25, y, 0.03, (i % 2 ? 0.12 : -0.08) + 0.04 * i, cg); return y + t; }, 0.465);
+  }
 
   /* ===== Living room ===== */
   const fx = 8.0;
@@ -633,8 +711,24 @@ function buildRooms() {
   G.CUDDLE_BLANKET = blanket;
   // Coffee table with the cake, mugs, cookies and a candle.
   const tx = 8.0, tz = 1.85;
-  box(1.15, 0.06, 0.62, MAT.darkWood, tx, 0.43, tz, { r: 0.02 });
-  for (const [a, b] of [[-0.5, -0.24], [0.5, -0.24], [-0.5, 0.24], [0.5, 0.24]]) box(0.06, 0.4, 0.06, MAT.darkWood, tx + a, 0.2, tz + b);
+  // A low farmhouse table: three thick boards with breadboard ends, an apron, chunky turned legs, and a slatted shelf
+  // under it with books on it. (A slab on four square posts.)
+  {
+    const { V: cV, H: cH } = G.FURN('#6e4c34'), tg = new THREE.Group(); tg.position.set(tx, 0, tz); W.add(tg);
+    for (let i = 0; i < 3; i++) G.box(1.03, 0.055, 0.204, cH, 0, 0.4325, -0.206 + i * 0.206, { parent: tg, r: 0.006, uv: [1.7, 0.35] });
+    for (const s of [-1, 1]) G.box(0.06, 0.055, 0.62, cV, s * 0.545, 0.4325, 0, { parent: tg, r: 0.008, uv: [0.1, 1] });
+    for (const s of [-1, 1]) G.box(0.9, 0.065, 0.022, cH, 0, 0.37, s * 0.235, { parent: tg, r: 0.004, uv: [1.5, 0.1] });
+    for (const s of [-1, 1]) G.box(0.022, 0.065, 0.44, cH, s * 0.465, 0.37, 0, { parent: tg, r: 0.004, uv: [0.7, 0.1] });
+    const leg = [[0.028, 0], [0.034, 0.012], [0.03, 0.03], [0.026, 0.06], [0.036, 0.1], [0.04, 0.13], [0.04, 0.15], [0.03, 0.17], [0.034, 0.19], [0.03, 0.21], [0.026, 0.26], [0.032, 0.3], [0.034, 0.33]];
+    for (const [a, b] of [[-0.47, -0.235], [0.47, -0.235], [-0.47, 0.235], [0.47, 0.235]]) {
+      G.lathe(leg, cV, a, 0, b, { parent: tg, seg: 14 });
+      G.box(0.064, 0.075, 0.064, cV, a, 0.3675, b, { parent: tg, r: 0.006, uv: [0.1, 0.12] });
+    }
+    for (const s of [-1, 1]) G.box(0.03, 0.035, 0.44, cH, s * 0.47, 0.1, 0, { parent: tg, r: 0.004, uv: [0.7, 0.06] });   // the shelf's bearers
+    for (let i = 0; i < 5; i++) G.box(0.97, 0.016, 0.072, cH, 0, 0.1255, -0.18 + i * 0.09, { parent: tg, r: 0.004, uv: [1.6, 0.12] });   // its slats
+    [['#2d4659', 0.26, 0.03], ['#a8803c', 0.23, 0.024]].reduce((y, [c, w, t], i) => { G.bookFlat(w, t, w * 0.75, c, -0.22, y, 0.02, 0.1 - i * 0.18, tg); return y + t; }, 0.1335);
+    G.bookFlat(0.2, 0.02, 0.15, '#7a3a34', 0.25, 0.1335, -0.04, -0.3, tg);
+  }
   G.COLL.push({ x0: tx - 0.6, z0: tz - 0.34, x1: tx + 0.6, z1: tz + 0.34 });
   G.CAKE = buildCake(tx - 0.12, 0.46, tz);
   for (const [dx, dz, c] of [[0.36, 0.14, '#efe7da'], [0.42, -0.12, '#8a3a2e']]) {
@@ -915,16 +1009,53 @@ function buildKitchen() {
   for (const [x, y, c] of [[14.4, 1.6, '#c94a3a'], [14.75, 1.1, '#4a7ac9'], [14.48, 0.75, '#e0b040']]) sph(0.018, enamel(c), x, y, 0.785, [1, 1, 0.5], W, 10);
   // Table and three chairs: two side by side facing the window wall, one across.
   K.table = { x: 13.0, z: 2.95, top: 0.76 };
-  box(1.25, 0.05, 0.8, MAT.wood, 13.0, 0.74, 2.95, { r: 0.015 });
-  for (const [a, b] of [[-0.56, -0.34], [0.56, -0.34], [-0.56, 0.34], [0.56, 0.34]]) box(0.05, 0.72, 0.05, MAT.wood, 13.0 + a, 0.36, 2.95 + b);
+  // A farmhouse table: three pine boards with breadboard ends, on a base painted sage like the cupboards, an apron
+  // and turned legs. (A plank on four sticks.)
+  {
+    const tg = new THREE.Group(); tg.position.set(13.0, 0, 2.95); W.add(tg);
+    const { V: pV, H: pH } = G.FURN('#a97b4f'), sg = G.std({ map: G.grainTex(false), color: '#8c9c86', roughness: 0.6, env: 0.25 }), sgH = G.std({ map: G.grainTex(true), color: '#8c9c86', roughness: 0.6, env: 0.25 });
+    for (let i = 0; i < 3; i++) G.box(1.13, 0.045, 0.262, pH, 0, 0.7425, -0.267 + i * 0.267, { parent: tg, r: 0.005, uv: [1.9, 0.45] });
+    for (const s of [-1, 1]) G.box(0.06, 0.045, 0.8, pV, s * 0.595, 0.7425, 0, { parent: tg, r: 0.008, uv: [0.1, 1.35] });
+    for (const s of [-1, 1]) G.box(1.0, 0.1, 0.022, sgH, 0, 0.665, s * 0.32, { parent: tg, r: 0.004, uv: [1.6, 0.15] });
+    for (const s of [-1, 1]) G.box(0.022, 0.1, 0.62, sgH, s * 0.54, 0.665, 0, { parent: tg, r: 0.004, uv: [1, 0.15] });
+    const leg = [[0.024, 0], [0.028, 0.015], [0.024, 0.035], [0.021, 0.08], [0.026, 0.25], [0.031, 0.38], [0.027, 0.42], [0.034, 0.45], [0.034, 0.48], [0.026, 0.5], [0.03, 0.54], [0.034, 0.585]];
+    for (const [a, b] of [[-0.54, -0.32], [0.54, -0.32], [-0.54, 0.32], [0.54, 0.32]]) {
+      G.lathe(leg, sg, a, 0, b, { parent: tg, seg: 14 });
+      G.box(0.066, 0.135, 0.066, sg, a, 0.6475, b, { parent: tg, r: 0.006, uv: [0.1, 0.22] });
+    }
+  }
   G.COLL.push({ x0: 12.36, z0: 2.53, x1: 13.64, z1: 3.37 });
+  // The chairs: spindle-backed, a shaped seat on four splayed, turned legs joined by an H stretcher, the back raked a
+  // little, five spindles up to a crest rail, and a plaid cushion tied on at the back. (Ladder-backs of boxes.)
+  const chW = G.FURN('#7f5a3c'), seatSh = new THREE.Shape();
+  seatSh.moveTo(-0.2, 0.19); seatSh.lineTo(0.2, 0.19); seatSh.lineTo(0.21, -0.12); seatSh.quadraticCurveTo(0.21, -0.2, 0.13, -0.205);
+  seatSh.quadraticCurveTo(0, -0.215, -0.13, -0.205); seatSh.quadraticCurveTo(-0.21, -0.2, -0.21, -0.12); seatSh.lineTo(-0.2, 0.19);
+  const seatGeo = new THREE.ExtrudeGeometry(seatSh, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 2, curveSegments: 10 }); seatGeo.rotateX(-Math.PI / 2);
+  const chLeg = [[0.015, 0], [0.018, 0.02], [0.016, 0.05], [0.014, 0.12], [0.019, 0.15], [0.019, 0.165], [0.014, 0.18], [0.018, 0.3], [0.021, 0.38], [0.017, 0.42], [0.014, 0.445]];
+  const post = [[0.015, -0.01], [0.017, 0.03], [0.014, 0.08], [0.016, 0.2], [0.013, 0.3], [0.015, 0.36], [0.012, 0.44]];
+  const crestGeo = new THREE.BoxGeometry(0.42, 0.075, 0.024, 16, 1, 1);
+  { const P = crestGeo.attributes.position; for (let i = 0; i < P.count; i++) { const u = P.getX(i) / 0.21; P.setZ(i, P.getZ(i) + 0.016 * u * u); P.setY(i, P.getY(i) + 0.012 * (1 - u * u)); } crestGeo.computeVertexNormals(); }
   const chair = (x, z, ry) => {
     const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; W.add(g);
-    box(0.42, 0.04, 0.4, MAT.darkWood, 0, 0.45, 0, { parent: g, r: 0.01 });
-    for (const [a, b] of [[-0.18, -0.17], [0.18, -0.17], [-0.18, 0.17], [0.18, 0.17]]) box(0.035, 0.45, 0.035, MAT.darkWood, a, 0.225, b, { parent: g });
-    for (const a of [-0.18, 0.18]) box(0.035, 0.5, 0.035, MAT.darkWood, a, 0.72, -0.18, { parent: g });
-    box(0.4, 0.12, 0.03, MAT.darkWood, 0, 0.9, -0.18, { parent: g });
-    box(0.36, 0.035, 0.34, MAT.plaid, 0, 0.485, 0.01, { parent: g, r: 0.012 });
+    const seat = G.add(new THREE.Mesh(seatGeo, chW.V), g, true, true); seat.position.y = 0.432;
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const l = G.lathe(chLeg, chW.V, sx * 0.185, 0, sz * 0.158, { parent: g, seg: 10 });
+      l.rotation.set(-sz * 0.042, 0, sx * 0.045);
+    }
+    for (const sx of [-1, 1]) { const t = cyl(0.009, 0.009, 0.31, chW.V, sx * 0.178, 0.15, 0, { parent: g, seg: 8 }); t.rotation.x = Math.PI / 2; }
+    { const t = cyl(0.009, 0.009, 0.36, chW.V, 0, 0.16, 0, { parent: g, seg: 8 }); t.rotation.z = Math.PI / 2; }
+    const bk = new THREE.Group(); bk.position.set(0, 0.47, -0.165); bk.rotation.x = -0.12; g.add(bk);
+    for (const sx of [-1, 1]) G.lathe(post, chW.V, sx * 0.175, 0, 0, { parent: bk, seg: 10 });
+    for (let i = -2; i <= 2; i++) cyl(0.0058, 0.0078, 0.4, chW.V, i * 0.062, 0.2, 0.004, { parent: bk, seg: 8 });
+    const crest = G.add(new THREE.Mesh(crestGeo, chW.H), bk, true, true); crest.position.y = 0.425;
+    const cu = G.pillowGeo(0.37, 0.04, 0.35, x * 7 + z), CP = cu.attributes.position;   // the cushion, its underside flattened on the seat
+    for (let i = 0; i < CP.count; i++) if (CP.getY(i) < 0) CP.setY(i, CP.getY(i) * 0.25);
+    cu.computeVertexNormals();
+    G.add(new THREE.Mesh(cu, MAT.plaid), g, true, true).position.set(0, 0.476, 0.015);
+    for (const sx of [-1, 1]) {   // the ties, knotted round the back posts
+      sph(0.009, MAT.plaid, sx * 0.168, 0.5, -0.17, [1.3, 0.8, 1], g, 8);
+      for (const k of [-1, 1]) { const t = box(0.012, 0.06, 0.003, MAT.plaid, sx * 0.168 + k * 0.008, 0.47, -0.185, { parent: g, cast: false }); t.rotation.set(0.15, 0, k * 0.25); }
+    }
     return G.propify('chair', g);
   };
   // ry = π: the seat faces −z (toward the table from the window side).
