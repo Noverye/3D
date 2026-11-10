@@ -169,7 +169,7 @@ function buildNook() {
   // books along the side wall, a plant, and a little round rug
   bookshelf(NX1 - 0.18, z0 + 1.15, 0.34, 1.1, 1.85, Math.PI / 2);
   plant(NX0 + 0.25, z0 + 0.35, 0.9);
-  const rug = G.add(new THREE.Mesh(new THREE.CircleGeometry(0.7, 32), MAT.rug), W, false, true); rug.rotation.x = -Math.PI / 2; rug.position.set(sx, 0.007, z0 + 1.15);
+  G.rug('braid', 1.4, 1.4, sx, z0 + 1.15);   // a braided round rug
   G.NOOK = { x: sx, z: sz + 0.12, seatY: 0.5 };
   G.INTER.push({ id: 'nook', pos: [sx, 0.6, sz + 0.5], r: 1.0, label: 'Window seat', act: () => G.Story.nook && G.Story.nook() });
 }
@@ -229,7 +229,7 @@ function buildHomely() {
     const r = cyl(0.007, 0.007, 1.3, MAT.metal, 13.05, 1.615, z0 + 0.2, { seg: 6 }); r.rotation.z = Math.PI / 2; }
   // rugs: a long runner by the bed, a sheepskin by the hearth, a mat inside the door
   const rug = (w, d, x, z, mat, ry = 0) => { const m = G.add(new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat), W, false, true); m.rotation.set(-Math.PI / 2, 0, ry); m.position.set(x, 0.007, z); return m; };
-  rug(0.7, 2.0, 0.95, -0.8, MAT.rug);
+  G.rug('rag', 0.7, 2.0, 0.95, -0.8, { pal: 1 });   // a striped rag runner
   // The sheepskin: a whole pelt, its outline ragged with tufts and the four legs and the neck showing, the wool deep in
   // the middle and thinning to the edge, curly. (A flat ellipse of the cable knit.) The mat at the door is coir, with
   // a dark border. (A plain brown rectangle.)
@@ -511,7 +511,7 @@ function buildRooms() {
     hat.rotation.y = 0.4;
     G.cyl(0.155, 0.155, 0.045, G.std({ color: '#c9bfa9', roughness: 0.85 }), 0.28, 2.305, -0.32, { parent: W2, seg: 24 });   // its lid
   }
-  const rug = G.add(new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.6), MAT.rug), W, false, true); rug.rotation.x = -Math.PI / 2; rug.position.set(bx, 0.006, 3.2);
+  G.rug('berber', 2.6, 1.7, bx, 3.2);   // a cream Berber with a brown lattice
   plant(0.45, 3.6, 1.0);
   // A blanket chest against the front wall, painted a faded blue-grey: a lid with a moulded edge, two raised panels in
   // its front, a base moulding on bracket feet, iron drop handles at the ends and a brass escutcheon; a cream knitted
@@ -906,7 +906,7 @@ function buildRooms() {
   floorLamp(10.35, 0.55);
   floorLamp(6.15, 3.55);
   plant(10.4, 4.2, 1.2);   // Basil (not basil)
-  const rug2 = G.add(new THREE.Mesh(new THREE.PlaneGeometry(2.9, 2.0), MAT.rug), W, false, true); rug2.rotation.x = -Math.PI / 2; rug2.position.set(8, 0.006, 2.2);
+  G.rug('kilim', 3.0, 2.3, 8, 2.25);   // a faded kilim
   // A wall clock on the partition, hands set to the time of day (fx.js turns them).
   const clock = G.propSlot('clock', 5.13, 1.95, 1.5, Math.PI / 2, (g) => {
     // a schoolhouse clock: a round, turned wooden bezel, a brass ring, a cream dial with its numerals and minute
@@ -1345,7 +1345,7 @@ function buildKitchen() {
   const rimP = new THREE.Mesh(new THREE.TorusGeometry(0.222, 0.0045, 6, 40), G.shared({ color: '#1f2a26', roughness: 0.4 })); rimP.rotation.x = Math.PI / 2; rimP.position.y = -0.865; pend.add(rimP);
   const pl = new THREE.PointLight('#ffb062', 0, 6, 2); pl.position.set(0, -0.85, 0); pend.add(pl);
   LAMPS.push({ g: pend, light: pl, shade, on: true, power: 7.5, flick: 1 }); K.pendant = LAMPS[LAMPS.length - 1];
-  const runner = G.add(new THREE.Mesh(new THREE.PlaneGeometry(2.3, 0.7), MAT.rug), W, false, true); runner.rotation.x = -Math.PI / 2; runner.position.set(12.45, 0.006, 1.2);
+  G.rug('rag', 2.3, 0.7, 12.45, 1.2, { pal: 0 });   // a striped rag runner
   for (let i = 0; i < 3; i++) plant(12.5 + i * 0.32, 4.47, 0.27 + (i % 2) * 0.04, { y: 0.85, coll: false });   // herbs in little pots (they were green beads)
 }
 

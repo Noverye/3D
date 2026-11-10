@@ -1140,3 +1140,120 @@ G.bookFlat = (w, t, d, color, x, y, z, ry = 0, parent) => {
     return mat;
   };
 }
+
+/* ---------- rugs (build 160) ----------
+ * Every rug in the house was the same flat red sticker, stretched to fit. Now each is its own rug with a little
+ * thickness and a soft edge: a faded kilim in the living room, a cream Berber with a brown lattice by the bed,
+ * striped rag runners with knotted fringes, and a braided round rug in the nook.
+ *   G.rug(kind, w, d, x, z, { ry, parent, pal })   kind: 'kilim' | 'berber' | 'rag' | 'braid' (w = diameter) */
+{
+  const TXC = {};
+  const noise = (c, w, h, fn) => { const im = c.getImageData(0, 0, w, h), a = im.data; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4, k = fn(x, y); a[i] *= k; a[i + 1] *= k; a[i + 2] *= k; } c.putImageData(im, 0, 0); };
+  const stepDiamond = (c, cx, cy, rx, ry, steps, col) => { c.fillStyle = col; const hh = ry / steps; for (let j = -steps + 1; j <= steps - 1; j++) { const hw = rx * (1 - Math.abs(j) / steps); c.fillRect(Math.round(cx - hw), Math.round(cy + (j - 0.5) * hh), Math.round(hw * 2), Math.ceil(hh) + 1); } };
+  const kilimTex = () => TXC.kilim || (TXC.kilim = G.canvasTex(0, null, { w: 768, h: 592, draw: (c, w, h) => {
+    const INK = '#2a3142', CREAM = '#dccdae', OCH = '#c2924c', RED = '#8a3a2a', TEAL = '#4c6c64', DRED = '#5e2620';
+    c.fillStyle = INK; c.fillRect(0, 0, w, h);
+    c.fillStyle = CREAM; c.fillRect(12, 12, w - 24, h - 24); c.fillStyle = INK; c.fillRect(18, 18, w - 36, h - 36);
+    // the main border: a run of small stepped diamonds
+    const run = (x0, y0, x1, y1, n) => { for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t; stepDiamond(c, x, y, 17, 17, 4, i % 2 ? OCH : CREAM); stepDiamond(c, x, y, 8, 8, 2, i % 2 ? DRED : TEAL); } };
+    run(26, 44, w - 26, 44, 21); run(26, h - 44, w - 26, h - 44, 21); run(44, 70, 44, h - 70, 13); run(w - 44, 70, w - 44, h - 70, 13);
+    c.fillStyle = CREAM; c.fillRect(68, 68, w - 136, h - 136); c.fillStyle = OCH; c.fillRect(74, 74, w - 148, h - 148);
+    const F = 79; c.fillStyle = RED; c.fillRect(F, F, w - F * 2, h - F * 2);
+    c.save(); c.beginPath(); c.rect(F, F, w - F * 2, h - F * 2); c.clip();
+    for (const [cx, cy] of [[F, F], [w - F, F], [F, h - F], [w - F, h - F]]) { stepDiamond(c, cx, cy, 120, 100, 10, INK); stepDiamond(c, cx, cy, 96, 80, 8, CREAM); stepDiamond(c, cx, cy, 82, 68, 7, TEAL); stepDiamond(c, cx, cy, 50, 42, 5, DRED); }
+    // small motifs scattered through the field
+    const rnd = G.seeded(160);
+    for (let i = 0; i < 46; i++) { const x = F + 30 + rnd() * (w - F * 2 - 60), y = F + 30 + rnd() * (h - F * 2 - 60); stepDiamond(c, x, y, 9, 9, 3, rnd() < 0.5 ? OCH : CREAM); stepDiamond(c, x, y, 4, 4, 1, INK); }
+    // three medallions down the middle
+    for (const [cx, s] of [[w / 2, 1], [w / 2 - 205, 0.62], [w / 2 + 205, 0.62]]) {
+      const cy = h / 2;
+      stepDiamond(c, cx, cy, 150 * s, 168 * s, Math.round(14 * s), INK); stepDiamond(c, cx, cy, 132 * s, 148 * s, Math.round(12 * s), CREAM);
+      stepDiamond(c, cx, cy, 118 * s, 132 * s, Math.round(11 * s), OCH); stepDiamond(c, cx, cy, 96 * s, 108 * s, Math.round(9 * s), RED);
+      stepDiamond(c, cx, cy, 66 * s, 74 * s, Math.round(7 * s), TEAL); stepDiamond(c, cx, cy, 44 * s, 50 * s, Math.round(5 * s), CREAM); stepDiamond(c, cx, cy, 22 * s, 25 * s, 3, DRED);
+    }
+    c.restore();
+    // abrash (the dye lots drifting from row to row), the weave, and years of feet
+    noise(c, w, h, (x, y) => (0.9 + G.hash1(Math.floor(y / 7) * 3.7) * 0.14) * (0.93 + G.hash1(x * 12.9 + y * 78.2) * 0.12) * (0.9 + G.fbm(x / 90, y / 90, 2) * 0.16) * ((x + y) % 3 ? 1 : 0.93));
+  } }));
+  const berberTex = () => TXC.berber || (TXC.berber = G.canvasTex(0, null, { w: 768, h: 512, draw: (c, w, h) => {
+    c.fillStyle = '#e2d7c2'; c.fillRect(0, 0, w, h);
+    const rnd = G.seeded(77); c.strokeStyle = '#4a3a30'; c.lineCap = 'round'; c.lineJoin = 'round';
+    const PX = 154, PY = 128;
+    for (const dir of [1, -1]) for (let k = -6; k < 12; k++) {
+      c.lineWidth = 5 + rnd() * 2.5; c.beginPath();
+      for (let i = 0; i <= 10; i++) { const y = -20 + i * (h + 40) / 10, x = k * PX + dir * (y / PY) * PX * 0.5 + (dir < 0 ? PX * 2 : 0) + (rnd() - 0.5) * 12; i ? c.lineTo(x, y + (rnd() - 0.5) * 8) : c.moveTo(x, y); }
+      c.stroke();
+    }
+    noise(c, w, h, (x, y) => 0.86 + G.fbm(x / 6, y / 6, 2) * 0.16 + G.fbm(x / 70, y / 70, 2) * 0.1);
+  } }));
+  const shagB = () => TXC.shag || (TXC.shag = G.canvasTex(256, (u, v) => { const g = 60 + G.pfbm(u * 40, v * 40, [40, 40], 3) * 190; return [g, g, g]; }, { srgb: false }));
+  const PALS = [
+    [[214, 203, 180], [122, 138, 110], [178, 142, 86], [214, 203, 180], [88, 104, 92], [160, 92, 68]],     // kitchen: cream, sage, mustard, rust
+    [[206, 198, 184], [96, 116, 130], [206, 198, 184], [150, 74, 58], [58, 72, 88], [190, 160, 110]],     // bedside: cream, blue-grey, rust
+  ];
+  const ragTex = (pal, alongV) => { const key = 'rag' + pal + (alongV ? 'v' : 'u'); if (TXC[key]) return TXC[key];
+    const rnd = G.seeded(31 + pal * 9), cols = PALS[pal], tab = []; let last = -1;
+    while (tab.length < 512) { let ci; do ci = Math.floor(rnd() * cols.length); while (ci === last); last = ci; const n = 6 + Math.floor(rnd() * 26); for (let i = 0; i < n; i++) tab.push(ci); }
+    return (TXC[key] = G.canvasTex(512, (u, v) => {
+      const a = alongV ? v : u, b = alongV ? u : v;
+      const c = cols[tab[Math.floor(a * 511.99)]], row = Math.floor(a * 170);
+      const k = (0.84 + G.hash1(row * 5.3) * 0.2) * (0.94 + G.hash1(Math.floor(b * 512) * 3.1 + row * 17.7) * 0.1) * (Math.abs(((b * 46) % 1) - 0.5) < 0.09 ? 1.12 : 1) * ((a * 170) % 1 < 0.16 ? 0.8 : 1);
+      return [c[0] * k, c[1] * k, c[2] * k];
+    })); };
+  const ragB = (alongV) => { const key = 'ragB' + (alongV ? 'v' : 'u'); return TXC[key] || (TXC[key] = G.canvasTex(256, (u, v) => { const a = alongV ? v : u, g = 128 + Math.sin(a * 85 * Math.PI * 2) * 90; return [g, g, g]; }, { srgb: false })); };
+  const RINGS = 12, BRAID = [[150, 70, 54], [206, 196, 176], [84, 104, 96], [190, 150, 84], [206, 196, 176], [62, 74, 92], [150, 70, 54], [206, 196, 176], [122, 138, 110], [190, 150, 84], [84, 60, 50], [206, 196, 176]];
+  const braidTex = () => TXC.braid || (TXC.braid = G.canvasTex(512, (u, v) => {
+    const kf = v * RINGS, k = Math.min(RINGS - 1, Math.floor(kf)), f = kf - k, reps = Math.max(6, Math.round((k + 0.5) / RINGS * 0.7 * 6.283 / 0.034));
+    const ch = (u * reps + Math.abs(f - 0.5) * 0.9) % 1, strand = Math.floor(ch * 3);
+    const c0 = BRAID[k], c1 = BRAID[(k + 5) % RINGS], c = strand === 1 ? [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2, (c0[2] + c1[2]) / 2] : c0;
+    const sh = (0.82 + Math.sin(f * Math.PI) * 0.22) * (0.9 + (((ch * 3) % 1) < 0.18 ? -0.16 : 0)) * (0.94 + G.hash1(Math.floor(u * 512) * 1.3 + Math.floor(v * 512) * 91.7) * 0.1);
+    return [c[0] * sh, c[1] * sh, c[2] * sh];
+  }));
+  const braidB = () => TXC.braidB || (TXC.braidB = G.canvasTex(256, (u, v) => { const f = (v * RINGS) % 1, g = 40 + Math.sin(f * Math.PI) * 200; return [g, g, g]; }, { srgb: false }));
+  // knotted tassels: alpha-cut strands hanging off an end
+  const fringeTex = () => TXC.fringe || (TXC.fringe = G.canvasTex(0, null, { w: 256, h: 64, draw: (c, w, h) => {
+    c.clearRect(0, 0, w, h); const rnd = G.seeded(5);
+    for (let i = 0; i < 16; i++) { const x = (i + 0.5) * 16;
+      for (let s = 0; s < 5; s++) { c.strokeStyle = `rgb(${212 + rnd() * 26 | 0},${200 + rnd() * 24 | 0},${172 + rnd() * 24 | 0})`; c.lineWidth = 2; c.beginPath(); c.moveTo(x + (s - 2) * 0.8, 0); c.quadraticCurveTo(x + (s - 2) * 1.6, h * 0.4, x + (s - 2) * 2.6 + (rnd() - 0.5) * 4, h * (0.8 + rnd() * 0.2)); c.stroke(); }
+      c.fillStyle = '#cdbf9f'; c.fillRect(x - 3.5, 6, 7, 6); }
+  } }));
+  let fringeM;
+  const slab = (w, d, pile, seed) => {
+    const e = Math.min(0.014, pile * 1.4), nx = Math.max(6, Math.round(w / 0.16)), nz = Math.max(6, Math.round(d / 0.16));
+    const line = (len, n) => { const a = [-len / 2, -len / 2 + e]; for (let i = 1; i < n; i++) a.push(-len / 2 + e + (len - e * 2) * i / n); a.push(len / 2 - e, len / 2); return a; };
+    const xs = line(w, nx), zs = line(d, nz), pos = [], uv = [], idx = [], W1 = xs.length, D1 = zs.length;
+    for (let j = 0; j < D1; j++) for (let i = 0; i < W1; i++) {
+      const edge = i === 0 || j === 0 || i === W1 - 1 || j === D1 - 1;
+      pos.push(xs[i], edge ? 0 : pile + (G.fbm(xs[i] * 3 + seed, zs[j] * 3, 2) - 0.5) * 0.004, zs[j]); uv.push(xs[i] / w + 0.5, 0.5 - zs[j] / d);
+    }
+    for (let j = 0; j < D1 - 1; j++) for (let i = 0; i < W1 - 1; i++) { const a = j * W1 + i, b = a + 1, c2 = a + W1, d2 = c2 + 1; idx.push(a, c2, b, b, c2, d2); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
+  };
+  G.rug = (kind, w, d, x, z, o = {}) => {
+    const g = new THREE.Group(); g.position.set(x, 0.004, z); g.rotation.y = o.ry || 0; (o.parent || G.world).add(g);
+    const along = d > w;   // the long way runs along z
+    let mat, pile = 0.009, fringe = true;
+    if (kind === 'kilim') mat = G.std({ map: kilimTex(), bumpMap: G.rep(G.TX.fabricB, 14, 11), bumpScale: 0.003, roughness: 1, env: 0.1 });
+    else if (kind === 'berber') { mat = G.std({ map: berberTex(), bumpMap: G.rep(shagB(), 5, 3.3), bumpScale: 0.012, roughness: 1, env: 0.1 }); pile = 0.02; }
+    else if (kind === 'rag') { mat = G.std({ map: ragTex(o.pal || 0, along), bumpMap: ragB(along), bumpScale: 0.004, roughness: 1, env: 0.1 }); pile = 0.01; }
+    else { mat = G.std({ map: braidTex(), bumpMap: braidB(), bumpScale: 0.01, roughness: 1, env: 0.1, side: THREE.DoubleSide }); fringe = false; }
+    if (kind === 'braid') {
+      const R = w / 2, pts = []; for (let i = 0; i <= RINGS * 2; i++) { const t = i / (RINGS * 2); pts.push(new THREE.Vector2(Math.max(0.0005, R * t), i === RINGS * 2 ? 0 : 0.013 + (i % 2 ? 0.004 : 0))); }
+      const m = G.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 72), mat), g, false, true); m.geometry.computeVertexNormals();
+      return g;
+    }
+    G.add(new THREE.Mesh(slab(w, d, pile, w * 7.3), mat), g, false, true);
+    if (fringe) {
+      fringeM = fringeM || G.std({ map: fringeTex(), transparent: true, alphaTest: 0.35, roughness: 1, env: 0.1, side: THREE.DoubleSide });
+      const L = kind === 'berber' ? 0.07 : 0.05, len = along ? w : d;
+      for (const s of [-1, 1]) {
+        const fg = new THREE.PlaneGeometry(len - 0.01, L), uvA = fg.attributes.uv; for (let i = 0; i < uvA.count; i++) uvA.setX(i, uvA.getX(i) * Math.round(len / 0.26));
+        const f = G.add(new THREE.Mesh(fg, fringeM), g, false, true);
+        f.rotation.order = 'YXZ';   // knots toward the rug
+        if (along) f.rotation.set(-Math.PI / 2, 0, s > 0 ? 0 : Math.PI); else f.rotation.set(-Math.PI / 2, s > 0 ? Math.PI / 2 : -Math.PI / 2, 0);
+        f.position.set(along ? 0 : s * (w / 2 + L / 2 - 0.004), 0.003, along ? s * (d / 2 + L / 2 - 0.004) : 0);
+      }
+    }
+    return g;
+  };
+}
