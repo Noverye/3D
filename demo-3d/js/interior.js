@@ -331,7 +331,11 @@ function buildHomely() {
   }
   [['#5e4870', 0.24, 0.034], ['#9a5a36', 0.22, 0.03], ['#2d4659', 0.25, 0.04], ['#d4c6a8', 0.2, 0.026]].reduce((y, [c, w, t], i) => { G.bookFlat(w, t, w * 0.7, c, 0.75, y, -2.0, i * 0.25 - 0.3); return y + t; }, 0);
   // a throw over the sofa back and a knitted pouffe
-  const pf = cyl(0.3, 0.3, 0.36, G.std({ map: TX.knitCream, color: '#c0a07a', roughness: 1 }), 9.55, 0.18, 2.0, { seg: 20 }); G.COLL.push({ x0: 9.25, z0: 1.7, x1: 9.85, z1: 2.3 });
+  // (the pouffe: a round knitted pouf, stuffed, its sides bellied and its top sunk a little in the middle, the cable
+  // knit running round it; it was a straight-sided cylinder)
+  const pf = G.lathe([[0, 0.0], [0.24, 0.0], [0.285, 0.02], [0.31, 0.07], [0.318, 0.15], [0.314, 0.24], [0.298, 0.3], [0.265, 0.34], [0.2, 0.362], [0.1, 0.366], [0, 0.358]],
+    G.std({ map: G.rep(TX.knitCream, 5, 1.4), bumpMap: G.rep(TX.knitB, 5, 1.4), bumpScale: 0.008, color: '#c0a07a', roughness: 1 }), 9.55, 0, 2.0, { seg: 40 });
+  G.COLL.push({ x0: 9.25, z0: 1.7, x1: 9.85, z1: 2.3 });
   // (the kitchen's pendant is built with the kitchen; a second, copper one hung here too, just under it, so the table
   // had two lamps, one inside the other)
   // fairy lights along the living-room beam, over the sofa
@@ -355,6 +359,7 @@ function drapeOver(parent, mat, path, z0, z1, o = {}) {
   const tm = mat.clone(); tm.side = THREE.DoubleSide; G.MATS.push(tm);
   return G.add(new THREE.Mesh(tg, tm), parent, true, true);
 }
+G.drapeOver = drapeOver;
 function buildRooms() {
   const W = G.world;
   /* ===== Bedroom ===== */
@@ -991,7 +996,15 @@ function noteTex(lines, o = {}) {
 G.noteTex = noteTex;
 function buildKitchen() {
   const W = G.world, K = (G.KITCHEN = {});
-  const block = G.std({ map: TX.floor, color: '#d8b48a', roughness: 0.5, env: 0.4 });
+  // Butcher block: staves of oak about 4 cm wide running the length of the top, each its own tone, their butt joints
+  // staggered, the grain streaking along them, oiled. (It was the floorboards' texture, so the worktops read as floor.)
+  const butcher = G.canvasTex(512, (u, v) => {
+    const N = 10, j = Math.floor(v * N), fv = v * N - j, jo = G.hash1(j * 7.7 + 1), seg = (u + jo) % 1 < 0.5 + (G.hash1(j * 3.1) - 0.5) * 0.3 ? 0 : 1;
+    const tone = 0.8 + G.hash1(j * 13.3 + seg * 5.1) * 0.28, joint = Math.abs(((u + jo) % 1) - (0.5 + (G.hash1(j * 3.1) - 0.5) * 0.3)) < 0.002 || ((u + jo) % 1) < 0.002;
+    const t = tone * (0.9 + G.pfbm(u * 3, v * 60, [3, 60], 3) * 0.2 + Math.sin(v * N * 30 + G.pfbm(u * 6, v * 10, [6, 10], 2) * 6) * 0.025) * (fv < 0.04 || joint ? 0.72 : 1);
+    return [208 * t, 158 * t, 104 * t];
+  });
+  const block = G.std({ map: butcher, color: '#e2c49a', roughness: 0.42, env: 0.45 });
   const enamel = (c) => G.shared({ color: c, roughness: 0.25, env: 0.9 });
   // Base cabinets along the north wall, with a butcher-block top and a tiled splash: painted sage, with shaker doors
   // (a frame round a flat panel) and drawers, brass knobs and cup pulls; a cream enamel range in the middle with its
@@ -1026,25 +1039,74 @@ function buildKitchen() {
   front(SX0, (SX0 + SX1) / 2, 0.1, 0.655, (SX0 + SX1) / 2 - 0.05); front((SX0 + SX1) / 2, SX1, 0.1, 0.655, (SX0 + SX1) / 2 + 0.05);
   front(SX1, cx1, 0.66, 0.84, 'cup'); front(SX1, cx1, 0.1, 0.66, SX1 + 0.05);
   // the worktops, butcher block, either side of the range and round the back of the sink
-  for (const [a, b] of [[cx0 - 0.03, RX0], [RX1, SX0], [SX1, cx1 + 0.03]]) box(b - a, 0.05, 0.64, block, (a + b) / 2, 0.865, 0.41, { r: 0.008 });
-  box(SX1 - SX0, 0.05, 0.08, block, (SX0 + SX1) / 2, 0.865, 0.13, { r: 0.006 });
+  for (const [a, b] of [[cx0 - 0.03, RX0], [RX1, SX0], [SX1, cx1 + 0.03]]) box(b - a, 0.05, 0.64, block, (a + b) / 2, 0.865, 0.41, { r: 0.008, uv: [(b - a) / 0.8, 1.6] });
+  box(SX1 - SX0, 0.05, 0.08, block, (SX0 + SX1) / 2, 0.865, 0.13, { r: 0.006, uv: [(SX1 - SX0) / 0.8, 0.2] });
   const splash = new THREE.Mesh(new THREE.PlaneGeometry(cw, 0.56), G.std({ map: G.rep(tileTex(), cw / 0.6, 1), roughness: 0.3, env: 0.7 }));
   splash.position.set(ccx, 1.17, 0.113); W.add(splash); splash.receiveShadow = true;
   // Open shelf with jars, mugs and a sprig of something green.
-  box(cw - 0.1, 0.04, 0.24, MAT.darkWood, ccx, 1.78, 0.24);
+  // An oak board on carved brackets; glass storage jars with what's in them showing (pasta, beans, coffee, oats,
+  // lentils, rice) under cork or clamp lids, enamel mugs, a pot of thyme; three more mugs hang by their handles from
+  // brass cup hooks under it. (Pale tubes with discs on top, and stubby cylinders.)
   const r = G.seeded(61);
-  for (let x = cx0 + 0.15; x < cx1 - 0.1; x += 0.16 + r() * 0.08) {
-    if (r() < 0.55) { const h = 0.12 + r() * 0.1; cyl(0.045, 0.045, h, G.shared({ color: '#dfe6e0', roughness: 0.05, transparent: true, opacity: 0.5, env: 1.2 }), x, 1.8 + h / 2, 0.24); cyl(0.047, 0.047, 0.02, MAT.darkWood, x, 1.8 + h + 0.01, 0.24); }
-    else { cyl(0.04, 0.035, 0.09, enamel(['#c96a4a', '#efe7da', '#5d7a8c'][Math.floor(r() * 3)]), x, 1.845, 0.24, { seg: 14 }); }
+  {
+    const { V: oV, H: oH } = G.FURN('#8a6442');
+    box(cw - 0.1, 0.04, 0.24, oH, ccx, 1.78, 0.24, { r: 0.008, uv: [(cw - 0.1) / 0.6, 0.4] });
+    const brS = new THREE.Shape(); brS.moveTo(0, 0); brS.lineTo(0, 0.2); brS.lineTo(0.19, 0.2); brS.lineTo(0.19, 0.17); brS.quadraticCurveTo(0.07, 0.16, 0.04, 0.0); brS.lineTo(0, 0);
+    const brG = new THREE.ExtrudeGeometry(brS, { depth: 0.035, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 1, curveSegments: 10 });
+    brG.rotateY(-Math.PI / 2); brG.translate(0.0175, 1.56, 0.115);
+    for (const bxp of [cx0 + 0.2, cx0 + 0.88, cx1 - 0.16]) { const b = G.add(new THREE.Mesh(brG, oV), W, true, true); b.position.x = bxp; }
+  }
+  const mug = (parent, col, x, y, z, ry = 0, rz = 0) => {
+    const mg = new THREE.Group(); mg.position.set(x, y, z); mg.rotation.set(0, ry, rz); parent.add(mg);
+    const mm = enamel(col);
+    G.lathe([[0, 0], [0.036, 0], [0.038, 0.005], [0.038, 0.088], [0.035, 0.09], [0.034, 0.012], [0, 0.012]], mm, 0, 0, 0, { parent: mg, seg: 20 });
+    const rimT = new THREE.Mesh(new THREE.TorusGeometry(0.0365, 0.0022, 4, 24), G.shared({ color: '#1f2a33', roughness: 0.3 })); rimT.rotation.x = Math.PI / 2; rimT.position.y = 0.089; mg.add(rimT);   // the dark rolled rim enamel mugs have
+    const hd = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.0055, 6, 12), mm); hd.position.set(0.045, 0.048, 0); hd.scale.set(0.8, 1, 1); mg.add(hd);
+    return mg;
+  };
+  {
+    const glass = G.shared({ color: '#e4ece6', roughness: 0.05, transparent: true, opacity: 0.32, env: 1.3 });
+    const fills = [['#e2c07a', 0.8], ['#7a3a2a', 0.6], ['#3a2418', 0.7], ['#d9c9a6', 0.55], ['#b0632e', 0.75], ['#f0ebe0', 0.65], ['#c9a04a', 0.5]];
+    let x = cx0 + 0.14, k = 0;
+    while (x < cx1 - 0.1) {
+      if (k % 4 === 2) { mug(W, ['#c96a4a', '#efe7da', '#5d7a8c'][k % 3], x, 1.8, 0.24, r() * 6); x += 0.12; k++; continue; }
+      if (k === 5) { plant(x + 0.02, 0.24, 0.32, { y: 1.8, coll: false }); x += 0.15; k++; continue; }
+      const jr = 0.04 + r() * 0.012, h = 0.12 + r() * 0.1, [fc, fl] = fills[Math.floor(r() * fills.length)];
+      const jg = new THREE.Group(); jg.position.set(x + jr, 1.8, 0.24); W.add(jg);
+      G.lathe([[0, 0], [jr, 0], [jr + 0.002, 0.006], [jr + 0.002, h - 0.025], [jr - 0.006, h - 0.01], [jr - 0.008, h]], glass, 0, 0, 0, { parent: jg, seg: 20, cast: false });
+      cyl(jr - 0.004, jr - 0.004, h * fl - 0.006, G.shared({ color: fc, roughness: 0.9 }), 0, 0.003 + (h * fl - 0.006) / 2, 0, { parent: jg, seg: 18 });
+      if (r() < 0.5) cyl(jr - 0.006, jr - 0.009, 0.026, G.shared({ color: '#b98d5e', roughness: 0.95 }), 0, h + 0.006, 0, { parent: jg, seg: 16 });   // a cork
+      else { cyl(jr - 0.004, jr - 0.004, 0.014, glass, 0, h + 0.006, 0, { parent: jg, seg: 18, cast: false }); const sl = new THREE.Mesh(new THREE.TorusGeometry(jr - 0.004, 0.0028, 4, 20), G.shared({ color: '#c97a3a', roughness: 0.6 })); sl.rotation.x = Math.PI / 2; sl.position.y = h - 0.002; jg.add(sl); G.box(0.006, 0.03, 0.008, MAT.metal, jr - 0.002, h - 0.004, 0, { parent: jg, cast: false }); }   // a clamp lid on its orange seal
+      x += jr * 2 + 0.035 + r() * 0.05; k++;
+    }
+    // mugs hanging under the shelf by their handles, from brass cup hooks
+    for (const [hx, col] of [[cx0 + 0.42, '#5d7a8c'], [cx0 + 0.6, '#efe7da'], [cx0 + 1.18, '#c96a4a']]) {
+      const hook = new THREE.Mesh(new THREE.TorusGeometry(0.012, 0.0022, 4, 10, Math.PI * 1.3), MAT.metal); hook.position.set(hx, 1.74, 0.3); hook.rotation.set(0, Math.PI / 2, Math.PI * 0.85); W.add(hook);
+      cyl(0.0022, 0.0022, 0.02, MAT.metal, hx, 1.75, 0.3, { seg: 4, cast: false });
+      mug(W, col, hx + 0.048, 1.675, 0.3, 0, Math.PI / 2);
+    }
   }
   // Kettle (enamel red), hob with a pan, sink and tap, toaster.
   K.kettle = { x: 11.55, z: 0.36 };
   const kg = new THREE.Group(); kg.position.set(11.55, 0.89, 0.36); W.add(kg);
-  cyl(0.075, 0.095, 0.17, enamel('#b9473a'), 0, 0.085, 0, { parent: kg, seg: 20 });
-  cyl(0.03, 0.06, 0.03, enamel('#b9473a'), 0, 0.185, 0, { parent: kg, seg: 16 });
-  sph(0.018, MAT.darkMetal, 0, 0.21, 0, [1, 1, 1], kg, 10);
-  const spout = cyl(0.012, 0.02, 0.12, enamel('#b9473a'), 0.1, 0.11, 0, { parent: kg, seg: 8 }); spout.rotation.z = -0.9;
-  const hdl = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.012, 6, 16, Math.PI), MAT.darkMetal); hdl.position.set(0, 0.2, 0); kg.add(hdl);
+  // An enamel stovetop kettle: a round-shouldered body with its black-edged foot, a domed lid and knob, a spout curving
+  // up and thinning to its lip, and an arched handle with a wooden grip. (Two cones and a tube.)
+  {
+    const red = enamel('#b9473a'), edge = G.shared({ color: '#1d1a18', roughness: 0.3, env: 0.8 });
+    G.lathe([[0, 0], [0.084, 0], [0.093, 0.008], [0.1, 0.035], [0.1, 0.075], [0.093, 0.115], [0.078, 0.142], [0.058, 0.158], [0.047, 0.164]], red, 0, 0, 0, { parent: kg, seg: 32 });
+    const ft = new THREE.Mesh(new THREE.TorusGeometry(0.089, 0.0045, 5, 32), edge); ft.rotation.x = Math.PI / 2; ft.position.y = 0.004; kg.add(ft);
+    G.lathe([[0.05, 0.16], [0.052, 0.165], [0.046, 0.18], [0.03, 0.19], [0.012, 0.194], [0.0, 0.195]], red, 0, 0, 0, { parent: kg, seg: 28 });   // the lid
+    G.lathe([[0.006, 0.194], [0.008, 0.202], [0.017, 0.208], [0.018, 0.216], [0.012, 0.223], [0, 0.225]], edge, 0, 0, 0, { parent: kg, seg: 14 });   // its knob
+    const sc = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0.075, 0.05, 0), new THREE.Vector3(0.14, 0.08, 0), new THREE.Vector3(0.165, 0.165, 0));
+    const sg = new THREE.TubeGeometry(sc, 12, 0.022, 12, false), SP = sg.attributes.position, pt = new THREE.Vector3();
+    for (let i = 0; i < SP.count; i++) { const t = Math.floor(i / 13) / 12, c = sc.getPoint(t, pt), k = 1 - 0.55 * t; SP.setXYZ(i, c.x + (SP.getX(i) - c.x) * k, c.y + (SP.getY(i) - c.y) * k, c.z + (SP.getZ(i) - c.z) * k); }
+    sg.computeVertexNormals();
+    G.add(new THREE.Mesh(sg, red), kg, true, true);
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(0.0095, 0.0022, 4, 12), edge); lip.position.set(0.165, 0.165, 0); lip.rotation.set(Math.PI / 2, 0, 0.5); kg.add(lip);
+    const hc = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.06, 0.14, 0), new THREE.Vector3(-0.055, 0.24, 0), new THREE.Vector3(0, 0.272, 0), new THREE.Vector3(0.055, 0.24, 0), new THREE.Vector3(0.06, 0.14, 0)]);
+    G.add(new THREE.Mesh(new THREE.TubeGeometry(hc, 24, 0.0055, 6, false), MAT.darkMetal), kg, true, true);
+    const grip = cyl(0.012, 0.012, 0.075, G.std({ map: G.grainTex(false), color: '#b48a5c', roughness: 0.5 }), 0, 0.266, 0, { parent: kg, seg: 12 }); grip.rotation.z = Math.PI / 2;
+  }
   K.kettleG = G.propify('kettle', kg);
   K.stove = { x: 12.35, z: 0.38 };
   // The range: cream enamel, its top with four burners under cast-iron grates, a back guard with a little clock,
@@ -1098,8 +1160,22 @@ function buildKitchen() {
   const tapSpout = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.011, 8, 18, Math.PI), MAT.metal); tapSpout.rotation.y = Math.PI / 2; tapSpout.position.set(13.05, 1.065, 0.22); W.add(tapSpout);
   cyl(0.011, 0.009, 0.04, MAT.metal, 13.05, 1.045, 0.31, { seg: 10 });
   K.toaster = { x: 13.48, z: 0.36 };
-  box(0.26, 0.17, 0.15, enamel('#e9e1d2'), 13.48, 0.975, 0.36, { r: 0.04, seg: 3 });
-  for (const dz of [-0.03, 0.03]) box(0.18, 0.01, 0.018, G.shared({ color: '#141210', roughness: 0.6 }), 13.48, 1.062, 0.36 + dz, { cast: false });
+  // A two-slot toaster in the range's cream enamel on a chrome foot, chrome round its slots, its lever and browning
+  // knob on the end, the cord running back to the wall. (A rounded box with two black lines.)
+  {
+    const tg = new THREE.Group(); tg.position.set(13.48, 0.89, 0.36); W.add(tg);
+    G.box(0.27, 0.018, 0.16, chrome, 0, 0.009, 0, { parent: tg, r: 0.008, seg: 3 });
+    G.box(0.255, 0.155, 0.145, enamel('#e9e1d2'), 0, 0.094, 0, { parent: tg, r: 0.042, seg: 5 });
+    for (const dz of [-0.03, 0.03]) {
+      G.box(0.19, 0.006, 0.03, chrome, 0, 0.17, dz, { parent: tg, r: 0.003, cast: false });
+      G.box(0.175, 0.008, 0.014, G.shared({ color: '#141210', roughness: 0.6 }), 0, 0.172, dz, { parent: tg, cast: false });
+    }
+    G.box(0.004, 0.09, 0.01, G.shared({ color: '#141210', roughness: 0.6 }), 0.1285, 0.1, 0.02, { parent: tg, cast: false });   // the lever's slot
+    G.box(0.022, 0.014, 0.034, G.shared({ color: '#2a2622', roughness: 0.4 }), 0.137, 0.14, 0.02, { parent: tg, r: 0.004 });   // the lever
+    const kn = cyl(0.014, 0.016, 0.012, chrome, 0.132, 0.06, -0.035, { parent: tg, seg: 16 }); kn.rotation.z = Math.PI / 2;
+    const cord = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.1, 0.03, -0.07), new THREE.Vector3(-0.115, 0.006, -0.12), new THREE.Vector3(-0.07, 0.006, -0.19), new THREE.Vector3(-0.04, 0.06, -0.24)]);
+    G.add(new THREE.Mesh(new THREE.TubeGeometry(cord, 16, 0.003, 5, false), G.shared({ color: '#1c1a18', roughness: 0.7 })), tg, false, true);
+  }
   // Fridge in the corner, covered in magnets and one very important drawing.
   K.fridge = { x: 14.55, z: 0.45 };
   // Rounded like an old one, in the range's cream: two doors with a dark seam between, chrome lever handles on posts,
@@ -1203,13 +1279,20 @@ function buildKitchen() {
   });
   // Pendant over the table, a runner rug, herbs on the sill.
   const pend = new THREE.Group(); pend.position.set(13.0, 2.7, 2.95); W.add(pend);
-  cyl(0.006, 0.006, 0.7, MAT.darkMetal, 0, -0.35, 0, { parent: pend, seg: 6 });
-  const shadeMat = G.std({ color: '#2c3a34', roughness: 0.5, metalness: 0.3, emissive: '#ffb060', emissiveIntensity: 0, side: THREE.DoubleSide });
-  const shade = cyl(0.05, 0.22, 0.18, shadeMat, 0, -0.78, 0, { parent: pend, open: true, cast: false });
+  // An enamel barn pendant: deep green outside, white inside where the bulb lights it, a dark rolled rim, a cloth cord
+  // up to a canopy on the ceiling. (A green cone on a wire.)
+  cyl(0.045, 0.05, 0.025, MAT.darkMetal, 0, -0.0125, 0, { parent: pend, seg: 18 });   // the canopy
+  cyl(0.0045, 0.0045, 0.6, G.shared({ color: '#3a2c22', roughness: 0.9 }), 0, -0.32, 0, { parent: pend, seg: 6 });   // the cord
+  const prof = [[0.222, -0.865], [0.21, -0.85], [0.16, -0.815], [0.1, -0.775], [0.06, -0.735], [0.042, -0.7], [0.036, -0.665], [0.03, -0.62]];
+  G.lathe(prof, G.std({ color: '#2f4a40', roughness: 0.35, env: 0.8 }), 0, 0, 0, { parent: pend, seg: 36, cast: false });
+  const shadeMat = G.std({ color: '#f3efe6', roughness: 0.3, emissive: '#ffb060', emissiveIntensity: 0, side: THREE.DoubleSide });
+  const shade = G.lathe(prof.map(([a, b]) => [a - 0.004, b - 0.002]), shadeMat, 0, 0, 0, { parent: pend, seg: 36, cast: false });
+  sph(0.032, shadeMat, 0, -0.745, 0, [1, 1.15, 1], pend, 14);   // the bulb
+  const rimP = new THREE.Mesh(new THREE.TorusGeometry(0.222, 0.0045, 6, 40), G.shared({ color: '#1f2a26', roughness: 0.4 })); rimP.rotation.x = Math.PI / 2; rimP.position.y = -0.865; pend.add(rimP);
   const pl = new THREE.PointLight('#ffb062', 0, 6, 2); pl.position.set(0, -0.85, 0); pend.add(pl);
   LAMPS.push({ g: pend, light: pl, shade, on: true, power: 7.5, flick: 1 }); K.pendant = LAMPS[LAMPS.length - 1];
   const runner = G.add(new THREE.Mesh(new THREE.PlaneGeometry(2.3, 0.7), MAT.rug), W, false, true); runner.rotation.x = -Math.PI / 2; runner.position.set(12.45, 0.006, 1.2);
-  for (let i = 0; i < 3; i++) { const x = 12.5 + i * 0.32; cyl(0.06, 0.05, 0.1, MAT.pot, x, 0.9, 4.47, { seg: 14 }); for (let k = 0; k < 6; k++) { const lf = sph(0.03, MAT.leaf, x + Math.sin(k * 2.1) * 0.03, 0.97 + (k % 3) * 0.025, 4.47 + Math.cos(k * 2.1) * 0.02, [0.5, 1.2, 0.3], W, 8); lf.rotation.z = Math.sin(k) * 0.6; } }
+  for (let i = 0; i < 3; i++) plant(12.5 + i * 0.32, 4.47, 0.27 + (i % 2) * 0.04, { y: 0.85, coll: false });   // herbs in little pots (they were green beads)
 }
 
 /* A pot plant: a terracotta pot with a rolled rim on its saucer, dark soil, and broad leaves on stems arching out of
@@ -1217,8 +1300,8 @@ function buildKitchen() {
  * midrib and drooping toward its tip, every one its own green. Leaves and stems are one mesh, coloured per vertex.
  * (Half-spheres stuck round a cylinder.) */
 let LEAF_M = null, POT_M = null;
-function plant(x, z, s = 1) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s); G.world.add(g);
+function plant(x, z, s = 1, o = {}) {
+  const g = new THREE.Group(); g.position.set(x, o.y || 0, z); g.scale.setScalar(s); G.world.add(g);
   const r = G.seeded(Math.round(x * 100 + z));
   POT_M = POT_M || G.std({ map: G.canvasTex(128, (u, v) => { const t = 0.88 + G.pfbm(u * 8, v * 8, [8, 8], 3) * 0.16 + (G.hash1(u * 913 + v * 37) - 0.5) * 0.05; return [176 * t, 104 * t, 70 * t]; }), roughness: 0.92, env: 0.2 });
   G.lathe([[0, 0.012], [0.112, 0.012], [0.118, 0.02], [0.141, 0.25], [0.145, 0.262], [0.162, 0.267], [0.166, 0.29], [0.161, 0.314], [0.151, 0.318], [0.145, 0.31], [0.141, 0.28]], POT_M, 0, 0, 0, { parent: g, seg: 28 });
@@ -1248,7 +1331,7 @@ function plant(x, z, s = 1) {
   }
   const lm = new THREE.Mesh(G.merge(parts), LEAF_M || (LEAF_M = G.std({ vertexColors: true, roughness: 0.55, env: 0.35, side: THREE.DoubleSide })));
   lm.castShadow = true; lm.receiveShadow = true; g.add(lm);
-  G.COLL.push({ x0: x - 0.2 * s, z0: z - 0.2 * s, x1: x + 0.2 * s, z1: z + 0.2 * s });
+  if (o.coll !== false) G.COLL.push({ x0: x - 0.2 * s, z0: z - 0.2 * s, x1: x + 0.2 * s, z1: z + 0.2 * s });
 }
 /* A bookcase: sides and a back panel, a top overhanging on a moulding, a plinth, the shelves; and the books. Each book
  * is its cloth or leather spine (some with bands, gilt or dark, some with a label) and the pale page edges between its

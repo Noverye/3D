@@ -1370,7 +1370,9 @@ G.buildCabin = () => {
   const bx = 9.45, bz = 5.5;
   { const g = new THREE.Group(); g.position.set(bx, 0, bz); world.add(g); G.logBench(g, { len: 1.7, depth: 0.46, seatY: 0.47, seed: 31 }); }
   G.COLL.push({ x0: bx - 0.85, z0: bz - 0.24, x1: bx + 0.85, z1: bz + 0.24 });
-  const throwM = G.box(0.9, 0.05, 0.5, MAT.plaid, bx + 0.4, 0.49, bz + 0.02, { r: 0.02 }); throwM.rotation.y = 0.15;
+  // the plaid throw, over the seat and down its front edge (it was a slab of plaid lying on the boards)
+  { const tg = new THREE.Group(); tg.position.set(bx + 0.35, 0, bz); tg.rotation.y = -Math.PI / 2 + 0.06; world.add(tg);
+    G.drapeOver(tg, MAT.plaid, [[-0.18, 0.474], [0.05, 0.476], [0.18, 0.473], [0.225, 0.461], [0.247, 0.43], [0.255, 0.36], [0.258, 0.28], [0.253, 0.2]], -0.27, 0.27); }
   G.BENCH = { x: bx, z: bz, seatY: 0.47 };
   const fl2 = new THREE.Group(); fl2.position.set(bx + 1.05, 0, bz + 0.1); fl2.rotation.y = 0.3; world.add(fl2);
   { // an iron lantern on the boards, lit at dusk (it was two plates with an orange box between)
