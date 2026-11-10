@@ -597,10 +597,8 @@ const BASKET = (() => {
   // beside the hearth, in the corner by the bookshelves (it had been left out in the room by the coffee table, 2.5 m
   // from the fire, since the room was made deeper)
   const W = G.world, g = new THREE.Group(); g.position.set(6.7, 0, -1.55); g.userData.dynamic = true; W.add(g);
-  const wick = G.std({ map: G.rep(G.TX.knitCream, 3, 1), color: '#9a7a50', roughness: 1 });
-  G.cyl(0.24, 0.2, 0.32, wick, 0, 0.16, 0, { parent: g, seg: 22, open: true });
-  G.cyl(0.2, 0.2, 0.02, wick, 0, 0.01, 0, { parent: g, seg: 22 });
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.016, 8, 26), wick); rim.rotation.x = Math.PI / 2; rim.position.y = 0.32; g.add(rim);
+  // woven cane (G.basket), with a loop handle at each end (it was the cable knit, wrapped round a tin)
+  G.basket(g, 0.2, 0.24, 0.32, { color: '#b08a5c', handles: true, rim: 0.016 });
   const logs = [];
   // split firewood, as on the fire (G.wood): halves and quarters and the odd round, pale where they were split
   const KINDS = ['half', 'quarter', 'round', 'third', 'half'];

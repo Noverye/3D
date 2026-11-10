@@ -1108,3 +1108,35 @@ G.bookFlat = (w, t, d, color, x, y, z, ry = 0, parent) => {
   G.box(w - 0.007, t - 2 * b, d - 0.006, pages, -0.0015, t / 2, 0, { parent: g, cast: false });
   return g;
 };
+
+/* ===== Wicker (build 157) =====
+ * G.wickerTex(): woven cane, seamless: upright stakes with weavers passed over and under them, each strand rounded in
+ * the light and its own tone, dark in the gaps. 24 stakes and 32 rows to a tile.
+ * G.basket(parent, r0, r1, h, o): a woven basket: the body turned from its foot (r0) out to the rim (r1), lined (the
+ * inside is the same weave), a woven base, and a rolled rim; o.handles adds a pair of loops. Its material is returned. */
+{
+  let wt = null;
+  G.wickerTex = () => wt || (wt = G.canvasTex(256, (u, v) => {
+    const N = 24, M = 32, cu = u * N, cv = v * M, i = Math.floor(cu), j = Math.floor(cv), fu = cu - i, fv = cv - j;
+    const over = (i + j) % 2 === 0;   // a weaver passing over this stake
+    let t;
+    if (over) t = (0.7 + 0.3 * Math.sin(Math.PI * fv)) * (0.86 + 0.14 * Math.sin(Math.PI * fu)) * (0.9 + G.hash1(j * 3.7 + (i % N) * 0.01) * 0.18);
+    else t = (0.62 + 0.3 * Math.sin(Math.PI * fu)) * (0.8 + 0.2 * Math.sin(Math.PI * fv)) * (0.88 + G.hash1(i * 5.3) * 0.16);
+    if (fv < 0.07 || fv > 0.93) t *= 0.55;   // the gap between rows
+    t *= 0.94 + G.pfbm(u * 16, v * 16, [16, 16], 2) * 0.12;
+    return [214 * t, 172 * t, 118 * t];
+  }));
+  G.basket = (parent, r0, r1, h, o = {}) => {
+    const mat = G.std({ map: G.rep(G.wickerTex(), Math.round((r0 + r1) * Math.PI / 0.75), Math.max(1, Math.round(h / 0.3))), color: o.color || '#c7a275', roughness: 0.85, env: 0.2, side: THREE.DoubleSide });
+    const bulge = o.bulge == null ? 0.012 : o.bulge, pr = [];
+    for (let k = 0; k <= 10; k++) { const t = k / 10; pr.push([r0 + (r1 - r0) * t + bulge * Math.sin(Math.PI * t), 0.01 + (h - 0.01) * t]); }
+    G.lathe(pr, mat, 0, 0, 0, { parent, seg: 32 });
+    G.cyl(r0 - 0.004, r0 - 0.004, 0.012, mat, 0, 0.008, 0, { parent, seg: 28 });   // the base
+    const rimM = mat.clone(); rimM.map = G.rep(G.wickerTex(), Math.round(r1 * 2 * Math.PI / 0.05), 0.25); G.MATS.push(rimM);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(r1, o.rim || 0.013, 8, 40), rimM); rim.rotation.x = Math.PI / 2; rim.position.y = h; rim.castShadow = true; parent.add(rim);
+    if (o.handles) for (const s of [-1, 1]) {
+      const hd = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.009, 6, 14, Math.PI), rimM); hd.position.set(s * (r1 - 0.004), h - 0.025, 0); hd.rotation.y = Math.PI / 2; hd.scale.set(1, 0.8, 1); parent.add(hd);
+    }
+    return mat;
+  };
+}

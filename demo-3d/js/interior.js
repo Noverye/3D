@@ -136,13 +136,36 @@ function buildNook() {
   for (let i = 0; i <= 18; i++) { const t = i / 18, b = new THREE.Mesh(new THREE.SphereGeometry(0.013, 6, 4), MAT.bulb); b.position.set(NX0 + 0.05 + t * (NX1 - NX0 - 0.1), 2.08 - Math.sin(t * Math.PI) * 0.12, nz + 0.08); W.add(b); }
   // the window seat
   const sx = 10.05, sz = z0 + 0.38;
-  box(1.5, 0.42, 0.62, MAT.wood, sx, 0.21, sz, { coll: true, r: 0.02 });
-  box(1.46, 0.1, 0.58, MAT.knitCream, sx, 0.47, sz, { r: 0.04, seg: 3 });
+  // Built in under the window and painted cream: a recessed plinth, three raised panels across its front in their
+  // frames, a seat board with a rounded nose, and a deep cushion in oatmeal linen. (A box of floorboards with a block
+  // of the cable knit on it.)
+  {
+    const sg = new THREE.Group(); sg.position.set(sx, 0, sz); W.add(sg);
+    G.COLL.push({ x0: sx - 0.75, z0: sz - 0.31, x1: sx + 0.75, z1: sz + 0.33 });
+    const pV = G.std({ map: G.grainTex(false), color: '#e3d8c5', roughness: 0.62, env: 0.25 }), pH = G.std({ map: G.grainTex(true), color: '#e3d8c5', roughness: 0.62, env: 0.25 });
+    const sb = (w, h, d, m, x, y, z, o = {}) => G.box(w, h, d, m, x, y, z, { parent: sg, uv: [Math.max(w, d) / 0.6, h / 0.6], ...o });
+    sb(1.46, 0.07, 0.54, G.shared({ color: '#4a3a2e', roughness: 0.8 }), 0, 0.035, -0.03);   // the plinth, set back
+    sb(1.5, 0.35, 0.6, pV, 0, 0.245, 0, { r: 0.004 });
+    for (let k = -1; k <= 1; k++) {
+      const px = k * 0.477;
+      sb(0.36, 0.19, 0.012, pV, px, 0.245, 0.304, { r: 0.006 });
+      sb(0.4, 0.02, 0.008, pH, px, 0.35, 0.302, { r: 0.003 }); sb(0.4, 0.02, 0.008, pH, px, 0.14, 0.302, { r: 0.003 });
+      for (const e of [-1, 1]) sb(0.02, 0.23, 0.008, pV, px + e * 0.19, 0.245, 0.302, { r: 0.003 });
+    }
+    sb(1.54, 0.03, 0.64, pH, 0, 0.435, 0.012, { r: 0.012 });   // the seat board
+    G.puff(1.46, 0.07, 0.56, G.std({ map: G.rep(TX.linen, 3, 1.2), bumpMap: TX.fabricB, bumpScale: 0.002, color: '#cdb995', roughness: 1 }), 0, 0.485, 0, { parent: sg, n: 7, top: 0.12, side: 0.05, seed: 11, uvM: 0.5 });
+  }
   const cush = [['#b65a3e', -0.5, -0.15], ['#d9cbb4', -0.15, 0.1], ['#6e7f62', 0.42, -0.2]];
   for (const [c, dx, ry] of cush) { const m = G.pillow(0.4, 0.36, 0.15, G.std({ map: TX.knitCream, color: c, roughness: 1 }), sx + dx, 0.66, sz - 0.18, { seed: dx * 9 }); m.rotation.set(-0.35, ry, 0.08); }
-  const th = box(0.7, 0.04, 0.5, MAT.plaid, sx + 0.3, 0.54, sz + 0.08, { r: 0.02 }); th.rotation.set(0.05, 0.4, -0.15);
-  for (let i = 0; i < 3; i++) box(0.2, 0.04, 0.15, G.shared({ color: ['#2d4659', '#8a3a2e', '#d4c6a8'][i], roughness: 0.8 }), sx - 0.62, 0.54 + i * 0.04, sz + 0.1, { r: 0.005 }).rotation.y = i * 0.2;
-  cyl(0.04, 0.035, 0.09, G.std({ color: '#efe7da', roughness: 0.3, env: 0.8 }), sx + 0.66, 0.565, sz + 0.12, { seg: 16 });
+  // the plaid throw, over the front of the cushion and down the seat; books; a mug
+  { const tg = new THREE.Group(); tg.position.set(sx + 0.3, 0, sz); tg.rotation.y = -Math.PI / 2; W.add(tg);
+    drapeOver(tg, MAT.plaid, [[-0.14, 0.52], [0.08, 0.524], [0.22, 0.518], [0.28, 0.502], [0.312, 0.47], [0.334, 0.4], [0.34, 0.3], [0.338, 0.21]], -0.27, 0.28); }
+  [['#2d4659', 0.22, 0.032], ['#8a3a2e', 0.2, 0.028], ['#d4c6a8', 0.18, 0.024]].reduce((y, [c, w, t], i) => { G.bookFlat(w, t, w * 0.72, c, sx - 0.6, y, sz + 0.08, i * 0.2 - 0.15); return y + t; }, 0.52);
+  { const mg = new THREE.Group(); mg.position.set(sx + 0.66, 0.52, sz + 0.1); mg.rotation.y = 0.8; W.add(mg);
+    const mm = G.std({ color: '#efe7da', roughness: 0.3, env: 0.8 });
+    G.lathe([[0, 0], [0.034, 0], [0.037, 0.006], [0.04, 0.085], [0.037, 0.088], [0.035, 0.08], [0.032, 0.012], [0, 0.012]], mm, 0, 0, 0, { parent: mg, seg: 20 });
+    cyl(0.033, 0.033, 0.002, G.shared({ color: '#4a2a1a', roughness: 0.2 }), 0, 0.07, 0, { parent: mg, seg: 16 });
+    const hd = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.006, 6, 12), mm); hd.position.set(0.044, 0.048, 0); hd.scale.set(0.8, 1, 1); mg.add(hd); }
   // books along the side wall, a plant, and a little round rug
   bookshelf(NX1 - 0.18, z0 + 1.15, 0.34, 1.1, 1.85, Math.PI / 2);
   plant(NX0 + 0.25, z0 + 0.35, 0.9);
@@ -190,12 +213,98 @@ function buildHomely() {
   // rugs: a long runner by the bed, a sheepskin by the hearth, a mat inside the door
   const rug = (w, d, x, z, mat, ry = 0) => { const m = G.add(new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat), W, false, true); m.rotation.set(-Math.PI / 2, 0, ry); m.position.set(x, 0.007, z); return m; };
   rug(0.7, 2.0, 0.95, -0.8, MAT.rug);
-  const sheep = G.add(new THREE.Mesh(new THREE.CircleGeometry(0.55, 24), G.std({ map: TX.knitCream, color: '#f4eee4', roughness: 1 })), W, false, true); sheep.rotation.x = -Math.PI / 2; sheep.scale.set(1.3, 0.9, 1); sheep.position.set(8.6, 0.008, -0.9);
-  rug(1.0, 0.6, 6.5, z1 - 0.5, G.std({ color: '#5a4636', roughness: 1 }));
-  // boots on the mat, and a basket of hats and mittens
-  for (const [x, c] of [[6.0, '#4a3426'], [6.18, '#4a3426'], [6.95, '#6b4a32'], [7.1, '#6b4a32']]) { const b = box(0.11, 0.24, 0.27, G.shared({ color: c, roughness: 0.6 }), x, 0.12, z1 - 0.38, { r: 0.04 }); b.rotation.y = (x * 7) % 0.3 - 0.15; }
-  cyl(0.2, 0.17, 0.3, G.std({ map: TX.bark, color: '#c9a26e', roughness: 1 }), 4.65, 0.15, z1 - 0.45, { seg: 16 });
-  sph(0.11, G.std({ map: TX.knitCream, color: '#b8322a', roughness: 1 }), 4.6, 0.32, z1 - 0.42, [1, 0.6, 1]);
+  // The sheepskin: a whole pelt, its outline ragged with tufts and the four legs and the neck showing, the wool deep in
+  // the middle and thinning to the edge, curly. (A flat ellipse of the cable knit.) The mat at the door is coir, with
+  // a dark border. (A plain brown rectangle.)
+  {
+    const K = 10, S = 120, P = [], UV = [], I = [];
+    const lobe = (th, c, a, w) => { const d = Math.atan2(Math.sin(th - c), Math.cos(th - c)); return a * Math.exp(-(d * d) / w); };
+    for (let k = 0; k <= K; k++) for (let j = 0; j <= S; j++) {
+      const th = (j / S) * Math.PI * 2, rho = k / K, jj = j % S;
+      let R = 1 + lobe(th, 0.62, 0.17, 0.02) + lobe(th, Math.PI - 0.62, 0.17, 0.02) + lobe(th, Math.PI + 0.62, 0.15, 0.02) + lobe(th, -0.62, 0.15, 0.02) + lobe(th, 0, 0.07, 0.03) - lobe(th, Math.PI / 2, 0.06, 0.2) - lobe(th, -Math.PI / 2, 0.06, 0.2);
+      R *= 1 + (G.hash1(jj * 1.7) - 0.5) * 0.07 + Math.sin(jj * 0.9) * 0.015;
+      const px = Math.cos(th) * R * rho * 0.66, pz = Math.sin(th) * R * rho * 0.47;
+      P.push(px, 0.003 + 0.022 * (1 - Math.pow(rho, 3)) + G.fbm(px * 14, pz * 14, 2) * 0.004 * (1 - rho * 0.6), pz);
+      UV.push(px / 0.45, pz / 0.45);
+    }
+    for (let k = 0; k < K; k++) for (let j = 0; j < S; j++) { const a = k * (S + 1) + j, b = a + S + 1; I.push(a, a + 1, b, a + 1, b + 1, b); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); sg.setIndex(I); sg.computeVertexNormals();
+    const wool = G.canvasTex(256, (u, v) => { const t = 0.78 + G.pfbm(u * 18, v * 18, [18, 18], 3) * 0.3 + Math.abs(G.pfbm(u * 48, v * 48, [48, 48], 2)) * 0.25; return [246 * t, 240 * t, 229 * t]; });
+    const sheep = G.add(new THREE.Mesh(sg, G.std({ map: wool, bumpMap: wool, bumpScale: 0.012, color: '#e6ded0', roughness: 1 })), W, false, true);
+    sheep.position.set(8.6, 0.004, -0.9); sheep.rotation.y = 0.12;
+    const coir = G.canvasTex(128, (u, v) => {
+      const edge = Math.min(u, 1 - u) * 1.0 < 0.055 || Math.min(v, 1 - v) < 0.09, t = 0.82 + G.pfbm(u * 40, v * 6, [40, 6], 2) * 0.22 + (G.hash1(u * 517 + v * 91) - 0.5) * 0.12;
+      return edge ? [70 * t, 52 * t, 38 * t] : [168 * t, 124 * t, 78 * t];
+    });
+    rug(1.0, 0.6, 6.5, z1 - 0.5, G.std({ map: coir, bumpMap: coir, bumpScale: 0.004, roughness: 1 }));
+  }
+  // Boots by the door. His: brown leather, laced up through hooks, on a lugged rubber sole, a pull tab at the back.
+  // Hers: tan suede with a cream fleece cuff turned down; one of hers has fallen over. (They were four rounded blocks.)
+  {
+    const foot = (() => {   // the sole's outline: a rounded heel, a waist, the ball wider, a round toe (toe to +z)
+      const pts = [];
+      for (let i = 0; i < 48; i++) {
+        const th = (i / 48) * Math.PI * 2, t = (1 - Math.cos(th)) / 2, w = 0.04 + 0.004 * Math.sin(t * 2.2) - 0.008 * Math.exp(-((t - 0.38) ** 2) / 0.012) + 0.012 * Math.exp(-((t - 0.7) ** 2) / 0.02) - 0.012 * G.smooth(0.8, 1, t);
+        pts.push(new THREE.Vector2(Math.sin(th) * w, -(t - 0.5) * 0.27));
+      }
+      const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: 0.026, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 1, curveSegments: 4 });
+      g.rotateX(-Math.PI / 2); g.translate(0, 0.003, 0);
+      return g;
+    })();
+    const shaftHis = [[0.05, 0.03], [0.054, 0.08], [0.051, 0.15], [0.052, 0.2], [0.056, 0.225], [0.05, 0.232], [0.045, 0.226], [0.043, 0.15], [0.043, 0.06]];
+    const shaftHer = [[0.05, 0.03], [0.054, 0.08], [0.05, 0.16], [0.05, 0.23], [0.052, 0.252], [0.046, 0.258], [0.042, 0.25], [0.042, 0.16], [0.042, 0.06]];
+    const boot = (x, z, ry, hers, fallen) => {
+      const g = new THREE.Group(); g.position.set(x, fallen ? 0.052 : 0, z); g.rotation.set(0, ry, fallen ? 1.42 : 0); W.add(g);
+      const up = hers ? G.std({ color: '#7a5c44', roughness: 0.95, env: 0.12 }) : G.std({ color: '#43291a', roughness: 0.42, env: 0.6 });
+      const sole = G.shared({ color: hers ? '#3b312a' : '#262019', roughness: 0.85 });
+      G.add(new THREE.Mesh(foot, sole), g, true, true);
+      for (let k = 0; k < 7; k++) G.box(0.07, 0.006, 0.012, sole, 0, 0.0, -0.11 + k * 0.035, { parent: g, cast: false });   // the lugs
+      const vamp = G.puff(0.088, 0.09, 0.19, up, 0, 0.07, 0.038, { parent: g, n: 3, top: 0.12, side: 0.06, front: 0.12, seed: x * 9 });
+      vamp.rotation.y = Math.PI;
+      const sh = G.lathe(hers ? shaftHer : shaftHis, up, 0, 0, -0.058, { parent: g, seg: 20 }); sh.scale.set(0.92, 1, 1.06);
+      if (hers) {
+        const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.02, 8, 22), G.std({ map: TX.knitCream, color: '#f0e9dd', roughness: 1 }));
+        cuff.rotation.x = Math.PI / 2; cuff.scale.set(0.95, 1.08, 1.2); cuff.position.set(0, 0.252, -0.058); g.add(cuff);
+      } else {
+        const lace = G.shared({ color: '#c9b08a', roughness: 0.8 }), hook = G.shared({ color: '#3a3430', roughness: 0.4, metalness: 0.8 });
+        G.puff(0.04, 0.15, 0.02, up, 0, 0.16, 0.0, { parent: g, n: 4, top: 0.1, side: 0.1, seed: 2 }).rotation.x = -0.12;   // the tongue
+        for (let k = 0; k < 4; k++) {
+          const y = 0.1 + k * 0.035;
+          for (const sx of [-1, 1]) {
+            sph(0.0045, hook, sx * 0.026, y, -0.011, [1, 1, 1], g, 6);
+            const l = G.box(0.056, 0.0035, 0.0035, lace, 0, y + 0.017, 0.009, { parent: g, cast: false }); l.rotation.z = sx * 0.55;
+          }
+        }
+        G.box(0.02, 0.035, 0.006, up, 0, 0.235, -0.11, { parent: g, r: 0.002 });   // the pull tab
+      }
+      return g;
+    };
+    boot(6.0, z1 - 0.36, Math.PI + 0.12, false); boot(6.13, z1 - 0.34, Math.PI - 0.05, false);
+    boot(6.96, z1 - 0.38, Math.PI + 0.2, true); boot(7.16, z1 - 0.4, Math.PI - 0.5, true, true);
+  }
+  // The basket of hats and mittens by the door: woven cane, a red knitted hat with a turned-up cuff and a pompom
+  // poking out of it, a pair of blue mittens, one hung over the rim. (A dark tub with a red half-ball in it.)
+  {
+    const hb = new THREE.Group(); hb.position.set(4.65, 0, z1 - 0.45); hb.rotation.y = 0.3; W.add(hb);
+    G.basket(hb, 0.15, 0.19, 0.25, { color: '#c4a074' });
+    const knit = (c) => G.std({ map: TX.knitCream, bumpMap: TX.knitB, bumpScale: 0.004, color: c, roughness: 1 });
+    const hat = new THREE.Group(); hat.position.set(0.02, 0.21, 0.0); hat.rotation.set(0.45, 0.2, 0.35); hb.add(hat);
+    const red = knit('#b8322a');
+    const crown = new THREE.Mesh(new THREE.SphereGeometry(0.085, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), red); crown.scale.set(1, 1.2, 1); crown.position.y = 0.04; crown.castShadow = true; hat.add(crown);
+    cyl(0.089, 0.089, 0.05, red, 0, 0.02, 0, { parent: hat, seg: 24 });   // the cuff
+    cyl(0.0855, 0.0855, 0.05, red, 0, 0.02, 0, { parent: hat, seg: 24, open: true });
+    sph(0.038, knit('#efe8dc'), 0, 0.15, 0, [1, 0.95, 1], hat, 12);   // the pompom
+    const blue = knit('#6f8296');
+    const mitten = (parent, x, y, z, rx, ry, rz) => {
+      const m = new THREE.Group(); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); parent.add(m);
+      G.puff(0.085, 0.026, 0.15, blue, 0, 0, 0, { parent: m, n: 3, top: 0.15, side: 0.1, seed: x * 5 + 1 });
+      const th = G.puff(0.03, 0.022, 0.065, blue, 0.045, 0, 0.0, { parent: m, n: 3, top: 0.1, side: 0.1, seed: 3 }); th.rotation.y = -0.6;
+      G.puff(0.088, 0.03, 0.04, knit('#e6dccb'), 0, 0, -0.085, { parent: m, n: 4, top: 0.1, side: 0.05, seed: 4 });   // the ribbed cuff
+      return m;
+    };
+    mitten(hb, -0.07, 0.24, -0.03, -1.0, 0.4, 0.2);
+    mitten(hb, 0.0, 0.2, 0.2, 1.35, 0, 0.1);   // over the rim, hanging down the outside
+  }
   // plants: the bedroom corner and the kitchen
   plant(0.45, z0 + 0.5, 1.1); plant(14.55, 1.4, 0.8);
   // A bench at the foot of the bed, to go with it: the bed's wood, turned legs joined by an H stretcher, a rail round
@@ -1103,37 +1212,109 @@ function buildKitchen() {
   for (let i = 0; i < 3; i++) { const x = 12.5 + i * 0.32; cyl(0.06, 0.05, 0.1, MAT.pot, x, 0.9, 4.47, { seg: 14 }); for (let k = 0; k < 6; k++) { const lf = sph(0.03, MAT.leaf, x + Math.sin(k * 2.1) * 0.03, 0.97 + (k % 3) * 0.025, 4.47 + Math.cos(k * 2.1) * 0.02, [0.5, 1.2, 0.3], W, 8); lf.rotation.z = Math.sin(k) * 0.6; } }
 }
 
+/* A pot plant: a terracotta pot with a rolled rim on its saucer, dark soil, and broad leaves on stems arching out of
+ * it, the old ones low and far out, the young ones upright in the middle and lighter; each leaf bent up along its
+ * midrib and drooping toward its tip, every one its own green. Leaves and stems are one mesh, coloured per vertex.
+ * (Half-spheres stuck round a cylinder.) */
+let LEAF_M = null, POT_M = null;
 function plant(x, z, s = 1) {
-  cyl(0.15 * s, 0.12 * s, 0.32 * s, MAT.pot, x, 0.16 * s, z, { seg: 18 });
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s); G.world.add(g);
   const r = G.seeded(Math.round(x * 100 + z));
-  for (let i = 0; i < 16; i++) {
-    const leaf = G.add(new THREE.Mesh(new THREE.SphereGeometry(0.12 * s, 10, 6, 0, Math.PI), MAT.leaf));
-    leaf.scale.set(0.42, 1, 0.1); const a = r() * Math.PI * 2;
-    leaf.position.set(x + Math.cos(a) * 0.1 * s, (0.42 + r() * 0.38) * s, z + Math.sin(a) * 0.1 * s);
-    leaf.rotation.set(Math.sin(a) * 0.8, a, Math.cos(a) * 0.8);
+  POT_M = POT_M || G.std({ map: G.canvasTex(128, (u, v) => { const t = 0.88 + G.pfbm(u * 8, v * 8, [8, 8], 3) * 0.16 + (G.hash1(u * 913 + v * 37) - 0.5) * 0.05; return [176 * t, 104 * t, 70 * t]; }), roughness: 0.92, env: 0.2 });
+  G.lathe([[0, 0.012], [0.112, 0.012], [0.118, 0.02], [0.141, 0.25], [0.145, 0.262], [0.162, 0.267], [0.166, 0.29], [0.161, 0.314], [0.151, 0.318], [0.145, 0.31], [0.141, 0.28]], POT_M, 0, 0, 0, { parent: g, seg: 28 });
+  G.lathe([[0, 0], [0.15, 0], [0.165, 0.008], [0.17, 0.022], [0.163, 0.024], [0.156, 0.012], [0, 0.012]], POT_M, 0, 0, 0, { parent: g, seg: 28 });   // the saucer
+  cyl(0.141, 0.141, 0.008, G.shared({ color: '#33251b', roughness: 1 }), 0, 0.282, 0, { parent: g, seg: 24, cast: false });   // soil
+  const parts = [], n = 20 + Math.floor(r() * 7), stemC = new THREE.Color('#58713c'), up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < n; i++) {
+    const t = i / n, a = i * 2.39996 + r() * 0.4, ca = Math.cos(a), sa = Math.sin(a);
+    const spread = 0.03 + (1 - t) * 0.11 + r() * 0.03, rise = 0.06 + t * 0.26 + r() * 0.06;
+    const p0 = new THREE.Vector3(ca * 0.015, 0.282, sa * 0.015);
+    const p2 = new THREE.Vector3(ca * (0.015 + spread), 0.282 + rise, sa * (0.015 + spread));
+    const p1 = new THREE.Vector3(ca * (0.015 + spread * 0.25), 0.282 + rise * 0.8, sa * (0.015 + spread * 0.25));
+    parts.push({ geo: new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(p0, p1, p2), 6, 0.0035, 4, false), mat: new THREE.Matrix4(), color: stemC });
+    const elev = 0.95 - (1 - t) * 0.85 + (r() - 0.5) * 0.3;
+    const dir = new THREE.Vector3(ca * Math.cos(elev), Math.sin(elev), sa * Math.cos(elev));
+    const X = new THREE.Vector3().crossVectors(up, dir).normalize(), Z = new THREE.Vector3().crossVectors(X, dir).normalize();
+    const roll = (r() - 0.5) * 0.5; X.applyAxisAngle(dir, roll); Z.applyAxisAngle(dir, roll);
+    const L = 0.14 + r() * 0.05 + (1 - t) * 0.04, Wd = L * (0.56 + r() * 0.12), droop = 0.2 + r() * 0.25 + (1 - t) * 0.3;
+    const lg = new THREE.PlaneGeometry(1, 1, 4, 8), LP = lg.attributes.position;
+    for (let k = 0; k < LP.count; k++) {
+      const u = LP.getX(k), v = LP.getY(k) + 0.5, wv = Math.sin(Math.PI * Math.pow(v, 0.8)) * (1 - 0.15 * v);
+      LP.setXYZ(k, u * Wd * wv, v * L, Math.abs(u) * Wd * wv * 0.35 - droop * v * v * L * 0.6);
+    }
+    lg.computeVertexNormals();
+    const col = new THREE.Color('#44683a').offsetHSL((r() - 0.5) * 0.03, (r() - 0.5) * 0.1, t * 0.07 + (r() - 0.5) * 0.04);
+    parts.push({ geo: lg, mat: new THREE.Matrix4().makeBasis(X, dir, Z).setPosition(p2), color: col });
   }
+  const lm = new THREE.Mesh(G.merge(parts), LEAF_M || (LEAF_M = G.std({ vertexColors: true, roughness: 0.55, env: 0.35, side: THREE.DoubleSide })));
+  lm.castShadow = true; lm.receiveShadow = true; g.add(lm);
   G.COLL.push({ x0: x - 0.2 * s, z0: z - 0.2 * s, x1: x + 0.2 * s, z1: z + 0.2 * s });
+}
+/* A bookcase: sides and a back panel, a top overhanging on a moulding, a plinth, the shelves; and the books. Each book
+ * is its cloth or leather spine (some with bands, gilt or dark, some with a label) and the pale page edges between its
+ * boards at the top; they stand in runs of like heights, a gap here and there, the last of a run sometimes leaning
+ * on its neighbour, the odd pile lying flat, a jar, a candle. A case's books are one mesh, coloured per vertex. (The
+ * books were bright blocks, the case dark boards.) */
+const BOOK_COLS = ['#6e2f26', '#2d4659', '#a8803c', '#43614a', '#5e4870', '#9a5a36', '#c9b896', '#33302c', '#7a6a5a', '#8a3a2e', '#1f3a4a', '#8c6a3c', '#4e5a3a', '#6b4a5a', '#5a2a22', '#2a2a33', '#7d2b2b', '#3c5470', '#2f4a3a', '#a04a2c'];
+const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
+let BOOK_M = null;
+function bookParts(parts, M, bw, bh, bd, col, r) {
+  const U = (x, y, z, sx, sy, sz, c) => parts.push({ geo: UNIT_BOX, mat: new THREE.Matrix4().multiplyMatrices(M, G.mtx(x, y, z, sx, sy, sz)), color: c });
+  U(0, bh / 2, 0, bw, bh, bd, col);
+  U(0, bh - 0.0007, -0.002, Math.max(0.004, bw - 0.0055), 0.002, bd - 0.008, new THREE.Color(r() < 0.7 ? '#e8dfc8' : '#d5c6a0'));   // the page edges
+  const k = r();
+  if (k < 0.55) { const band = k < 0.28 ? new THREE.Color('#b89a5c') : col.clone().multiplyScalar(0.5); for (const f of [0.09, 0.91]) U(0, bh * f, bd / 2 + 0.0006, bw + 0.0008, 0.005, 0.0016, band); }
+  else if (k > 0.72) U(0, bh * 0.66, bd / 2 + 0.0006, bw * 0.64, Math.min(0.03, bh * 0.12), 0.0014, new THREE.Color(k > 0.88 ? '#1e1b18' : '#e4d9c0'));
 }
 function bookshelf(x, z, w, d, h, ry) {
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; G.world.add(g);
-  box(w, h, 0.03, MAT.darkWood, 0, h / 2, -d / 2 + 0.015, { parent: g });
-  for (const s of [-1, 1]) box(0.04, h, d, MAT.darkWood, s * (w / 2 - 0.02), h / 2, 0, { parent: g });
-  const cols = ['#6e2f26', '#2d4659', '#a8803c', '#43614a', '#5e4870', '#9a5a36', '#d4c6a8', '#33302c', '#7a6a5a'];
-  const r = G.seeded(Math.round(x * 31 + z * 7));
+  const { V: sV, H: sH } = G.FURN('#5f4130'), backM = G.std({ map: G.grainTex(false), color: '#3e2a1f', roughness: 0.75, env: 0.2 });
+  G.box(w - 0.03, h - 0.02, 0.012, backM, 0, h / 2, -d / 2 + 0.012, { parent: g, uv: [w / 0.5, h / 0.6] });
+  for (const s of [-1, 1]) G.box(0.024, h, d, sV, s * (w / 2 - 0.012), h / 2, 0, { parent: g, uv: [d / 0.6, h / 0.6] });
+  G.box(w + 0.05, 0.028, d + 0.035, sH, 0, h + 0.014, 0.0175, { parent: g, r: 0.006, uv: [(w + 0.05) / 0.6, 0.1] });   // the top
+  G.box(w + 0.02, 0.045, 0.02, sH, 0, h - 0.0225, d / 2 + 0.008, { parent: g, r: 0.005, uv: [w / 0.6, 0.1] });        // the moulding under it
+  G.box(w - 0.048, 0.07, 0.02, sH, 0, 0.035, d / 2 - 0.012, { parent: g, uv: [w / 0.6, 0.12] });                       // the plinth
+  const r = G.seeded(Math.round(x * 31 + z * 7)), parts = [];
   const rows = Math.floor(h / 0.42);
+  const colour = () => new THREE.Color(BOOK_COLS[Math.floor(r() * BOOK_COLS.length)]).multiplyScalar(0.75 + r() * 0.3);
   for (let row = 0; row < rows; row++) {
-    const y = 0.06 + row * 0.42;
-    box(w - 0.06, 0.03, d - 0.02, MAT.darkWood, 0, y, 0.01, { parent: g });
-    let u = -w / 2 + 0.06;
-    while (u < w / 2 - 0.1) {
+    const y = 0.06 + row * 0.42, yb = y + 0.015, uEnd = w / 2 - 0.028, room = Math.min(0.37, row === rows - 1 ? h - 0.07 - yb : 0.37);
+    G.box(w - 0.048, 0.03, d - 0.03, sH, 0, y, 0.003, { parent: g, r: 0.003, uv: [w / 0.6, 0.12] });
+    let u = -w / 2 + 0.03, runH = 0, runN = 0, prevH = 0;
+    while (u < uEnd - 0.03) {
       const kind = r();
-      if (kind < 0.08) { cyl(0.04, 0.045, 0.12, G.shared({ color: '#cfd8d0', roughness: 0.05, transparent: true, opacity: 0.55, env: 1.2 }), u + 0.05, y + 0.075, 0, { parent: g }); u += 0.12; continue; }
-      if (kind < 0.12) { G.candle(u + 0.04, y + 0.015, 0.0, 0.07, 0.025, g); u += 0.1; continue; }
-      const bw = 0.025 + r() * 0.035, bh = 0.2 + r() * 0.13;
-      const b = box(bw, bh, d * 0.75, G.shared({ color: cols[Math.floor(r() * cols.length)], roughness: 0.85 }), u + bw / 2, y + 0.015 + bh / 2, 0.02, { parent: g, cast: false });
-      if (r() < 0.1) b.rotation.z = 0.22;
-      u += bw + 0.004;
+      if (kind < 0.05) { cyl(0.04, 0.045, 0.12, G.shared({ color: '#cfd8d0', roughness: 0.05, transparent: true, opacity: 0.55, env: 1.2 }), u + 0.05, y + 0.075, 0, { parent: g }); u += 0.12; prevH = 0; continue; }
+      if (kind < 0.08) { G.candle(u + 0.04, y + 0.015, 0.0, 0.07, 0.025, g); u += 0.1; prevH = 0; continue; }
+      if (kind < 0.11) { u += 0.02 + r() * 0.03; prevH = 0; continue; }   // a gap
+      if (kind < 0.18 && uEnd - u > 0.27) {   // a pile lying flat
+        const n = 2 + Math.floor(r() * 3), L0 = 0.19 + r() * 0.05; let yy = yb;
+        for (let k = 0; k < n && yy < yb + room - 0.05; k++) {
+          const t = 0.024 + r() * 0.022, L = L0 - r() * 0.035, bd = d * (0.6 + r() * 0.12), zc = d / 2 - 0.035 - bd / 2;
+          const M = new THREE.Matrix4().multiplyMatrices(G.mtx(u + L + (r() - 0.5) * 0.012, yy + t / 2, zc, 1, 1, 1, (r() - 0.5) * 0.1), new THREE.Matrix4().makeRotationZ(Math.PI / 2));
+          bookParts(parts, M, t, L, bd, colour(), r); yy += t;
+        }
+        u += L0 + 0.015; prevH = 0; continue;
+      }
+      if (runN <= 0) { runH = 0.2 + r() * 0.11; runN = 2 + Math.floor(r() * 6); }
+      const bw = r() < 0.12 ? 0.045 + r() * 0.02 : 0.02 + r() * 0.025, bh = Math.min(room, runH + (r() - 0.5) * 0.03), bd = d * (0.64 + r() * 0.12);
+      const zc = d / 2 - 0.03 - bd / 2 + (r() - 0.5) * 0.012;
+      runN--;
+      // the last of a run, at the end of the row or by a gap, leans on the one before
+      if (prevH > 0 && (uEnd - u < 0.09 || (runN === 0 && r() < 0.35)) && uEnd - u > 0.06) {
+        const a = 0.2 + r() * 0.15, lh = Math.min(room, prevH / Math.cos(a)), xbl = u + lh * Math.sin(a) - 0.002;
+        if (xbl + bw * Math.cos(a) < uEnd) {
+          const M = new THREE.Matrix4().multiplyMatrices(G.mtx(xbl, yb, zc), new THREE.Matrix4().makeRotationZ(a)).multiply(new THREE.Matrix4().makeTranslation(bw / 2, 0, 0));
+          bookParts(parts, M, bw, lh, bd, colour(), r);
+          u = xbl + bw * Math.cos(a) + 0.03; prevH = 0; runN = 0; continue;
+        }
+      }
+      bookParts(parts, G.mtx(u + bw / 2, yb, zc), bw, bh, bd, colour(), r);
+      u += bw + 0.0015; prevH = bh;
     }
+  }
+  if (parts.length) {
+    const bm = new THREE.Mesh(G.merge(parts), BOOK_M || (BOOK_M = G.std({ vertexColors: true, roughness: 0.78, env: 0.25 })));
+    bm.castShadow = true; bm.receiveShadow = true; g.add(bm);
   }
   G.COLL.push(ry ? { x0: x - d / 2, z0: z - w / 2, x1: x + d / 2, z1: z + w / 2 } : { x0: x - w / 2, z0: z - d / 2, x1: x + w / 2, z1: z + d / 2 });
   G.INTER.push({ id: 'shelf' + x, pos: [x, 1, z], r: 1.2, label: 'Bookshelf', act: () => G.say(null, '(Paperbacks with cracked spines, a jar of sea glass, and a candle that smells like pine.)') });
