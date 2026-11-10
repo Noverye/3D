@@ -131,8 +131,8 @@ function buildNook() {
   // the opening: a beam and two posts, softened with a pair of curtains
   box(0.12, 2.12, 0.12, MAT.darkWood, NX0, 1.06, nz, { coll: true });
   box(NX1 - NX0 + 0.1, 0.16, 0.14, MAT.darkWood, (NX0 + NX1) / 2, 2.2, nz);
-  const curtainM = G.std({ map: TX.knitCream, color: '#c98f6a', roughness: 1, side: THREE.DoubleSide });
-  for (const [x, s] of [[NX0 + 0.2, 1], [NX1 - 0.18, -1]]) curtain(x, nz + 0.05, 0.42, 2.05, curtainM, s, true);
+  const curtainM = curtainMat('#b9805c');
+  for (const [x, s] of [[NX0 + 0.2, 1], [NX1 - 0.18, -1]]) curtain(x, nz + 0.05, 0.5, 2.05, curtainM, s, true, true, false);
   for (let i = 0; i <= 18; i++) { const t = i / 18, b = new THREE.Mesh(new THREE.SphereGeometry(0.013, 6, 4), MAT.bulb); b.position.set(NX0 + 0.05 + t * (NX1 - NX0 - 0.1), 2.08 - Math.sin(t * Math.PI) * 0.12, nz + 0.08); W.add(b); }
   // the window seat
   const sx = 10.05, sz = z0 + 0.38;
@@ -173,29 +173,46 @@ function buildNook() {
   G.NOOK = { x: sx, z: sz + 0.12, seatY: 0.5 };
   G.INTER.push({ id: 'nook', pos: [sx, 0.6, sz + 0.5], r: 1.0, label: 'Window seat', act: () => G.Story.nook && G.Story.nook() });
 }
-// A curtain: a hanging panel of soft folds; tied back (narrow at the waist) or hanging straight.
-function curtain(x, z, w, h, mat, side = 1, tied = false, alongX = true) {
-  const g = new THREE.PlaneGeometry(w, h, 16, 12), p = g.attributes.position;
+/* A curtain: linen, gathered into its heading and hung by rings, falling in deep folds with finer ones between;
+ * tied back, it is drawn to the outside by a band at the waist and flares again under it. side: which way the window
+ * is (+1: toward +x of the panel). (They were flat sheets of the cable knit with six ripples.) */
+let CURT_TX = null;
+function curtainMat(color) {
+  CURT_TX = CURT_TX || G.canvasTex(256, (u, v) => { const t = 0.9 + Math.sin(u * Math.PI * 192) * 0.025 + Math.sin(v * Math.PI * 192) * 0.02 + G.pfbm(u * 6, v * 40, [6, 40], 2) * 0.08 + (G.hash1(u * 733 + v * 191) - 0.5) * 0.04; return [240 * t, 236 * t, 228 * t]; });
+  return G.std({ map: G.rep(CURT_TX, 1.5, 6), bumpMap: TX.fabricB, bumpScale: 0.0015, color, roughness: 1, side: THREE.DoubleSide });
+}
+function curtain(x, z, w, h, mat, side = 1, tied = false, alongX = true, rings = true) {
+  const g = new THREE.PlaneGeometry(w, h, 48, 40), p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const u = p.getX(i) / w + 0.5, v = p.getY(i) / h + 0.5;
     const pinch = tied ? 1 - 0.55 * Math.exp(-((v - 0.42) ** 2) / 0.02) : 1;
-    p.setX(i, (u - 0.5) * w * pinch + (tied ? side * (1 - pinch) * w * 0.4 : 0));
-    p.setZ(i, Math.sin(u * Math.PI * 6) * 0.03 * pinch + 0.02);
+    const top = 1 - 0.1 * G.smooth(0.88, 1, v), flare = tied && v < 0.42 ? 1 + (0.42 - v) * 0.3 : 1;
+    p.setX(i, (u - 0.5) * w * pinch * top * flare - (tied ? side * (1 - pinch) * w * 0.4 : 0));
+    p.setZ(i, Math.sin(u * Math.PI * 7 + Math.sin(v * 4) * 0.5) * 0.034 * pinch * (0.75 + 0.25 * Math.sin(v * 5 + u * 3)) + Math.sin(u * Math.PI * 17 + 1) * 0.006 * pinch + 0.02);
+    if (v < 0.001) p.setY(i, p.getY(i) + Math.sin(u * Math.PI * 7) * 0.008);
   }
   g.computeVertexNormals();
   const m = new THREE.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true;
   m.position.set(x, h / 2 + 0.08, z); if (!alongX) m.rotation.y = Math.PI / 2; G.world.add(m);
+  if (tied) {   // the tie-back band
+    const tb = new THREE.Mesh(new THREE.TorusGeometry(w * 0.235, 0.011, 6, 20), G.shared({ color: '#8a6a48', roughness: 0.9 }));
+    tb.rotation.x = Math.PI / 2; tb.scale.set(1, 0.32, 1); tb.position.set(-side * w * 0.22, (0.42 - 0.5) * h, 0.02); m.add(tb);
+  }
+  if (rings) for (let k = 0; k < 6; k++) {
+    const rg = new THREE.Mesh(new THREE.TorusGeometry(0.017, 0.003, 5, 12), MAT.darkMetal); rg.rotation.y = Math.PI / 2; rg.position.set((k / 5 - 0.5) * w * 0.84, h / 2 + 0.02, 0); m.add(rg);
+  }
   return m;
 }
 /* ---------- lived-in: curtains at the windows, rugs, throws, plants, boots by the door, a kitchen pendant ---------- */
 function buildHomely() {
   const W = G.world, z0 = G.CAB.z0, z1 = G.CAB.z1;
-  const cM = G.std({ map: TX.knitCream, color: '#d7b48e', roughness: 1, side: THREE.DoubleSide });
+  const cM = curtainMat('#d9c3a0');
   const rod = (x0, x1, z, y) => { const r = cyl(0.012, 0.012, x1 - x0 + 0.2, MAT.darkMetal, (x0 + x1) / 2, y, z, { seg: 8 }); r.rotation.z = Math.PI / 2; };
   // front windows (inside face of the front wall) and the one over the sink
-  for (const [a, b] of [[1.6, 3.2], [8.6, 10.2], [12.2, 13.8]]) { rod(a, b, z1 - 0.2, 2.2); curtain(a - 0.12, z1 - 0.2, 0.36, 2.1, cM, 1, true); curtain(b + 0.12, z1 - 0.2, 0.36, 2.1, cM, -1, true); }
+  for (const [a, b] of [[1.6, 3.2], [8.6, 10.2], [12.2, 13.8]]) { rod(a, b, z1 - 0.2, 2.2); curtain(a - 0.1, z1 - 0.2, 0.5, 2.1, cM, 1, true); curtain(b + 0.1, z1 - 0.2, 0.5, 2.1, cM, -1, true); }
   // the west (bedroom) window: on the side wall
-  for (const zz of [-1.02, 0.72]) { const c = curtain(0.2, zz, 0.36, 2.1, cM, 1, true, false); c.position.x = 0.2; }
+  { const r = cyl(0.012, 0.012, 2.2, MAT.darkMetal, 0.2, 2.2, -0.15, { seg: 8 }); r.rotation.x = Math.PI / 2; }
+  for (const [zz, sd] of [[-1.0, -1], [0.7, 1]]) { const c = curtain(0.2, zz, 0.5, 2.1, cM, sd, true, false); c.position.x = 0.2; }
   // a café curtain at the sink window
   // (red gingham, gathered on a little rod: it was a plain cream sheet, which the light behind it turned into a blank
   // white panel across the window)
@@ -230,7 +247,7 @@ function buildHomely() {
     for (let k = 0; k < K; k++) for (let j = 0; j < S; j++) { const a = k * (S + 1) + j, b = a + S + 1; I.push(a, a + 1, b, a + 1, b + 1, b); }
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); sg.setIndex(I); sg.computeVertexNormals();
     const wool = G.canvasTex(256, (u, v) => { const t = 0.78 + G.pfbm(u * 18, v * 18, [18, 18], 3) * 0.3 + Math.abs(G.pfbm(u * 48, v * 48, [48, 48], 2)) * 0.25; return [246 * t, 240 * t, 229 * t]; });
-    const sheep = G.add(new THREE.Mesh(sg, G.std({ map: wool, bumpMap: wool, bumpScale: 0.012, color: '#e6ded0', roughness: 1 })), W, false, true);
+    const sheep = G.add(new THREE.Mesh(sg, G.std({ map: wool, bumpMap: wool, bumpScale: 0.012, color: '#d6cdbd', roughness: 1 })), W, false, true);
     sheep.position.set(8.6, 0.004, -0.9); sheep.rotation.y = 0.12;
     const coir = G.canvasTex(128, (u, v) => {
       const edge = Math.min(u, 1 - u) * 1.0 < 0.055 || Math.min(v, 1 - v) < 0.09, t = 0.82 + G.pfbm(u * 40, v * 6, [40, 6], 2) * 0.22 + (G.hash1(u * 517 + v * 91) - 0.5) * 0.12;
@@ -775,9 +792,21 @@ function buildRooms() {
   G.INTER.push({ id: 'fire', pos: [fx, 0.6, 1.25], r: 1.3, label: () => (G.FIRE.on ? 'Fireplace' : 'Light the fire'), act: () => { G.FIRE.on = !G.FIRE.on; if (G.FIRE.on) G.say('partner', 'The fire person, at work. My hero, {toHim}.'); } });
   // Mantle: candles, frames, a snow globe, a sprig of pine.
   // Mantle things sit on the shelf in front of the stone (its face is at z = 0.66), not inside it.
-  candle(fx - 0.85, 1.48, 0.74, 0.16, 0.03); candle(fx - 0.72, 1.48, 0.77, 0.11, 0.03); candle(fx + 0.82, 1.48, 0.76, 0.13, 0.03);
+  // candles in brass candlesticks of different heights (they stood straight on the beam)
+  for (const [dx, zz, hs, hc] of [[-0.85, 0.76, 0.1, 0.16], [-0.71, 0.8, 0.055, 0.12], [0.84, 0.78, 0.075, 0.14]]) {
+    G.lathe([[0, 0], [0.036, 0], [0.038, 0.006], [0.02, 0.014], [0.009, 0.022], [0.008, hs - 0.024], [0.014, hs - 0.018], [0.008, hs - 0.012], [0.019, hs - 0.004], [0.021, hs], [0, hs]], MAT.metal, fx + dx, 1.48, zz, { seg: 20 });
+    candle(fx + dx, 1.48 + hs, zz, hc, 0.014);
+  }
   G.MANTLE_LIGHT = new THREE.PointLight('#ffa850', 1.4, 3, 2); G.MANTLE_LIGHT.position.set(fx, 1.75, 0.8); W.add(G.MANTLE_LIGHT);
-  polaroid(fx - 0.3, 1.6, 0.7, 0, 'lake', -0.12); polaroid(fx + 0.05, 1.58, 0.7, 0, 'hill', 0.08);   // leaning on the stones
+  // two photographs in wooden frames, standing on their struts (they were bare prints leaning on the stones)
+  for (const [dx, kind, ry, col] of [[-0.32, 'lake', 0.18, '#6e4c34'], [0.04, 'hill', -0.12, '#3a2a20']]) {
+    const fg = new THREE.Group(); fg.position.set(fx + dx, 1.48, 0.76); fg.rotation.set(-0.16, ry, 0, 'YXZ'); W.add(fg);
+    const fm = G.FURN(col);
+    G.box(0.15, 0.172, 0.01, G.shared({ color: '#2a2420', roughness: 0.9 }), 0, 0.086, -0.002, { parent: fg });
+    for (const s2 of [-1, 1]) { G.box(0.016, 0.176, 0.016, fm.V, s2 * 0.071, 0.088, 0.004, { parent: fg, r: 0.003, uv: [0.05, 0.3] }); G.box(0.158, 0.016, 0.016, fm.H, 0, 0.088 + s2 * 0.08, 0.004, { parent: fg, r: 0.003, uv: [0.3, 0.05] }); }
+    const ph = new THREE.Mesh(new THREE.PlaneGeometry(0.128, 0.146), G.std({ map: photoTex(kind), roughness: 0.4, env: 0.5 })); ph.position.set(0, 0.088, 0.0035); fg.add(ph);
+    const st = G.box(0.03, 0.15, 0.004, G.shared({ color: '#2a2420', roughness: 0.9 }), 0, 0.07, -0.03, { parent: fg }); st.rotation.x = 0.38;
+  }
   // The old snow globe: a tiny cabin and one pine on a snowy base, under glass.
   { const gx = fx + 0.5, gy = 1.56, gz = 0.75;
     cyl(0.06, 0.062, 0.012, MAT.snow, gx, gy - 0.031, gz, { seg: 24 });
@@ -786,7 +815,8 @@ function buildRooms() {
     box(0.006, 0.006, 0.002, new THREE.MeshBasicMaterial({ color: '#ffd27a' }), gx - 0.006, gy - 0.014, gz + 0.018, { cast: false });
     const pine = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.045, 8), G.shared({ color: '#2f4a38', roughness: 0.8 })); pine.position.set(gx + 0.024, gy - 0.002, gz - 0.006); G.world.add(pine);
     const glass = sph(0.07, G.std({ color: '#e8f2fc', roughness: 0.02, transparent: true, opacity: 0.12, env: 0.7 }), gx, gy, gz, [1, 1, 1], G.world, 40); glass.renderOrder = 6; }
-  cyl(0.07, 0.08, 0.05, MAT.darkWood, fx + 0.5, 1.5, 0.75);
+  G.lathe([[0, 0], [0.08, 0], [0.082, 0.008], [0.074, 0.016], [0.069, 0.03], [0.073, 0.04], [0.066, 0.05], [0, 0.05]], G.FURN('#4a3224').V, fx + 0.5, 1.48, 0.75, { seg: 28 });   // the globe's turned base
+  { const bd = new THREE.Mesh(new THREE.TorusGeometry(0.0665, 0.003, 5, 28), MAT.metal); bd.rotation.x = Math.PI / 2; bd.position.set(fx + 0.5, 1.528, 0.75); W.add(bd); }
   // Tall bookshelf left of the fireplace.
   bookshelf(6.15, 0.3, 1.5, 0.34, 2.4, 0);
   // Sofa facing the fire.
@@ -879,11 +909,24 @@ function buildRooms() {
   const rug2 = G.add(new THREE.Mesh(new THREE.PlaneGeometry(2.9, 2.0), MAT.rug), W, false, true); rug2.rotation.x = -Math.PI / 2; rug2.position.set(8, 0.006, 2.2);
   // A wall clock on the partition, hands set to the time of day (fx.js turns them).
   const clock = G.propSlot('clock', 5.13, 1.95, 1.5, Math.PI / 2, (g) => {
-    cyl(0.17, 0.17, 0.04, MAT.darkWood, 0, 0, 0, { parent: g, seg: 32 }).rotation.x = Math.PI / 2;
-    cyl(0.15, 0.15, 0.01, MAT.ceramic, 0, 0, 0.022, { parent: g, seg: 32 }).rotation.x = Math.PI / 2;
-    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; box(i % 3 ? 0.008 : 0.014, 0.025, 0.004, MAT.darkMetal, Math.sin(a) * 0.125, Math.cos(a) * 0.125, 0.029, { parent: g, cast: false }).rotation.z = -a; }
-    const hand = (len, w) => { const p = new THREE.Group(); p.position.z = 0.032; p.userData.dynamic = true; g.add(p); box(w, len, 0.004, MAT.darkMetal, 0, len / 2 - 0.015, 0, { parent: p, cast: false }); return p; };
-    G.CLOCK = { h: hand(0.08, 0.012), m: hand(0.115, 0.008) };
+    // a schoolhouse clock: a round, turned wooden bezel, a brass ring, a cream dial with its numerals and minute
+    // track, tapered hands on a brass boss (it was a disc with twelve dashes)
+    const cw = G.FURN('#5f4130').V;
+    cyl(0.172, 0.172, 0.034, cw, 0, 0, 0, { parent: g, seg: 40 }).rotation.x = Math.PI / 2;
+    const bz = new THREE.Mesh(new THREE.TorusGeometry(0.168, 0.022, 10, 48), cw); bz.position.z = 0.017; bz.castShadow = true; g.add(bz);
+    const faceT = G.canvasTex(0, null, { w: 256, h: 256, draw: (c, w, h) => {
+      c.fillStyle = '#f1e9d6'; c.fillRect(0, 0, w, h); c.fillStyle = c.strokeStyle = '#2a2420';
+      c.font = 'bold 30px Georgia, serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      for (let n = 1; n <= 12; n++) { const a = n / 12 * Math.PI * 2; c.fillText(String(n), 128 + Math.sin(a) * 88, 130 - Math.cos(a) * 88); }
+      for (let k = 0; k < 60; k++) { const a = k / 60 * Math.PI * 2, r0 = k % 5 ? 116 : 111; c.lineWidth = k % 5 ? 1.5 : 3.5; c.beginPath(); c.moveTo(128 + Math.sin(a) * r0, 128 - Math.cos(a) * r0); c.lineTo(128 + Math.sin(a) * 121, 128 - Math.cos(a) * 121); c.stroke(); }
+      c.lineWidth = 1.5; c.beginPath(); c.arc(128, 128, 123, 0, 7); c.stroke();
+    } });
+    const face = new THREE.Mesh(new THREE.CircleGeometry(0.15, 48), G.std({ map: faceT, roughness: 0.6, env: 0.3 })); face.position.z = 0.019; face.receiveShadow = true; g.add(face);
+    const br = new THREE.Mesh(new THREE.TorusGeometry(0.149, 0.004, 6, 48), MAT.metal); br.position.z = 0.021; g.add(br);
+    const handG = (len, w) => { const sh = new THREE.Shape(); sh.moveTo(-w / 2, -0.018); sh.lineTo(w / 2, -0.018); sh.lineTo(w * 0.62, len * 0.55); sh.lineTo(0, len); sh.lineTo(-w * 0.62, len * 0.55); sh.lineTo(-w / 2, -0.018); return new THREE.ShapeGeometry(sh); };
+    const hand = (len, w, z) => { const p = new THREE.Group(); p.position.z = z; p.userData.dynamic = true; g.add(p); p.add(new THREE.Mesh(handG(len, w), G.shared({ color: '#1e1b18', roughness: 0.5 }))); return p; };
+    G.CLOCK = { h: hand(0.082, 0.014, 0.024), m: hand(0.122, 0.009, 0.027) };
+    sph(0.008, MAT.metal, 0, 0, 0.028, [1, 1, 0.6], g, 10);
   });
   G.INTER.push({ id: 'clock', pos: [5.4, 1.6, 1.5], r: 0.9, label: 'Clock', act: () => G.say(null, '(The clock is four minutes fast. It has been four minutes fast for as long as anyone can remember. Nobody fixes it.)') });
   // Coats by the door, hung by their loops from a Shaker peg rail: his charcoal wool, her camel one with a fur-trimmed
@@ -1270,12 +1313,23 @@ function buildKitchen() {
   note.position.set(11.52, 1.3, 4.02); note.rotation.set(0, Math.PI, -0.05); W.add(note);
   // A little radio on the window sill (story.js switches it on and off).
   K.radio = G.propSlot('radio', 13.58, 0.88, 4.42, Math.PI, (g) => {
-    box(0.26, 0.15, 0.1, enamel('#7c2f2a'), 0, 0.075, 0, { parent: g, r: 0.025, seg: 3 });
-    const grille = box(0.12, 0.09, 0.005, G.shared({ color: '#d8ccb4', roughness: 0.9 }), -0.05, 0.08, 0.051, { parent: g, cast: false });
-    cyl(0.025, 0.025, 0.02, G.shared({ color: '#e9e1d2', roughness: 0.4 }), 0.075, 0.08, 0.055, { parent: g, seg: 14 }).rotation.x = Math.PI / 2;
-    box(0.005, 0.18, 0.005, MAT.metal, 0.1, 0.24, -0.02, { parent: g }).rotation.z = -0.3;
-    const dial = new THREE.Mesh(new THREE.PlaneGeometry(0.035, 0.02), new THREE.MeshBasicMaterial({ color: '#ffb468', transparent: true, opacity: 0 }));
-    dial.position.set(0.075, 0.125, 0.051); dial.userData.dynamic = true; g.add(dial); K.radioDial = dial;
+    // a little valve-era portable: a rounded red case on feet, a cream front with a cloth grille in a chrome surround,
+    // a tuning window that lights, two knobs, a carrying handle and a telescopic aerial (it was a box with a disc on it)
+    const dark = G.shared({ color: '#2a2622', roughness: 0.5 });
+    box(0.27, 0.16, 0.1, enamel('#7c2f2a'), 0, 0.092, 0, { parent: g, r: 0.03, seg: 4 });
+    for (const fx2 of [-0.1, 0.1]) for (const fz of [-0.03, 0.03]) cyl(0.01, 0.008, 0.014, dark, fx2, 0.007, fz, { parent: g, seg: 8 });
+    box(0.232, 0.122, 0.004, G.shared({ color: '#e9e1d2', roughness: 0.4 }), 0, 0.092, 0.05, { parent: g, cast: false });
+    const cloth = G.std({ map: G.rep(G.canvasTex(32, (u, v) => { const t = 0.75 + 0.25 * Math.sin(u * Math.PI * 8) * Math.sin(v * Math.PI * 8); return [150 * t, 124 * t, 88 * t]; }), 8, 6), roughness: 1 });
+    box(0.118, 0.094, 0.004, cloth, -0.047, 0.092, 0.0525, { parent: g, cast: false });
+    for (const sy of [-1, 1]) box(0.126, 0.005, 0.006, chrome, -0.047, 0.092 + sy * 0.0495, 0.0535, { parent: g, cast: false });
+    for (const sx2 of [-1, 1]) box(0.005, 0.104, 0.006, chrome, -0.047 + sx2 * 0.0605, 0.092, 0.0535, { parent: g, cast: false });
+    box(0.078, 0.03, 0.004, dark, 0.07, 0.125, 0.0525, { parent: g, cast: false });   // the tuning window
+    for (const kx of [0.047, 0.094]) { cyl(0.015, 0.016, 0.014, G.shared({ color: '#e9e1d2', roughness: 0.4 }), kx, 0.07, 0.058, { parent: g, seg: 16 }).rotation.x = Math.PI / 2; cyl(0.008, 0.008, 0.003, chrome, kx, 0.07, 0.066, { parent: g, seg: 12 }).rotation.x = Math.PI / 2; }
+    { const hd = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.006, 6, 18, Math.PI), dark); hd.position.set(0, 0.168, 0); hd.scale.y = 0.42; g.add(hd); }
+    { const an = new THREE.Group(); an.position.set(0.115, 0.165, -0.03); an.rotation.z = -0.3; g.add(an);
+      cyl(0.002, 0.003, 0.24, chrome, 0, 0.12, 0, { parent: an, seg: 6 }); sph(0.005, chrome, 0, 0.243, 0, [1, 1, 1], an, 8); }
+    const dial = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.022), new THREE.MeshBasicMaterial({ color: '#ffb468', transparent: true, opacity: 0 }));
+    dial.position.set(0.07, 0.125, 0.0548); dial.userData.dynamic = true; g.add(dial); K.radioDial = dial;
   });
   // Pendant over the table, a runner rug, herbs on the sill.
   const pend = new THREE.Group(); pend.position.set(13.0, 2.7, 2.95); W.add(pend);
